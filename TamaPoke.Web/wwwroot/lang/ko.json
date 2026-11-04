@@ -591,7 +591,6 @@
   "battle.stat.noLower": "{0}의\n{1}{2} 더 떨어지지 않는다!",
   "walk.cannot": "지금은 산책을 나갈 수 없어요.\n(배틀/미니게임/진화 중)",
   "web.loading": "불러오는 중...",
-  "web.egg": "알",
   "web.tap.egg": "알 두드리기",
   "web.tap.pet": "쓰다듬기",
   "web.btn.feed": "밥 주기",
@@ -599,6 +598,5 @@
   "web.btn.sleep": "재우기",
   "web.btn.wake": "깨우기",
   "web.btn.bath": "씻기기",
-  "web.comingSoon": "준비 중입니다",
-  "web.species.4": "파이리"
+  "web.comingSoon": "준비 중입니다"
 }

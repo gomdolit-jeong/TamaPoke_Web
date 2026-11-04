@@ -591,7 +591,6 @@
   "battle.stat.noLower": "{0}'s\n{1} won't go any lower!",
   "walk.cannot": "Can't go for a walk right now.\n(battle, mini-game or evolution in progress)",
   "web.loading": "Loading...",
-  "web.egg": "Egg",
   "web.tap.egg": "Tap the egg",
   "web.tap.pet": "Pet",
   "web.btn.feed": "Feed",
@@ -599,6 +598,5 @@
   "web.btn.sleep": "Sleep",
   "web.btn.wake": "Wake",
   "web.btn.bath": "Bath",
-  "web.comingSoon": "Coming soon",
-  "web.species.4": "Charmander"
+  "web.comingSoon": "Coming soon"
 }

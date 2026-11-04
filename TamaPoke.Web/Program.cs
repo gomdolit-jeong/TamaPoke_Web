@@ -14,7 +14,10 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 builder.Services.AddScoped<Loc>();
 builder.Services.AddScoped<SaveStore>();
 builder.Services.AddScoped<SpriteLoader>();
+builder.Services.AddScoped<PokemonDex>();
 
 var host = builder.Build();
-await host.Services.GetRequiredService<Loc>().InitializeAsync();
+await Task.WhenAll(
+    host.Services.GetRequiredService<Loc>().InitializeAsync(),
+    host.Services.GetRequiredService<PokemonDex>().InitializeAsync());
 await host.RunAsync();

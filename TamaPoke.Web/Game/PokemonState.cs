@@ -26,9 +26,6 @@ public sealed class PokemonState
     private const double WALK_LIMIT = 100;
     private const double WALK_PIXELS_PER_SECOND = 68;
 
-    // 아직 포켓몬 데이터를 옮기지 않아서, 부화하면 항상 파이리입니다.
-    private const int HATCH_SPECIES_ID = 4;
-
     private static readonly HashSet<int> SideViewActions =
     [
         PokemonAnim.WALK, PokemonAnim.SLEEP, PokemonAnim.EVENTSLEEP, PokemonAnim.HOP,
@@ -72,6 +69,9 @@ public sealed class PokemonState
     [JsonIgnore] public bool IsFeedMenuOpen { get; set; }
     [JsonIgnore] public bool NeedsSave { get; set; }
 
+    // 부화할 포켓몬을 고르는 규칙 (도감 데이터가 필요해서 밖에서 넣어 줍니다)
+    [JsonIgnore] public Func<int>? PickHatchSpecies { get; set; }
+
     [JsonIgnore] public bool IsEgg => SpeciesId < 0;
     [JsonIgnore] public bool IsCeremony => Ceremony != 0;
     [JsonIgnore] public bool IsPetting => _pettingMs > 0;
@@ -81,7 +81,6 @@ public sealed class PokemonState
     [JsonIgnore] public bool CanRunawayNow => !IsEgg && !IsSleeping && !IsCeremony && NeglectTicks >= RUNAWAY_TICKS;
     [JsonIgnore] public bool CanCare => !IsEgg && !IsCeremony;
     [JsonIgnore] public string SpritePath => IsEgg ? "0000/0004" : $"{SpeciesId:D4}";
-    [JsonIgnore] public string BiomeName => IsEgg ? "TALL GRASS" : "MOUNTAIN"; // 타입 데이터를 옮기면 PC판처럼 타입별로 나눕니다.
     [JsonIgnore] public bool IsNight => IsSleeping || DateTime.Now.Hour is < 6 or >= 20;
 
     [JsonIgnore]
@@ -402,7 +401,7 @@ public sealed class PokemonState
 
     private void Hatch()
     {
-        SpeciesId = HATCH_SPECIES_ID;
+        SpeciesId = PickHatchSpecies?.Invoke() ?? throw new InvalidOperationException("부화 규칙이 없습니다.");
         BerryKnown = false;
         NeglectTicks = 0;
         AgeSeconds = 0;

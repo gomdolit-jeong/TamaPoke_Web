@@ -13,6 +13,14 @@ dotnet run --project TamaPoke.Web
 
 `main`에 푸시하면 GitHub Actions가 빌드해서 GitHub Pages에 배포합니다.
 
+Debug 빌드에서는 테스트하기 쉽도록 알에서 항상 파이리가 부화합니다. 배포판은 무작위입니다.
+
+포켓몬 데이터(`TamaPoke.Web/wwwroot/data/pokemon.json`)는 PC판 `pokemon_data.json`으로 만듭니다.
+
+```bash
+python tools/make_pokemon_data.py <PC판 Data/pokemon_data.json>
+```
+
 ## 📝 Credits
 
 - **Sprites:** [PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab) 기여자들의 작업물이며, [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)에 따라 비상업적 목적으로만 사용합니다.
