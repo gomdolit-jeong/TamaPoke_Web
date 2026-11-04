@@ -24,6 +24,9 @@ else if (_strip is not null)
     [Parameter] public int Action { get; set; } = PokemonAnim.IDLE;
     [Parameter] public int Row { get; set; } = PokemonAnim.ROW_FRONT;
     [Parameter] public int Scale { get; set; } = 3;
+
+    // 값이 있으면 대기 모션이 이 크기(px)에 맞도록 배율을 정합니다. (포켓몬마다 크기가 달라도 배틀에서 비슷하게 보임)
+    [Parameter] public double? FitBox { get; set; }
     [Parameter] public bool Flipped { get; set; }
 
     // 도감 썸네일처럼 첫 장면만 보여줄 때 씁니다. (미리 받기와 재생을 하지 않음)
@@ -60,6 +63,11 @@ else if (_strip is not null)
         try
         {
             var strip = await Loader.GetStripAsync(SpritePath, Action);
+            if (FitBox is double box)
+            {
+                var (idleWidth, idleHeight) = await Loader.GetIdleFrameSizeAsync(SpritePath);
+                _fitScale = box / Math.Max(idleWidth, idleHeight);
+            }
             if (request != _request) return;
 
             _strip = strip;
@@ -116,7 +124,9 @@ else if (_strip is not null)
         catch (OperationCanceledException) { }
     }
 
-    private string Px(int sourcePixels) => $"{sourcePixels * Scale}px";
+    private double _fitScale;
+
+    private string Px(int sourcePixels) => $"{(FitBox is null ? sourcePixels * Scale : sourcePixels * _fitScale).ToString("F1")}px";
 
     public void Dispose()
     {

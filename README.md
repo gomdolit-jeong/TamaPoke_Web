@@ -21,6 +21,12 @@ Debug 빌드에서는 테스트하기 쉽도록 알에서 항상 파이리가 �
 python tools/make_pokemon_data.py <PC판 Data/pokemon_data.json>
 ```
 
+기술 데이터(`moves.json`, `learnsets.json`)는 PC판 Data 폴더로 만듭니다.
+
+```bash
+python tools/make_skill_data.py <PC판 Data 폴더>
+```
+
 ## 📝 Credits
 
 - **Sprites:** [PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab) 기여자들의 작업물이며, [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)에 따라 비상업적 목적으로만 사용합니다.

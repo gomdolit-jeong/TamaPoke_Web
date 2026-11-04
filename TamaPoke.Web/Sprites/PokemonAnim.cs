@@ -4,11 +4,16 @@ namespace TamaPoke.Web.Sprites;
 public static class PokemonAnim
 {
     public const int WALK = 0;
+    public const int ATTACK = 1;
+    public const int SHOOT = 3;
     public const int SHAKE = 4;
     public const int SLEEP = 5;
     public const int HURT = 6;
     public const int IDLE = 7;
+    public const int DOUBLE = 9;
     public const int HOP = 10;
+    public const int CHARGE = 11;
+    public const int ROTATE = 12;
     public const int EVENTSLEEP = 13;
     public const int WAKE = 14;
     public const int EAT = 15;

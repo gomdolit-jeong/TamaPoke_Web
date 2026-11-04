@@ -54,6 +54,14 @@ public sealed class SpriteLoader(HttpClient http)
         };
     }
 
+    // 대기 모션 한 칸의 크기 (배틀 화면은 이 크기를 기준으로 배율을 정합니다)
+    public async Task<(int Width, int Height)> GetIdleFrameSizeAsync(string path)
+    {
+        var anims = await GetAnimDataAsync(path);
+        if (!anims.TryGetValue(PokemonAnim.IDLE, out var idle)) idle = anims.OrderBy(a => a.Key).First().Value;
+        return (idle.FrameWidth, idle.FrameHeight);
+    }
+
     public async Task PreloadAsync(string path)
     {
         try

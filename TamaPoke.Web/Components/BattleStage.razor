@@ -1,0 +1,157 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+
+@* 게임판 좌표는 PC판 BattleView와 같은 288x288입니다. *@
+<div class="game-arena battle-arena @(Pet.IsDefeatedFadeOut ? "is-defeated" : "")">
+    <div class="battle-field" style="background-image:url('backgrounds/@(Dex.GetBiomeName(Pet.SpeciesId)).png')">
+        <div class="battle-platform battle-platform-enemy"></div>
+        <div class="battle-platform battle-platform-player"></div>
+
+        <div class="battle-panel battle-panel-enemy">
+            <div class="battle-panel-name"><span>@Pet.EnemyName</span><span>Lv.@Pet.EnemyLevel</span></div>
+            <div class="battle-panel-hp">
+                @AilmentBadge(Pet.EnemyAilment)
+                <progress class="@HpClass(Pet.EnemyHp, Pet.EnemyMaxHp)" max="@Pet.EnemyMaxHp" value="@Pet.EnemyHp"></progress>
+            </div>
+        </div>
+
+        @if (Pet.IsEnemyVisible)
+        {
+            <div class="battle-sprite battle-sprite-enemy @(Pet.IsEnemyTakingDamage ? "is-hit" : "")">
+                <AnimatedSprite SpritePath="@Pet.EnemySpritePath" Action="Pet.EnemyCurrentAction" Row="Pet.EnemyRow" FitBox="72" Alt="@Pet.EnemyName" />
+            </div>
+        }
+        @if (Pet.IsPlayerVisible)
+        {
+            <div class="battle-sprite battle-sprite-player @(Pet.IsPlayerTakingDamage ? "is-hit" : "")">
+                <AnimatedSprite SpritePath="@Pet.SpritePath" Action="Pet.CurrentAction" Row="Pet.CurrentRow" FitBox="108" Alt="@Pet.Name" />
+            </div>
+        }
+
+        @if (Pet.BattleFx is { } fx)
+        {
+            <div class="battle-fx" style="left:@(fx.X.ToString("F0"))px;top:@(fx.Y.ToString("F0"))px;width:@(fx.Size.ToString("F0"))px;height:@(fx.Size.ToString("F0"))px;background-image:url('ui/@fx.Image');background-size:@((fx.Size * fx.FrameCount).ToString("F0"))px 100%;background-position:-@((fx.Size * fx.Frame).ToString("F0"))px 0;transform:scaleX(@(fx.Flipped ? -1 : 1))"></div>
+        }
+        @if (Pet.IsBallVisible)
+        {
+            <img class="battle-ball @(Pet.IsBallWobbling ? "is-wobbling" : "is-thrown")" src="ui/icon_ball.png" alt="" />
+        }
+
+        <div class="battle-panel battle-panel-player">
+            <div class="battle-panel-name"><span>@Pet.Name</span><span>Lv.@Pet.Level</span></div>
+            <div class="battle-panel-hp">
+                @AilmentBadge(Pet.PlayerAilment)
+                <progress class="@HpClass(Pet.PlayerHp, Pet.PlayerMaxHp)" max="@Pet.PlayerMaxHp" value="@Pet.PlayerHp"></progress>
+            </div>
+            <div class="battle-panel-numbers">@Pet.PlayerHp/@Pet.PlayerMaxHp</div>
+        </div>
+    </div>
+
+    <div class="battle-controls">
+        <div class="battle-message" role="status">@Pet.BattleMessage</div>
+
+        @if (Pet.IsMainMenuVisible)
+        {
+            <div class="battle-buttons">
+                <button type="button" class="battle-fight" @onclick="() => Pet.ChooseAttackMenu(true)">@Loc.T("battle.ui.fight")</button>
+                <button type="button" class="battle-dodge" @onclick="() => Pet.ExecuteTurnAsync(BattleAction.Dodge)">@Loc.T("battle.ui.dodge")</button>
+                <button type="button" class="battle-bag" @onclick="() => Pet.ChooseBag(true)">@Loc.T("battle.ui.bag")</button>
+                <button type="button" class="battle-run" @onclick="() => Pet.ExecuteTurnAsync(BattleAction.Run)">@Loc.T("battle.ui.run")</button>
+            </div>
+        }
+        @if (Pet.IsAttackMenuVisible)
+        {
+            <div class="battle-overlay-menu">
+                <div class="battle-choice-grid">
+                    @foreach (var skill in Pet.CurrentSkills)
+                    {
+                        <button type="button" title="@skill.Type" @onclick="() => Pet.ExecuteSkillTurnAsync(skill)">
+                            <span class="battle-choice-name">@skill.Name</span>
+                            <span class="battle-type battle-type-@skill.Type.ToString().ToLowerInvariant()">@skill.Type</span>
+                        </button>
+                    }
+                </div>
+                <button type="button" class="battle-back" aria-label="@Loc.T("common.cancel")" @onclick="() => Pet.ChooseAttackMenu(false)">◀</button>
+            </div>
+        }
+        @if (Pet.IsBagVisible)
+        {
+            <div class="battle-overlay-menu">
+                <div class="battle-choice-grid">
+                    @foreach (var item in ItemDex.All)
+                    {
+                        <button type="button" disabled="@(Pet.ItemCount(item.Id) <= 0)" @onclick="() => Pet.UseBattleItemAsync(item)">
+                            <img src="ui/@item.Icon" alt="" />
+                            <span class="battle-choice-name">@Loc.T($"item.{item.Id}.name") ×@Pet.ItemCount(item.Id)</span>
+                        </button>
+                    }
+                </div>
+                <button type="button" class="battle-back" aria-label="@Loc.T("common.cancel")" @onclick="() => Pet.ChooseBag(false)">◀</button>
+            </div>
+        }
+    </div>
+
+    @if (Pet.IsCatchOffered)
+    {
+        <div class="battle-popup" role="dialog">
+            <p>@Loc.T("battle.ui.won")</p>
+            <div class="battle-popup-row">
+                <button type="button" class="battle-fight" @onclick="() => Pet.ThrowBallAsync()">@Loc.T("battle.ui.catch")</button>
+                <button type="button" class="battle-run" @onclick="Pet.LeaveWildBattle">@Loc.T("battle.ui.moveOn")</button>
+            </div>
+        </div>
+    }
+    @if (Pet.IsSkillLearnMenuOpen)
+    {
+        <div class="battle-popup" role="dialog">
+            <p>@Loc.T("battle.ui.newSkill")</p>
+            <div class="battle-popup-row">
+                @if (Pet.RecommendedSkill1 is { } first)
+                {
+                    <button type="button" class="battle-learn" @onclick="() => Pet.SelectRecommendedSkill(1)">@first.Name<span class="battle-type battle-type-@first.Type.ToString().ToLowerInvariant()">@first.Type</span></button>
+                }
+                @if (Pet.RecommendedSkill2 is { } second)
+                {
+                    <button type="button" class="battle-learn" @onclick="() => Pet.SelectRecommendedSkill(2)">@second.Name<span class="battle-type battle-type-@second.Type.ToString().ToLowerInvariant()">@second.Type</span></button>
+                }
+            </div>
+            <button type="button" class="battle-run battle-wide" @onclick="Pet.SkipSkillLearning">@Loc.T("battle.ui.dontLearn")</button>
+        </div>
+    }
+    @if (Pet.IsSkillReplaceMenuOpen)
+    {
+        <div class="battle-popup" role="dialog">
+            <p>@Loc.T("battle.ui.skillsFull")</p>
+            <div class="battle-choice-grid">
+                @for (int i = 0; i < Pet.Skills.Length; i++)
+                {
+                    int slot = i;
+                    var skill = Pet.SkillBook.GetSkill(Pet.Skills[i]);
+                    <button type="button" class="battle-learn" @onclick="() => Pet.ReplaceExistingSkill(slot)">@(skill?.Name ?? "-")</button>
+                }
+            </div>
+            <button type="button" class="battle-run battle-wide" @onclick="Pet.SkipSkillLearning">@Loc.T("battle.ui.neverMind")</button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter, EditorRequired] public required PokemonDex Dex { get; set; }
+
+    private string HpClass(int hp, int maxHp)
+    {
+        double ratio = maxHp <= 0 ? 1 : (double)hp / maxHp;
+        return ratio > 0.5 ? "hp-good" : ratio > 0.2 ? "hp-warn" : "hp-low";
+    }
+
+    private RenderFragment AilmentBadge(SkillAilment ailment) => @<span class="battle-ailment battle-ailment-@ailment.ToString().ToLowerInvariant()">@AilmentText(ailment)</span>;
+
+    private string AilmentText(SkillAilment ailment) => ailment switch
+    {
+        SkillAilment.None => "",
+        SkillAilment.BadPoison => Loc.T("ailment.badge.badPoison"),
+        _ => Loc.T($"ailment.badge.{ailment.ToString().ToLowerInvariant()}"),
+    };
+}

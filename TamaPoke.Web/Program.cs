@@ -16,9 +16,11 @@ builder.Services.AddScoped<SaveStore>();
 builder.Services.AddScoped<SoundPlayer>();
 builder.Services.AddScoped<SpriteLoader>();
 builder.Services.AddScoped<PokemonDex>();
+builder.Services.AddScoped<SkillDex>();
 
 var host = builder.Build();
 await Task.WhenAll(
     host.Services.GetRequiredService<Loc>().InitializeAsync(),
-    host.Services.GetRequiredService<PokemonDex>().InitializeAsync());
+    host.Services.GetRequiredService<PokemonDex>().InitializeAsync(),
+    host.Services.GetRequiredService<SkillDex>().InitializeAsync());
 await host.RunAsync();

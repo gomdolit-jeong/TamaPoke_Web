@@ -157,6 +157,7 @@ public sealed partial class PokemonState
             if (Ceremony == CEREMONY_RELEASE) return PokemonAnim.HOP;
             if (Ceremony == CEREMONY_EVOLVE) return PokemonAnim.FLOAT;
             if (IsAnyMiniGameOpen) return IsCleanHit ? PokemonAnim.HURT : PokemonAnim.IDLE;
+            if (IsBattleOpen) return _tempActionMs > 0 ? _tempAction : PokemonAnim.IDLE;
             if (IsEgg) return PokemonAnim.IDLE;
             if (IsSleeping) return PokemonAnim.SLEEP;
 
@@ -175,7 +176,7 @@ public sealed partial class PokemonState
         }
     }
 
-    [JsonIgnore] public int CurrentRow => SideViewActions.Contains(CurrentAction) ? PokemonAnim.ROW_LEFT : PokemonAnim.ROW_FRONT;
+    [JsonIgnore] public int CurrentRow => IsBattleOpen ? BATTLE_PLAYER_ROW : SideViewActions.Contains(CurrentAction) ? PokemonAnim.ROW_LEFT : PokemonAnim.ROW_FRONT;
 
     [JsonIgnore]
     public string MoodKey
@@ -185,6 +186,7 @@ public sealed partial class PokemonState
             if (Ceremony == CEREMONY_FAREWELL) return "mood.farewell";
             if (Ceremony == CEREMONY_RUNAWAY) return "mood.runaway";
             if (Ceremony == CEREMONY_RELEASE) return "mood.release";
+            if (IsBattleOpen) return "mood.battle";
             if (ActiveGame == MiniGame.Ball) return "mood.game.ball";
             if (ActiveGame == MiniGame.Catch) return "mood.game.catch";
             if (ActiveGame == MiniGame.Memo) return "mood.game.memo";
@@ -207,7 +209,12 @@ public sealed partial class PokemonState
     {
         UpdateMotion(Math.Min(elapsedMs, MAX_MOTION_STEP_MS));
 
-        // 연출과 미니게임 중에는 나이를 먹지 않습니다.
+        // 연출, 미니게임, 배틀 중에는 나이를 먹지 않습니다.
+        if (IsBattleOpen)
+        {
+            UpdateEnemyMotion(Math.Min(elapsedMs, MAX_MOTION_STEP_MS));
+            return;
+        }
         if (IsCeremony)
         {
             UpdateCeremony(elapsedMs);
@@ -369,6 +376,19 @@ public sealed partial class PokemonState
 
         AgeMinutes++;
         if (AgeMinutes % MINUTES_PER_LEVEL == 0) IsEvolutionPostponed = false;
+        if (LowestStat >= EVOLVE_MIN_STAT)
+        {
+            _goodTicks++;
+            if (_goodTicks >= 720)
+            {
+                _goodTicks = 0;
+                if (TrDef < 100) TrDef++;
+            }
+        }
+        else
+        {
+            _goodTicks = 0;
+        }
         NeedsSave = true;
 
         // 몸무게는 자는 중에도 3분마다 1씩 빠집니다.
@@ -434,6 +454,11 @@ public sealed partial class PokemonState
         int roll = Random.Shared.Next(100);
         if (roll < 35)
         {
+            if (Random.Shared.Next(10000) < WILD_ENCOUNTER_PER_10000)
+            {
+                StartWildBattle(autoEncounter: true);
+                return;
+            }
             FlipX = Random.Shared.Next(2) == 0 ? -1 : 1;
             PlayAutoAction(PokemonAnim.WALK, Random.Shared.Next(120, 240));
         }
@@ -556,11 +581,17 @@ public sealed partial class PokemonState
     {
         SpeciesId = Dex.PickHatchSpecies();
         (IsGenderless, IsFemale) = Dex.RollGender(SpeciesId);
+        Genes = new PokemonGene
+        {
+            HpGene = Random.Shared.Next(0, 32), AtkGene = Random.Shared.Next(0, 32),
+            DefGene = Random.Shared.Next(0, 32), SpeGene = Random.Shared.Next(0, 32),
+        };
         RegisterCurrentInDex();
         BerryKnown = false;
         NeglectTicks = 0;
         AgeSeconds = 0;
         AgeMinutes = 0;
+        RelearnFromLevel();
         IsEvolutionPostponed = false;
         IsFarewellPostponed = false;
         ResetPosition();
@@ -662,6 +693,11 @@ public sealed partial class PokemonState
         IsFarewellPostponed = false;
         EvolvedFromSpeciesId = 0;
         Medals = 0;
+        TrAtk = 0;
+        TrDef = 0;
+        TrSpeed = 0;
+        Genes = new PokemonGene();
+        Skills = new int[4];
         BerryKnown = false;
         Ceremony = 0;
         CeremonyElapsedMs = 0;

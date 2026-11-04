@@ -9,6 +9,7 @@
 @inject Loc Loc
 @inject PokemonDex Dex
 @inject SoundPlayer Sound
+@inject SkillDex Skills
 
 <PageTitle>TamaPoke</PageTitle>
 
@@ -26,7 +27,11 @@ else
 
         <p class="pet-mood" role="status">@MoodText</p>
 
-        @if (_pet.IsProfileOpen)
+        @if (_pet.IsBattleOpen)
+        {
+            <BattleStage Pet="_pet" Dex="Dex" />
+        }
+        else if (_pet.IsProfileOpen)
         {
             <ProfilePanel Pet="_pet" OnClose="CloseProfile" />
         }
@@ -145,7 +150,7 @@ else
         }
     </section>
 
-    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync" />
+    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnStartBattle="StartBattle" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync" />
     </div>
 }
 
@@ -194,7 +199,9 @@ else
         var pet = await Store.LoadAsync();
         pet.Dex = Dex;
         pet.PlaySound = PlaySound;
+        pet.SkillBook = Skills;
         pet.RegisterCurrentInDex();
+        if (!pet.IsEgg && pet.SkillCount == 0) pet.RelearnFromLevel();
         _pet = pet;
         _ = RunLoopAsync();
     }
@@ -254,6 +261,13 @@ else
         _pet.IsProfileOpen = true;
     }
 
+    private void StartBattle()
+    {
+        PlaySound(SoundEffects.Play);
+        _isDexOpen = false;
+        _pet!.StartWildBattle();
+    }
+
     private void CloseProfile() => _pet!.IsProfileOpen = false;
 
     private void ToggleMute()
@@ -291,7 +305,7 @@ else
                     (_pet.Fullness, _pet.Joy, _pet.Energy, _pet.Hygiene, _pet.Poops, _pet.Level, _pet.SpeciesId),
                     (_pet.IsEvolvingFlash, _pet.HasEvolved, _pet.CanShowEvolvePrompt, _pet.CanShowFarewellPrompt, _pet.IsSleeping),
                     (_pet.EatingFood, _pet.IsBathing, _pet.ShownGame, _pet.FoodBites, Math.Round(_pet.FoodOpacity, 1)));
-                if (_pet.ShownGame != MiniGame.None || !rendered.Equals(_lastRendered))
+                if (_pet.ShownGame != MiniGame.None || _pet.IsBattleOpen || !rendered.Equals(_lastRendered))
                 {
                     _lastRendered = rendered;
                     StateHasChanged();

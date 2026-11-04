@@ -1,0 +1,128 @@
+using System;
+using TamaPoke.Web.Utils;
+
+namespace TamaPoke.Web.Game
+{
+    public static class AilmentHelper
+    {
+        private static readonly Random rand = new Random();
+        private const int THUNDER_WAVE_MOVE_ID = 86;
+
+        // 1. 상태이상 초기 지속 턴 수 결정
+        public static int GetInitialTurns(SkillAilment ailment)
+        {
+            return ailment switch
+            {
+                SkillAilment.Sleep => rand.Next(2, 5), // 수면: 1~3턴 행동 불가 (턴 시작 시 1 감소 후 0이면 깨어남)
+                _ => 999 // 화상, 마비, 독, 얼음은 영구 유지
+            };
+        }
+
+        // 타입에 따른 상태이상 면역 (불꽃-화상, 얼음-얼음, 전기-마비, 독/강철-독)
+        // 전기자석파는 상태이상을 거는 변화 기술 중 유일하게 타입 상성도 따릅니다. (땅 타입에게 무효, 원작 규칙)
+        public static bool IsImmune(SkillInfo skill, PokemonInfo? target)
+        {
+            if (skill.Id == THUNDER_WAVE_MOVE_ID && BattleCalculator.TypeMultiplier(skill.Type, target) == 0) return true;
+            return IsImmune(skill.Ailment, target?.Type1 ?? PokemonType.Normal, target?.Type2 ?? PokemonType.None);
+        }
+
+        private static bool IsImmune(SkillAilment ailment, PokemonType type1, PokemonType type2)
+        {
+            bool Has(PokemonType t) => type1 == t || type2 == t;
+            return ailment switch
+            {
+                SkillAilment.Burn => Has(PokemonType.Fire),
+                SkillAilment.Freeze => Has(PokemonType.Ice),
+                SkillAilment.Paralysis => Has(PokemonType.Electric),
+                SkillAilment.Poison or SkillAilment.BadPoison => Has(PokemonType.Poison) || Has(PokemonType.Steel),
+                _ => false
+            };
+        }
+
+        // 2. 턴 시작 시 행동 가능 여부 검사
+        // cured가 true면 상태이상이 풀린 것이므로 호출한 쪽에서 상태이상을 None으로 바꿔야 합니다.
+        public static bool CanActThisTurn(SkillAilment ailment, ref int turnsLeft, string name, out string message, out bool cured)
+        {
+            message = "";
+            cured = false;
+
+            switch (ailment)
+            {
+                case SkillAilment.Sleep:
+                    if (turnsLeft <= 0)
+                    {
+                        cured = true;
+                        message = L.F("ailment.wake", name);
+                        return true;
+                    }
+                    message = L.F("ailment.asleep", name);
+                    return false;
+
+                case SkillAilment.Freeze:
+                    if (rand.Next(100) < 20) // 20% 확률로 얼음 해제
+                    {
+                        turnsLeft = 0;
+                        cured = true;
+                        message = L.F("ailment.thaw", name);
+                        return true;
+                    }
+                    message = L.F("ailment.frozen", name);
+                    return false;
+
+                case SkillAilment.Paralysis:
+                    if (rand.Next(100) < 25) // 25% 확률로 마비 행동 불가
+                    {
+                        message = L.F("ailment.paralyzed", name);
+                        return false;
+                    }
+                    return true;
+
+                default:
+                    return true;
+            }
+        }
+
+        // 3. 턴 종료 시 지속 데미지(틱뎀) 계산
+        public static int GetTurnEndDamage(SkillAilment ailment, int maxHp, int ailmentTurnCount, out string message)
+        {
+            message = "";
+            int damage = 0;
+
+            switch (ailment)
+            {
+                case SkillAilment.Burn:
+                    damage = Math.Max(1, maxHp / 16);
+                    message = L.T("ailment.tick.burn");
+                    break;
+
+                case SkillAilment.Poison:
+                    damage = Math.Max(1, maxHp / 8);
+                    message = L.T("ailment.tick.poison");
+                    break;
+
+                case SkillAilment.BadPoison:
+                    int multiplier = Math.Max(1, ailmentTurnCount);
+                    damage = Math.Max(1, (maxHp * multiplier) / 16);
+                    message = L.T("ailment.tick.badPoison");
+                    break;
+            }
+
+            return damage;
+        }
+
+        // 4. 상태이상 아이콘 반환
+        public static string GetAilmentIcon(SkillAilment ailment)
+        {
+            return ailment switch
+            {
+                SkillAilment.Burn => L.T("ailment.name.burn"),
+                SkillAilment.Poison => L.T("ailment.name.poison"),
+                SkillAilment.BadPoison => L.T("ailment.name.badPoison"),
+                SkillAilment.Paralysis => L.T("ailment.name.paralysis"),
+                SkillAilment.Sleep => L.T("ailment.name.sleep"),
+                SkillAilment.Freeze => L.T("ailment.name.freeze"),
+                _ => ""
+            };
+        }
+    }
+}

@@ -15,6 +15,8 @@ public sealed partial class PokemonState
     private const double CLEAN_HIT_MS = 500;
     private const int ARENA_CENTER = 144;
     private const double POINTER_LIMIT = 100;
+    private const double BALL_MAX_X = 261; // 게임판 288 - 공 27
+    private const double BALL_BOUNCE = 0.85;
 
     private static readonly string[] FruitImages =
     [
@@ -41,7 +43,7 @@ public sealed partial class PokemonState
     [JsonIgnore] public MiniGame ActiveGame { get; private set; }
     [JsonIgnore] public MiniGame ShownGame { get; private set; }
     [JsonIgnore] public bool IsAnyMiniGameOpen => ActiveGame != MiniGame.None;
-    [JsonIgnore] public bool CanStartActivity => !IsEgg && !IsSleeping && !IsCeremony && !IsAnyMiniGameOpen;
+    [JsonIgnore] public bool CanStartActivity => !IsEgg && !IsSleeping && !IsCeremony && !IsAnyMiniGameOpen && !IsBattleOpen;
 
     public void StartMiniGame(MiniGame game)
     {
@@ -174,21 +176,16 @@ public sealed partial class PokemonState
         BallX += _ballVelX;
         BallY += _ballVelY;
 
-        double dx = BallX - ARENA_CENTER;
-        double dy = BallY - ARENA_CENTER;
-        double dist = Math.Sqrt(dx * dx + dy * dy);
-        if (dist > 130)
+        // 게임판이 사각형이라 네 벽에서 튕깁니다. (PC판은 원형 벽, 튕기는 힘은 같음)
+        if (BallX < 0 || BallX > BALL_MAX_X)
         {
-            double nx = dx / dist;
-            double ny = dy / dist;
-            double dot = _ballVelX * nx + _ballVelY * ny;
-            if (dot > 0)
-            {
-                _ballVelX = (_ballVelX - 2 * dot * nx) * 0.85;
-                _ballVelY = (_ballVelY - 2 * dot * ny) * 0.85;
-            }
-            BallX = ARENA_CENTER + nx * 130;
-            BallY = ARENA_CENTER + ny * 130;
+            BallX = Math.Clamp(BallX, 0, BALL_MAX_X);
+            _ballVelX = -_ballVelX * BALL_BOUNCE;
+        }
+        if (BallY < 0)
+        {
+            BallY = 0;
+            _ballVelY = -_ballVelY * BALL_BOUNCE;
         }
 
         if (BallY > 260)

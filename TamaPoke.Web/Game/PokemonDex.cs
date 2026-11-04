@@ -41,6 +41,8 @@ public sealed class PokemonDex(HttpClient http)
     private const int TEST_HATCH_SPECIES_ID = 4;
 #endif
 
+    private const int WILD_LEGENDARY_CHANCE_PERCENT = 1;
+
     // 세대(지방)별 도감 번호 범위 (PC판 GameRegions.cs와 같음)
     public static readonly (int Generation, int StartId, int EndId)[] Regions =
     [
@@ -90,6 +92,8 @@ public sealed class PokemonDex(HttpClient http)
     private Dictionary<int, PokemonInfo> _byId = [];
     private Dictionary<int, (int EvolveLevel, int[] NextSpeciesIds)> _evolutions = [];
     private int[] _hatchCandidates = [];
+    private int[] _wildCandidates = [];
+    private int[] _wildLegendaries = [];
 
     public async Task InitializeAsync()
     {
@@ -107,6 +111,16 @@ public sealed class PokemonDex(HttpClient http)
             .Where(p => p.HasSprite && !evolvedIds.Contains(p.Id) && !LegendaryIds.Contains(p.Id))
             .Select(p => p.Id)
             .ToArray();
+        _wildCandidates = all.Where(p => p.HasSprite && !LegendaryIds.Contains(p.Id)).Select(p => p.Id).ToArray();
+        _wildLegendaries = all.Where(p => p.HasSprite && LegendaryIds.Contains(p.Id)).Select(p => p.Id).ToArray();
+    }
+
+    // 야생 상대: 스프라이트가 있는 포켓몬. 전설은 1% 확률입니다.
+    public int PickWildSpecies()
+    {
+        if (_wildLegendaries.Length > 0 && Random.Shared.Next(100) < WILD_LEGENDARY_CHANCE_PERCENT)
+            return _wildLegendaries[Random.Shared.Next(_wildLegendaries.Length)];
+        return _wildCandidates.Length > 0 ? _wildCandidates[Random.Shared.Next(_wildCandidates.Length)] : 1;
     }
 
     public PokemonInfo? Get(int speciesId) => _byId.GetValueOrDefault(speciesId);

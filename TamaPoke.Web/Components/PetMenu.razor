@@ -3,6 +3,7 @@
 @inject Loc Loc
 
 <nav class="pet-menu" aria-label="@Loc.T("web.menu")">
+    <button type="button" disabled="@(!Pet.CanStartActivity)" @onclick="OnStartBattle">@Loc.T("web.menu.battle")</button>
     <button type="button" @onclick="OnOpenDex">@Loc.T("web.menu.dex")</button>
     <button type="button" disabled="@(!CanOpenProfile)" @onclick="OnOpenProfile">@Loc.T("web.menu.profile")</button>
     <button type="button" disabled title="@Loc.T("web.comingSoon")">@Loc.T("web.menu.party")</button>
@@ -36,6 +37,7 @@
 
 @code {
     [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnStartBattle { get; set; }
     [Parameter] public EventCallback OnOpenDex { get; set; }
     [Parameter] public EventCallback OnOpenProfile { get; set; }
     [Parameter] public EventCallback OnToggleMute { get; set; }
