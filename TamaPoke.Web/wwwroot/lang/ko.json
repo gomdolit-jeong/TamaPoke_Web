@@ -629,7 +629,7 @@
   "web.title.tagline": "포켓몬과 함께하는 작은 다마고치",
   "web.guest.start": "게스트로 시작",
   "web.guest.continue": "게스트로 이어하기",
-  "web.guest.note": "게스트는 이 브라우저에만 저장돼요. 게임 중에도 로그인할 수 있어요.",
+  "web.guest.note": "게스트 세이브는 이 브라우저에만 저장되고, 구글 계정 세이브와는 따로예요.",
   "web.menu.gym": "🏅 체육관",
   "web.menu.walk": "🌿 산책",
   "web.menu.settings": "⚙️ 설정",
@@ -656,5 +656,11 @@
   "web.settings.defaults": "기본값으로 되돌리기",
   "web.settings.defaults.hint": "설정만 처음 값으로 돌아가요. 포켓몬과 도감은 그대로예요.",
   "web.settings.defaults.done": "설정을 기본값으로 되돌렸어요.",
-  "web.menu.more": "☰ 더보기"
+  "web.menu.more": "☰ 더보기",
+  "web.cloud.loading": "세이브를 불러오는 중이에요...",
+  "web.cloud.loadFailed": "서버에서 세이브를 불러오지 못했어요. 다시 로그인해 주세요.",
+  "web.cloud.import.title": "계정으로 처음 시작해요",
+  "web.cloud.import.message": "이 계정에는 아직 세이브가 없어요. 어떻게 시작할까요? 게스트 세이브는 그대로 남아요.",
+  "web.cloud.import.guest": "게스트 세이브로 시작",
+  "web.cloud.import.new": "새 알로 시작"
 }

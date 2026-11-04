@@ -91,7 +91,6 @@
     [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public Func<string, Task>? ReplaceSave { get; set; }
-    [Parameter] public Func<Task>? BeforeReset { get; set; }
 
     private bool _confirmReset;
     private bool _importError;
@@ -169,7 +168,6 @@
     private async Task ResetAsync()
     {
         if (ReplaceSave is null) return;
-        if (BeforeReset is not null) await BeforeReset();
         await ReplaceSave(SaveStore.Serialize(new PokemonState { Settings = Pet.Settings, IsMuted = Pet.IsMuted, PendingNoticeKey = "reset.done.message" }));
     }
 }

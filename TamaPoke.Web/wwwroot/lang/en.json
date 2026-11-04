@@ -629,7 +629,7 @@
   "web.title.tagline": "A tiny virtual pet with Pokémon",
   "web.guest.start": "Play as guest",
   "web.guest.continue": "Continue as guest",
-  "web.guest.note": "Guest saves stay in this browser. You can sign in later from the menu.",
+  "web.guest.note": "Guest saves stay in this browser only and are separate from your Google account save.",
   "web.menu.gym": "🏅 Gyms",
   "web.menu.walk": "🌿 Walk",
   "web.menu.settings": "⚙️ Settings",
@@ -656,5 +656,11 @@
   "web.settings.defaults": "Restore defaults",
   "web.settings.defaults.hint": "Only settings go back to their defaults. Your Pokémon and Dex stay.",
   "web.settings.defaults.done": "Settings were restored to their defaults.",
-  "web.menu.more": "☰ More"
+  "web.menu.more": "☰ More",
+  "web.cloud.loading": "Loading your save...",
+  "web.cloud.loadFailed": "Couldn't load your save from the server. Please sign in again.",
+  "web.cloud.import.title": "First time on this account",
+  "web.cloud.import.message": "This account has no save yet. How do you want to start? Your guest save stays as it is.",
+  "web.cloud.import.guest": "Start from guest save",
+  "web.cloud.import.new": "Start with a new egg"
 }
