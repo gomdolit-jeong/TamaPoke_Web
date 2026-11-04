@@ -559,31 +559,6 @@ body {
     }
 }
 
-.pet-flash {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 180px;
-    height: 180px;
-    margin: -105px 0 0 -90px;
-    background: white;
-    border-radius: 50%;
-    pointer-events: none;
-    animation: pet-flash 0.25s ease-in-out infinite alternate;
-}
-
-@keyframes pet-flash {
-    from { opacity: 0.15; }
-    to { opacity: 0.95; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .pet-flash {
-        animation: none;
-        opacity: 0.7;
-    }
-}
-
 .pet-prompt {
     display: flex;
     gap: 0.5rem;
@@ -849,12 +824,6 @@ code {
     width: 36px;
     height: 36px;
     transform: translate(20px, -55px);
-}
-
-.pet-flash {
-    width: 120px;
-    height: 120px;
-    margin: -70px 0 0 -60px;
 }
 
 .pet-poops {
@@ -2910,4 +2879,74 @@ nav.pet-menu .menu-battle {
         width: 16px;
         height: 16px;
     }
+}
+
+/* 작별, 놔주기, 가출, 진화 연출 */
+.pet-device {
+    position: relative;
+}
+
+.pet-ceremony {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: rgb(26 26 26 / 93%);
+}
+
+.pet-ceremony-actor {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 110px;
+    height: 110px;
+}
+
+    .pet-ceremony-actor .sprite {
+        grid-area: 1 / 1;
+    }
+
+/* 진화 번쩍임: 같은 그림을 흰색으로 겹쳐 포켓몬 모양대로 깜빡입니다. */
+.pet-ceremony-flash {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    filter: brightness(0) invert(1);
+    animation: pet-ceremony-flash 0.15s ease-in-out infinite alternate;
+}
+
+    .pet-ceremony-flash .sprite {
+        grid-area: 1 / 1;
+    }
+
+@keyframes pet-ceremony-flash {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.pet-ceremony-text {
+    margin: 0;
+    color: #fff;
+    font-size: 16px;
+    line-height: 1.35;
+    text-align: center;
+    white-space: pre-line;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pet-ceremony-flash {
+        animation: none;
+        opacity: 0.7;
+    }
+}
+
+/* 연출 중에는 어두운 층 아래로 평소 자리의 포켓몬이 비치지 않게 합니다. */
+.pet-device:has(.pet-ceremony) .pet-actor {
+    visibility: hidden;
 }
