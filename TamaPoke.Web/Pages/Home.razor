@@ -294,7 +294,12 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _pet = PreparePet(await Store.LoadAsync());
+        var saved = await Store.LoadAsync();
+#if DEBUG
+        // 로컬 테스트: 세이브가 비어 있으면 강한 파티로 시작합니다.
+        if (saved.HasNoProgress) saved = TestSave.Create(Megas);
+#endif
+        _pet = PreparePet(saved);
         CloudSave.Changed += OnCloudChanged;
         _ = CloudSave.InitializeAsync(() => _pet!, SwitchSaveAsync);
         _ = RunLoopAsync();

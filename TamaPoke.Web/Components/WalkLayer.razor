@@ -208,11 +208,11 @@
         }
 
         // 들판 안쪽
-        Scatter(TreeGreen, 5, 300, 490);
-        Scatter(TreeDeep, 4, 320, 490);
-        Scatter(TreeBlossom, 3, 280, 480);
-        Scatter(TreeAutumn, 2, 300, 480);
-        Scatter(Pine, 5, 320, 495);
+        Scatter(TreeGreen, 3, 300, 490);
+        Scatter(TreeDeep, 2, 320, 490);
+        Scatter(TreeBlossom, 2, 280, 480);
+        Scatter(TreeAutumn, 1, 300, 480);
+        Scatter(Pine, 2, 320, 495);
         Scatter(Bush, 3, 180, 470);
         Scatter(BushBerry, 2, 180, 470);
         Scatter(Rock, 4, 200, 480);
@@ -236,7 +236,7 @@
         for (int i = 0; i < groves; i++)
         {
             var (x, y) = RandomPoint(WORLD_RADIUS + 40, extent);
-            int trees = random.Next(2, 5);
+            int trees = random.Next(1, 3);
             for (int tree = 0; tree < trees; tree++)
             {
                 Add(GroveTrees[random.Next(GroveTrees.Length)], x + (random.NextDouble() - 0.5) * GROVE_SIZE, y + (random.NextDouble() - 0.5) * GROVE_SIZE);
