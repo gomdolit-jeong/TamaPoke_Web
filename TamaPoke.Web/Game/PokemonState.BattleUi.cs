@@ -43,7 +43,7 @@ public sealed partial class PokemonState
     private const int WILD_SHINY_CHANCE_PERCENT = 1;
 
     // 게임판 좌표 (PC판 BattleView와 같음)
-    private const double ENEMY_CENTER_X = 214, ENEMY_CENTER_Y = 90, PLAYER_CENTER_X = 80, PLAYER_CENTER_Y = 159;
+    private const double ENEMY_CENTER_X = 214, ENEMY_CENTER_Y = 90, PLAYER_CENTER_X = 80, PLAYER_CENTER_Y = 139;
     private const double BATTLE_AREA_HEIGHT = 173;
     private const int FX_FRAME_MS = 80, SHOT_STEP_MS = 35, SHOT_STEPS = 9, SHOT_FRAME_EVERY = 2, CHARGE_FX_LOOPS = 4;
     private const double ENEMY_FX_SCALE = 2, PLAYER_FX_SCALE = 3, SHOT_SCALE = 2;

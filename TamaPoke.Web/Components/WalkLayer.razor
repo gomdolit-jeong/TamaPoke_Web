@@ -41,11 +41,12 @@
         <div class="walk-pet" @key="pet.Id" @onpointerdown="e => OnPetPointerDown(e, pet)" @onpointerdown:stopPropagation="true"
              style="left:@(Px(screenX));top:@(Px(screenY));z-index:@((int)screenY);transform:scale(@((depth * _zoom * PET_DEPTH_SCALE).ToString("F3")));@(visible ? "" : "display:none")">
             <span class="walk-shadow" style="top:@(Px(SpriteScale * 7));width:@(Px(SpriteScale * 18));height:@(Px(SpriteScale * 6));margin-left:@(Px(-SpriteScale * 9))"></span>
+            <AnimatedSprite SpritePath="@pet.SpritePath" FallbackPath="@pet.BasePath" Action="pet.Action" Row="pet.Row" Scale="SpriteScale" NoPreload="true" Alt="" />
             @if (pet.Behavior == WalkBehavior.Rummaging && pet.IsInBush)
             {
-                <span class="walk-bush"></span>
+                <img class="walk-bush" src="ui/fx_bush.png" alt=""
+                     style="left:@(Px(-SpriteScale * 20));top:@(Px(-SpriteScale * 6));width:@(Px(SpriteScale * 40));height:@(Px(SpriteScale * 20))" />
             }
-            <AnimatedSprite SpritePath="@pet.SpritePath" FallbackPath="@pet.BasePath" Action="pet.Action" Row="pet.Row" Scale="SpriteScale" NoPreload="true" Alt="" />
             @if (pet.Behavior == WalkBehavior.Transforming)
             {
                 <span class="walk-mega-ring"></span>

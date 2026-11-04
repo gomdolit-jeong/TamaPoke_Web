@@ -646,7 +646,7 @@
   "web.walk.rotateRight": "오른쪽으로 돌리기",
   "web.walk.zoomIn": "가까이",
   "web.walk.zoomOut": "멀리",
-  "web.walk.hint": "땅을 끌거나 ← → 키로 돌리기 · 휠로 확대 · 오른쪽 버튼으로 끌어 옮기기",
+  "web.walk.hint": "화면 돌리기: 드래그 또는 ← → · 확대: 휠 · 화면 이동: 우클릭 드래그 · 포켓몬 옮기기: 포켓몬 드래그",
   "web.settings.notify": "알림 사용",
   "web.settings.notify.hint": "탭을 안 보고 있을 때 배고픔, 야생 포켓몬 등을 브라우저 알림으로 알려 줘요.",
   "web.settings.notifyDenied": "브라우저에서 알림이 차단되어 있어요. 사이트 설정에서 허용해 주세요.",

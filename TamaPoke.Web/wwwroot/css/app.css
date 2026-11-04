@@ -1142,7 +1142,7 @@ code {
 
 .battle-sprite-player {
     left: 80px;
-    top: 159px;
+    top: 139px;
 }
 
 .battle-sprite .sprite {
@@ -2265,6 +2265,7 @@ select {
     position: absolute;
     left: 50%;
     top: 50%;
+    box-sizing: border-box; /* 테두리까지 포함한 크기로 정확히 가운데에 맞춥니다. */
     width: 90px;
     height: 90px;
     margin: -45px 0 0 -45px;
@@ -2386,20 +2387,18 @@ select {
         translate: -50% -50%;
     }
 
+/* 풀숲은 한 장짜리 그림이고 살짝 흔들립니다. */
 .walk-bush {
     position: absolute;
-    left: -40px;
-    top: -10px;
-    width: 80px;
-    height: 40px;
-    background: url("../ui/fx_bush.png") 0 0 / 160px 40px no-repeat;
     image-rendering: pixelated;
     pointer-events: none;
-    animation: walk-bush 0.4s steps(2) infinite;
+    transform-origin: 50% 100%;
+    animation: walk-bush 0.3s ease-in-out infinite alternate;
 }
 
 @keyframes walk-bush {
-    to { background-position: -160px 0; }
+    from { transform: skewX(-5deg); }
+    to { transform: skewX(5deg); }
 }
 
 .walk-bubble {
@@ -2906,4 +2905,12 @@ nav.pet-menu .menu-battle {
 
 .pet-actions button.care-play:hover:not(:disabled) {
     background: #5aad33;
+}
+
+/* 전투 화면은 좁아서 아래쪽이 잘리지 않게 작게 씁니다. */
+.battle-sprite .walk-mega-ring {
+    width: 64px;
+    height: 64px;
+    margin: -32px 0 0 -32px;
+    border-width: 4px;
 }
