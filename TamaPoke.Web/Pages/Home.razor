@@ -43,7 +43,7 @@ else
         <div class="pet-stage" style="background-image:url('@BackgroundUrl')">
             <button type="button" class="pet-actor" aria-label="@(Loc.T(_pet.IsEgg ? "web.tap.egg" : "web.tap.pet"))"
                     style="transform:translate(@(_pet.PosX.ToString("F1"))px,@(_pet.PosY.ToString("F0"))px)" @onclick="Tap">
-                <AnimatedSprite SpritePath="@_pet.SpritePath" Action="_pet.CurrentAction" Row="_pet.CurrentRow" Flipped="_pet.FlipX < 0" Alt="" />
+                <AnimatedSprite SpritePath="@_pet.SpritePath" Action="_pet.CurrentAction" Row="_pet.CurrentRow" Flipped="_pet.FlipX < 0" Scale="@(_pet.IsEgg ? 3 : 2)" Alt="" />
             </button>
 
             @if (_pet.EatingFood is int food)
@@ -92,21 +92,23 @@ else
             </div>
         }
 
+        @if (!_pet.IsPlayMenuOpen && !_pet.IsFeedMenuOpen)
+        {
         <ul class="pet-stats">
             @StatBar("stat.fullness", _pet.Fullness)
             @StatBar("stat.joy", _pet.Joy)
             @StatBar("stat.energy", _pet.Energy)
             @StatBar("stat.hygiene", _pet.Hygiene)
         </ul>
+        }
 
         @if (_pet.IsPlayMenuOpen)
         {
             <div class="pet-food-menu">
                 @foreach (var game in Games)
                 {
-                    <button type="button" @onclick="() => _pet.StartMiniGame(game.Game)">
+                    <button type="button" title="@Loc.T(game.Label)" aria-label="@Loc.T(game.Label)" @onclick="() => _pet.StartMiniGame(game.Game)">
                         <img src="ui/@game.Icon" alt="" />
-                        <span>@Loc.T(game.Label)</span>
                     </button>
                 }
             </div>
@@ -118,26 +120,25 @@ else
                 @for (int i = 0; i < FoodIcons.Length; i++)
                 {
                     int foodType = i;
-                    <button type="button" @onclick="() => Act(p => p.Feed(foodType))">
+                    <button type="button" title="@Loc.T(FoodKeys[i])" aria-label="@Loc.T(FoodKeys[i])" @onclick="() => Act(p => p.Feed(foodType))">
                         <img src="ui/@FoodIcons[i]" alt="" />
-                        <span>@Loc.T(FoodKeys[i])</span>
                     </button>
                 }
             </div>
         }
 
         <div class="pet-actions">
-            <button type="button" disabled="@(!_pet.CanCare || _pet.IsSleeping)" aria-expanded="@(_pet.IsFeedMenuOpen ? "true" : "false")" @onclick="ToggleFeedMenu">
-                <img src="ui/icon_feed.png" alt="" /><span>@Loc.T("web.btn.feed")</span>
+            <button type="button" disabled="@(!_pet.CanCare || _pet.IsSleeping)" aria-expanded="@(_pet.IsFeedMenuOpen ? "true" : "false")" title="@Loc.T("web.btn.feed")" aria-label="@Loc.T("web.btn.feed")" @onclick="ToggleFeedMenu">
+                <img src="ui/icon_feed.png" alt="" />
             </button>
-            <button type="button" disabled="@(!_pet.CanStartActivity)" aria-expanded="@(_pet.IsPlayMenuOpen ? "true" : "false")" @onclick="TogglePlayMenu">
-                <img src="ui/icon_play.png" alt="" /><span>@Loc.T("web.btn.play")</span>
+            <button type="button" disabled="@(!_pet.CanStartActivity)" aria-expanded="@(_pet.IsPlayMenuOpen ? "true" : "false")" title="@Loc.T("web.btn.play")" aria-label="@Loc.T("web.btn.play")" @onclick="TogglePlayMenu">
+                <img src="ui/icon_play.png" alt="" />
             </button>
-            <button type="button" disabled="@(!_pet.CanCare)" @onclick="() => Act(p => p.ToggleSleep())">
-                <img src="ui/icon_sleep.png" alt="" /><span>@Loc.T(_pet.IsSleeping ? "web.btn.wake" : "web.btn.sleep")</span>
+            <button type="button" disabled="@(!_pet.CanCare)" title="@Loc.T(_pet.IsSleeping ? "web.btn.wake" : "web.btn.sleep")" aria-label="@Loc.T(_pet.IsSleeping ? "web.btn.wake" : "web.btn.sleep")" @onclick="() => Act(p => p.ToggleSleep())">
+                <img src="ui/icon_sleep.png" alt="" />
             </button>
-            <button type="button" disabled="@(!_pet.CanCare || _pet.IsSleeping)" @onclick="() => Act(p => p.Clean())">
-                <img src="ui/icon_bath.png" alt="" /><span>@Loc.T("web.btn.bath")</span>
+            <button type="button" disabled="@(!_pet.CanCare || _pet.IsSleeping)" title="@Loc.T("web.btn.bath")" aria-label="@Loc.T("web.btn.bath")" @onclick="() => Act(p => p.Clean())">
+                <img src="ui/icon_bath.png" alt="" />
             </button>
         </div>
 

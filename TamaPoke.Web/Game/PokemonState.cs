@@ -30,7 +30,7 @@ public sealed partial class PokemonState
     private const double EVOLVE_FLASH_START_MS = 1500;
     private const double EVOLVE_FLASH_END_MS = 4500;
     private const double EVOLVE_END_MS = 8000;
-    private const double EVOLVE_FLOAT_PIXELS = 30;
+    private const double EVOLVE_FLOAT_PIXELS = 20;
 
     // PC판 메인 루프 한 칸. 모션 길이는 PC판의 칸 수를 그대로 곱해서 정합니다.
     private const double LOOP_TICK_MS = 33;
@@ -40,8 +40,8 @@ public sealed partial class PokemonState
     private const double FOOD_END_MS = 2100;
     private const double FOOD_FADE_MS = 300;
 
-    private const double WALK_LIMIT = 100;
-    private const double WALK_PIXELS_PER_SECOND = 68;
+    private const double WALK_LIMIT = 90;
+    private const double WALK_PIXELS_PER_SECOND = 45; // PC판과 같은 속도
 
     private static readonly HashSet<int> SideViewActions =
     [
