@@ -46,5 +46,5 @@ public sealed class Loc(HttpClient http, IJSRuntime js)
     }
 
     private async Task<Dictionary<string, string>> ReadAsync(string language) =>
-        await http.GetFromJsonAsync($"lang/{language}.json", LangJsonContext.Default.DictionaryStringString) ?? [];
+        await http.GetFromJsonAsync(BuildInfo.Versioned($"lang/{language}.json"), LangJsonContext.Default.DictionaryStringString) ?? [];
 }

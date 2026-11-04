@@ -93,7 +93,7 @@ public sealed class PokemonDex(HttpClient http)
 
     public async Task InitializeAsync()
     {
-        var all = await http.GetFromJsonAsync("data/pokemon.json", DexJsonContext.Default.ListPokemonInfo) ?? [];
+        var all = await http.GetFromJsonAsync(Utils.BuildInfo.Versioned("data/pokemon.json"), DexJsonContext.Default.ListPokemonInfo) ?? [];
         _byId = all.GroupBy(p => p.Id).ToDictionary(g => g.Key, g => g.First());
 
         // 레벨이 아닌 방법(돌, 교환 등)으로 진화하는 포켓몬은 Lv.36에 진화합니다.

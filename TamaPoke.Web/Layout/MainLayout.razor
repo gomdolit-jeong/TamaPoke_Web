@@ -1,5 +1,10 @@
 ﻿@inherits LayoutComponentBase
 
+@* index.html의 CSS는 첫 로딩 화면용입니다. 게임 화면은 이 빌드의 CSS로 덮어씁니다. *@
+<HeadContent>
+    <link rel="stylesheet" href="@TamaPoke.Web.Utils.BuildInfo.Versioned("css/app.css")" />
+</HeadContent>
+
 <main class="page">
     @Body
 </main>
