@@ -2914,3 +2914,26 @@ nav.pet-menu .menu-battle {
     margin: -32px 0 0 -32px;
     border-width: 4px;
 }
+
+/* 구글 로그인 버튼: 공식 G 로고는 흰 바탕 위에 둡니다. */
+.google-icon {
+    box-sizing: content-box;
+    width: 14px;
+    height: 14px;
+    padding: 2px;
+    border-radius: 50%;
+    background: #fff;
+    vertical-align: -5px;
+    image-rendering: auto;
+}
+
+.title-login .google-icon {
+    margin-right: 6px;
+}
+
+@media (max-width: 463px) {
+    nav.pet-menu button img.google-icon {
+        width: 16px;
+        height: 16px;
+    }
+}

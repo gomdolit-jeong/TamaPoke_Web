@@ -227,7 +227,7 @@ else
             }
             else if (CloudSave.Status != CloudStatus.Unavailable)
             {
-                <button type="button" disabled="@(CloudSave.Status == CloudStatus.Loading)" @onclick="CloudSave.SignInAsync">@PetMenu.Label("☁️ " + Loc.T("web.cloud.signIn"))</button>
+                <button type="button" disabled="@(CloudSave.Status == CloudStatus.Loading)" @onclick="CloudSave.SignInAsync"><img class="google-icon" src="ui/icon_google.svg" alt="" /><span class="menu-label">@Loc.T("web.cloud.signIn")</span></button>
             }
             <p class="cloud-status" role="status">@CloudStatusText</p>
         </Cloud>

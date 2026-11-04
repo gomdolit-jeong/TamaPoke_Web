@@ -29,7 +29,7 @@
         <p class="title-tagline">@Loc.T("web.title.tagline")</p>
         @if (CanSignIn)
         {
-            <button type="button" class="title-login" disabled="@(!IsSignInReady)" @onclick="OnSignIn">☁️ @Loc.T("web.cloud.signIn")</button>
+            <button type="button" class="title-login" disabled="@(!IsSignInReady)" @onclick="OnSignIn"><img class="google-icon" src="ui/icon_google.svg" alt="" />@Loc.T("web.cloud.signIn")</button>
         }
         <button type="button" class="title-guest" @onclick="OnGuest">@Loc.T(HasSave ? "web.guest.continue" : "web.guest.start")</button>
         <p class="title-note" role="status">@Note</p>
