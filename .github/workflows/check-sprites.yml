@@ -1,0 +1,36 @@
+name: Check new sprites
+
+# 일주일에 한 번 SpriteCollab과 비교해서 새 스프라이트가 있으면 이슈로 알려 줍니다.
+# 코드나 사이트는 바꾸지 않습니다. Actions 탭에서 직접 실행할 수도 있습니다.
+on:
+  schedule:
+    - cron: "0 0 * * 1" # 매주 월요일 오전 9시 (한국 시간)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare with SpriteCollab
+        id: compare
+        run: python tools/check_sprite_updates.py --report sprite-report.md
+
+      # 이미 열린 알림 이슈가 있으면 새로 만들지 않고 내용만 고칩니다.
+      - name: Open or update issue
+        if: steps.compare.outputs.has_updates == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 새 스프라이트가 나왔어요
+        run: |
+          number=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body-file sprite-report.md
+          else
+            gh issue create --title "$TITLE" --body-file sprite-report.md
+          fi
