@@ -67,3 +67,8 @@ window.tamaPoke = {
         }
     },
 };
+
+// 산책 화면에서는 오른쪽 버튼을 화면 옮기기에 쓰므로 브라우저 메뉴를 막습니다. (휴대폰 길게 누르기도 포함)
+document.addEventListener("contextmenu", (e) => {
+    if (e.target instanceof Element && e.target.closest(".walk-layer")) e.preventDefault();
+});

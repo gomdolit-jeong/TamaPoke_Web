@@ -11,7 +11,7 @@
 @* 산책: 둥근 들판을 돌려 볼 수 있는 2.5D 화면입니다.
    땅은 CSS 3D 평면이고, 포켓몬과 소품은 Project()로 같은 계산을 해서 화면 위치와 크기를 정합니다. *@
 <div class="walk-layer" tabindex="0" @ref="_layer" @onpointerdown="OnGroundPointerDown" @onpointermove="OnPointerMove" @onpointerup="OnPointerUp"
-     @onpointerleave="OnPointerUp" @onpointercancel="OnPointerUp" @oncontextmenu:preventDefault="true" @onwheel="OnWheel" @onkeydown="OnKeyDown">
+     @onpointerleave="OnPointerUp" @onpointercancel="OnPointerUp" @onwheel="OnWheel" @onkeydown="OnKeyDown">
     <div class="walk-sky" aria-hidden="true" style="height:@(Px(_groundTop))">
         <div class="walk-band walk-band-clouds" style="@BandStyle(0.45)"></div>
         <div class="walk-band walk-band-mountains" style="@BandStyle(0.55)"></div>
