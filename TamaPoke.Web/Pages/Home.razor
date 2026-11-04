@@ -1,50 +1,129 @@
-﻿@page "/"
+@page "/"
 @using System.Diagnostics
 @using TamaPoke.Web.Components
+@using TamaPoke.Web.Game
 @using TamaPoke.Web.Sprites
+@using TamaPoke.Web.Utils
 @implements IDisposable
+@inject SaveStore Store
+@inject Loc Loc
 
 <PageTitle>TamaPoke</PageTitle>
 
-<h1>TamaPoke</h1>
+@if (_pet is null)
+{
+    <p class="pet-loading">@Loc.T("web.loading")</p>
+}
+else
+{
+    <section class="pet-device">
+        <header class="pet-header">
+            <h1>@Name</h1>
+            <button type="button" class="pet-lang" lang="@(Loc.Language == Loc.Korean ? "en" : "ko")" @onclick="ToggleLanguageAsync">
+                @(Loc.Language == Loc.Korean ? "English" : "한국어")
+            </button>
+        </header>
 
-<div class="stage">
-    <div class="stage-actor" style="transform:translateX(@(_posX.ToString("F1"))px) scaleX(@_flipX)">
-        <AnimatedSprite File="p0025.bin" Alt="피카츄" Action="_action" Row="Row" />
-    </div>
-</div>
+        <p class="pet-mood" role="status">@Loc.T(_pet.MoodKey)</p>
 
-<div class="actions">
-    <button type="button" aria-pressed="@Pressed(PokemonAnim.IDLE)" @onclick="Idle">대기</button>
-    <button type="button" aria-pressed="@Pressed(PokemonAnim.WALK)" @onclick="() => _action = PokemonAnim.WALK">걷기</button>
-    <button type="button" aria-pressed="@Pressed(PokemonAnim.HOP)" @onclick="() => _action = PokemonAnim.HOP">점프</button>
-</div>
+        <div class="pet-stage" style="background-image:url('@BackgroundUrl')">
+            <button type="button" class="pet-actor" aria-label="@(Loc.T(_pet.IsEgg ? "web.tap.egg" : "web.tap.pet"))"
+                    style="transform:translateX(@(_pet.PosX.ToString("F1"))px)" @onclick="Tap">
+                <AnimatedSprite SpritePath="@_pet.SpritePath" Action="_pet.CurrentAction" Row="_pet.CurrentRow" Flipped="_pet.FlipX < 0" Alt="" />
+            </button>
 
-<p class="note">웹버전을 만들고 있습니다. <span lang="en">The web version is under construction.</span></p>
+            @if (_pet.EatingFood is int food)
+            {
+                <img class="pet-fx pet-fx-food" src="ui/@FoodIcons[food]" alt="" />
+            }
+            @if (_pet.IsBathing)
+            {
+                <img class="pet-fx pet-fx-bubble" src="ui/fx_bubble.png" alt="" />
+            }
+            @if (_pet.IsPetting)
+            {
+                <img class="pet-fx pet-fx-heart" src="ui/icon_heart.png" alt="" />
+            }
+            <div class="pet-poops">
+                @for (int i = 0; i < _pet.Poops; i++)
+                {
+                    <img src="ui/fx_poop.png" alt="" />
+                }
+            </div>
+        </div>
+
+        <ul class="pet-stats">
+            @StatBar("stat.fullness", _pet.Fullness)
+            @StatBar("stat.joy", _pet.Joy)
+            @StatBar("stat.energy", _pet.Energy)
+            @StatBar("stat.hygiene", _pet.Hygiene)
+        </ul>
+
+        @if (_pet.IsFeedMenuOpen)
+        {
+            <div class="pet-food-menu">
+                @for (int i = 0; i < FoodIcons.Length; i++)
+                {
+                    int foodType = i;
+                    <button type="button" @onclick="() => Act(p => p.Feed(foodType))">
+                        <img src="ui/@FoodIcons[i]" alt="" />
+                        <span>@Loc.T(FoodKeys[i])</span>
+                    </button>
+                }
+            </div>
+        }
+
+        <div class="pet-actions">
+            <button type="button" disabled="@(!_pet.CanCare || _pet.IsSleeping)" aria-expanded="@(_pet.IsFeedMenuOpen ? "true" : "false")" @onclick="() => _pet.IsFeedMenuOpen = !_pet.IsFeedMenuOpen">
+                <img src="ui/icon_feed.png" alt="" /><span>@Loc.T("web.btn.feed")</span>
+            </button>
+            <button type="button" disabled title="@Loc.T("web.comingSoon")">
+                <img src="ui/icon_play.png" alt="" /><span>@Loc.T("web.btn.play")</span>
+            </button>
+            <button type="button" disabled="@(!_pet.CanCare)" @onclick="() => Act(p => p.ToggleSleep())">
+                <img src="ui/icon_sleep.png" alt="" /><span>@Loc.T(_pet.IsSleeping ? "web.btn.wake" : "web.btn.sleep")</span>
+            </button>
+            <button type="button" disabled="@(!_pet.CanCare || _pet.IsSleeping)" @onclick="() => Act(p => p.Clean())">
+                <img src="ui/icon_bath.png" alt="" /><span>@Loc.T("web.btn.bath")</span>
+            </button>
+        </div>
+    </section>
+}
 
 @code {
-    private const double WALK_LIMIT = 100;
-    private const double WALK_SPEED = 60; // 초당 픽셀
+    private static readonly string[] FoodIcons = ["icon_berry_red.png", "icon_berry_blue.png", "icon_berry_green.png", "icon_candy.png"];
+    private static readonly string[] FoodKeys = ["food.red", "food.blue", "food.green", "food.candy"];
+
+    // 이보다 오래 멈췄으면 탭이 뒤로 간 게 아니라 컴퓨터나 브라우저가 멈춘 것으로 보고 시간을 흘리지 않습니다.
+    // 브라우저는 뒤에 있는 탭의 타이머를 최대 1분까지 늦춥니다.
+    private const double MAX_CATCH_UP_MS = 120_000;
 
     private readonly CancellationTokenSource _cts = new();
-    private int _action = PokemonAnim.WALK;
-    private double _posX;
-    private int _flipX = 1; // 1이면 시트의 왼쪽 방향 그대로, -1이면 뒤집어서 오른쪽
+    private PokemonState? _pet;
+    private object? _lastRendered;
 
-    private int Row => _action == PokemonAnim.IDLE ? PokemonAnim.ROW_FRONT : PokemonAnim.ROW_LEFT;
+    private string Name => _pet!.IsEgg ? Loc.T("web.egg") : $"{Loc.T($"web.species.{_pet.SpeciesId}")} Lv.{_pet.Level}";
+    private string BackgroundUrl => $"backgrounds/{_pet!.BiomeName}{(_pet.IsNight ? " NIGHT" : "")}.png";
 
-    // Blazor는 bool 값을 그대로 쓰면 aria-pressed="true"로 출력하지 않습니다.
-    private string Pressed(int action) => _action == action ? "true" : "false";
+    private RenderFragment StatBar(string key, int value) => @<li>
+        <span class="pet-stat-name">@Loc.T(key)</span>
+        <progress max="100" value="@value" aria-label="@Loc.T(key)"></progress>
+        <span class="pet-stat-value">@value</span>
+    </li>;
 
-    protected override void OnInitialized() => _ = WalkLoopAsync();
-
-    private void Idle()
+    protected override async Task OnInitializedAsync()
     {
-        _action = PokemonAnim.IDLE;
-        _flipX = 1;
+        _pet = await Store.LoadAsync();
+        _ = RunLoopAsync();
     }
 
-    private async Task WalkLoopAsync()
+    private void Act(Action<PokemonState> action) => action(_pet!);
+
+    private void Tap() => _pet!.Tap();
+
+    private Task ToggleLanguageAsync() => Loc.ToggleLanguageAsync();
+
+    private async Task RunLoopAsync()
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(33));
         long last = Stopwatch.GetTimestamp();
@@ -53,15 +132,26 @@
             while (await timer.WaitForNextTickAsync(_cts.Token))
             {
                 long now = Stopwatch.GetTimestamp();
-                double seconds = Math.Min(Stopwatch.GetElapsedTime(last, now).TotalSeconds, 0.1);
+                double elapsedMs = Stopwatch.GetElapsedTime(last, now).TotalMilliseconds;
                 last = now;
+                if (elapsedMs > MAX_CATCH_UP_MS) continue;
 
-                if (_action != PokemonAnim.WALK) continue;
+                _pet!.Update(elapsedMs);
 
-                _posX -= _flipX * WALK_SPEED * seconds;
-                if (_posX >= WALK_LIMIT) { _posX = WALK_LIMIT; _flipX = 1; }
-                else if (_posX <= -WALK_LIMIT) { _posX = -WALK_LIMIT; _flipX = -1; }
-                StateHasChanged();
+                if (_pet.NeedsSave)
+                {
+                    _pet.NeedsSave = false;
+                    await Store.SaveAsync(_pet);
+                }
+
+                // 값이 바뀌었을 때만 다시 그립니다.
+                object rendered = (_pet.PosX, _pet.FlipX, _pet.CurrentAction, _pet.MoodKey, _pet.IsPetting, _pet.IsNight,
+                    (_pet.Fullness, _pet.Joy, _pet.Energy, _pet.Hygiene, _pet.Poops, _pet.Level, _pet.SpeciesId));
+                if (!rendered.Equals(_lastRendered))
+                {
+                    _lastRendered = rendered;
+                    StateHasChanged();
+                }
             }
         }
         catch (OperationCanceledException) { }

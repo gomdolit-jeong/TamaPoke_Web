@@ -1,7 +1,7 @@
 @using System.Diagnostics
 @using TamaPoke.Web.Sprites
 @implements IDisposable
-@inject HttpClient Http
+@inject SpriteLoader Loader
 
 @if (_failed)
 {
@@ -10,7 +10,7 @@
 else if (_strip is not null)
 {
     @* 시트 전체를 img 하나로 두고 위치만 옮겨서, 프레임이 바뀌어도 이미지를 다시 디코딩하지 않습니다. *@
-    <div class="sprite" style="width:@(Px(_strip.FrameWidth));height:@(Px(_strip.FrameHeight))">
+    <div class="sprite" style="width:@(Px(_strip.FrameWidth));height:@(Px(_strip.FrameHeight));transform:scaleX(@(Flipped ? -1 : 1))">
         <img src="@_stripUrl" alt="@Alt" draggable="false"
              style="width:@(Px(_strip.SheetWidth));height:@(Px(_strip.SheetHeight));transform:translate(@(Px(-_frameIndex * _strip.FrameWidth)),@(Px(-SafeRow * _strip.FrameHeight)))" />
     </div>
@@ -20,61 +20,56 @@ else if (_strip is not null)
     private const double DEFAULT_FRAME_MS = 200.0;
     private const double PMD_TICK_MS = 1000.0 / 60.0;
 
-    [Parameter, EditorRequired] public required string File { get; set; }
+    [Parameter, EditorRequired] public required string SpritePath { get; set; }
     [Parameter] public int Action { get; set; } = PokemonAnim.IDLE;
     [Parameter] public int Row { get; set; } = PokemonAnim.ROW_FRONT;
     [Parameter] public int Scale { get; set; } = 3;
+    [Parameter] public bool Flipped { get; set; }
     [Parameter] public string Alt { get; set; } = "";
 
     private readonly CancellationTokenSource _cts = new();
-    private List<SpriteStrip?>? _strips;
-    private string? _loadedFile;
-    private int _loadedAction = -1;
+    private (string? SpritePath, int Action, int Row) _request;
     private SpriteStrip? _strip;
     private string? _stripUrl;
+    private int _stripRow;
     private int _frameIndex;
     private double _frameElapsedMs;
     private bool _failed;
 
-    private int SafeRow => _strip is null ? 0 : Math.Clamp(Row, 0, _strip.Rows - 1);
+    // 그림과 방향 줄을 함께 바꿉니다. (새 모션을 받는 동안 지금 그림의 다른 줄이 보이지 않도록)
+    private int SafeRow => _strip is null ? 0 : Math.Clamp(_stripRow, 0, _strip.Rows - 1);
 
     protected override void OnInitialized() => _ = RunLoopAsync();
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_loadedFile != File)
-        {
-            _loadedFile = File;
-            _strips = null;
-            _loadedAction = -1;
-            try
-            {
-                _strips = BinSpriteReader.Read(await Http.GetByteArrayAsync($"sprites/{File}", _cts.Token));
-                _failed = false;
-            }
-            catch (Exception ex) when (ex is HttpRequestException or EndOfStreamException or ArgumentOutOfRangeException)
-            {
-                Console.Error.WriteLine($"스프라이트 로드 실패 {File}: {ex.Message}");
-                _failed = true;
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-        }
+        var request = (SpritePath, Action, Row);
+        if (request == _request) return;
+        bool isNewSprite = request.SpritePath != _request.SpritePath;
+        _request = request;
 
-        if (_strips is not null && _loadedAction != Action)
+        if (isNewSprite) _ = Loader.PreloadAsync(SpritePath);
+
+        // 새 모션을 받는 동안에는 지금 모션을 계속 보여줍니다.
+        try
         {
-            _loadedAction = Action;
-            _strip = PickStrip(Action) ?? PickStrip(PokemonAnim.IDLE) ?? _strips.FirstOrDefault(s => s is not null);
-            _stripUrl = _strip is null ? null : $"data:image/png;base64,{Convert.ToBase64String(_strip.Png)}";
+            var strip = await Loader.GetStripAsync(SpritePath, Action);
+            if (request != _request) return;
+
+            _strip = strip;
+            _stripRow = Row;
+            _stripUrl = $"data:image/png;base64,{Convert.ToBase64String(strip.Png)}";
             _frameIndex = 0;
             _frameElapsedMs = 0;
+            _failed = false;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Xml.XmlException)
+        {
+            Console.WriteLine($"스프라이트 로드 실패 {SpritePath}: {ex.Message}");
+            _failed = _strip is null;
+            if (request == _request) _request = default;
         }
     }
-
-    // 요청한 모션이 없는(비어 있는) 스프라이트는 IDLE → 첫 번째 유효 모션 순으로 대체합니다.
-    private SpriteStrip? PickStrip(int index) => _strips is not null && index >= 0 && index < _strips.Count ? _strips[index] : null;
 
     private double CurrentFrameMs()
     {

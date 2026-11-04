@@ -26,15 +26,151 @@ body {
     padding: 1.5rem 1rem;
 }
 
-.stage {
+.pet-loading {
+    text-align: center;
+}
+
+.pet-device {
+    max-width: 26rem;
+    margin: 0 auto;
+    padding: 1rem;
+    border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+    border-radius: 1.5rem;
+}
+
+.pet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+    .pet-header h1 {
+        margin: 0;
+        font-size: 1.25rem;
+    }
+
+.pet-lang {
+    min-height: 2.75rem;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.pet-mood {
+    min-height: 3em;
+    margin: 0.25rem 0 0.5rem;
+    white-space: pre-line;
+}
+
+.pet-stage {
     position: relative;
     height: 18rem;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    border-radius: 0.5rem;
+    border-radius: 0.75rem;
     display: grid;
     place-items: center;
+    background-size: cover;
+    background-position: center bottom;
+    image-rendering: pixelated;
 }
+
+.pet-actor {
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+.pet-fx {
+    position: absolute;
+    left: 50%;
+    top: 20%;
+    width: 36px;
+    height: 36px;
+    margin-left: -18px;
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+
+.pet-poops {
+    position: absolute;
+    left: 0.5rem;
+    bottom: 0.5rem;
+    display: flex;
+    gap: 0.25rem;
+    pointer-events: none;
+}
+
+    .pet-poops img {
+        width: 27px;
+        height: 27px;
+        image-rendering: pixelated;
+    }
+
+.pet-stats {
+    list-style: none;
+    margin: 0.75rem 0;
+    padding: 0;
+}
+
+    .pet-stats li {
+        display: grid;
+        grid-template-columns: 3rem 1fr 2rem;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .pet-stats progress {
+        width: 100%;
+    }
+
+.pet-stat-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.pet-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+}
+
+.pet-food-menu {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+    .pet-actions button,
+    .pet-food-menu button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.25rem;
+        min-height: 3.5rem;
+        padding: 0.25rem;
+        font: inherit;
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+
+        .pet-actions button:disabled {
+            cursor: not-allowed;
+        }
+
+        .pet-actions img,
+        .pet-food-menu img {
+            width: 27px;
+            height: 27px;
+            image-rendering: pixelated;
+        }
+
+        .pet-actions button:disabled img {
+            opacity: 0.4;
+        }
 
 .sprite {
     overflow: hidden;
@@ -46,32 +182,6 @@ body {
         image-rendering: pixelated;
         user-select: none;
     }
-
-.actions {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: center;
-    margin-top: 1rem;
-}
-
-    .actions button {
-        min-height: 2.75rem;
-        padding: 0 1.25rem;
-        font: inherit;
-        cursor: pointer;
-    }
-
-        .actions button[aria-pressed="true"] {
-            font-weight: bold;
-            outline: 2px solid currentColor;
-        }
-
-.note {
-    margin-top: 1.5rem;
-    text-align: center;
-    font-size: 0.9rem;
-    opacity: 0.8;
-}
 
 .site-footer {
     padding: 1rem;
