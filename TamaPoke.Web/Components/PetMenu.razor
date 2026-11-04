@@ -27,6 +27,8 @@
 
     <hr />
 
+    @Cloud
+
     <button type="button" aria-pressed="@(Pet.IsMuted ? "true" : "false")" @onclick="OnToggleMute">
         <img src="ui/@(Pet.IsMuted ? "icon_sound_off.png" : "icon_sound_on.png")" alt="" />
         <span>@Loc.T(Pet.IsMuted ? "web.sound.off" : "web.sound.on")</span>
@@ -38,6 +40,7 @@
 
 @code {
     [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public RenderFragment? Cloud { get; set; }
     [Parameter] public EventCallback OnStartBattle { get; set; }
     [Parameter] public EventCallback OnOpenDex { get; set; }
     [Parameter] public EventCallback OnOpenProfile { get; set; }

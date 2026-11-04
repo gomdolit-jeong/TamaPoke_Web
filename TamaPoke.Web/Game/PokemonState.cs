@@ -110,6 +110,9 @@ public sealed partial class PokemonState
 
     [JsonIgnore] public bool IsEgg => SpeciesId < 0;
     [JsonIgnore] public bool IsCeremony => Ceremony != 0;
+
+    // 막 시작한 기기의 세이브인지 (로그인할 때 물어보지 않고 서버 세이브를 받습니다)
+    [JsonIgnore] public bool HasNoProgress => IsEgg && AgeSeconds < 60 && UnlockedPokemon.Count == 0 && Party.Count == 0;
     [JsonIgnore] public bool IsPetting => _pettingMs > 0;
     [JsonIgnore] public int Level => 1 + AgeMinutes / MINUTES_PER_LEVEL;
     [JsonIgnore] public int LowestStat => Math.Min(Math.Min(Fullness, Joy), Math.Min(Energy, Hygiene));

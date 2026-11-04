@@ -613,5 +613,17 @@
   "web.menu.party": "📂 파티",
   "web.menu.bag": "🎒 가방",
   "web.menu.release": "🍃 놔주기",
-  "web.menu.battle": "⚔️ 배틀"
+  "web.menu.battle": "⚔️ 배틀",
+  "web.cloud.signIn": "구글 로그인",
+  "web.cloud.signOut": "로그아웃",
+  "web.cloud.saveNow": "지금 저장",
+  "web.cloud.syncing": "저장 중...",
+  "web.cloud.saved": "서버에 저장됨",
+  "web.cloud.failed": "서버 저장 실패",
+  "web.cloud.unavailable": "서버 저장을 쓸 수 없어요",
+  "web.cloud.signInFailed": "로그인하지 못했어요",
+  "web.cloud.conflict.title": "세이브가 달라요",
+  "web.cloud.conflict.message": "서버와 이 기기의 세이브가 달라요. 어느 쪽을 쓸까요? 고르지 않은 쪽은 덮어써요.",
+  "web.cloud.useCloud": "서버",
+  "web.cloud.useLocal": "이 기기"
 }

@@ -13,6 +13,7 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 
 builder.Services.AddScoped<Loc>();
 builder.Services.AddScoped<SaveStore>();
+builder.Services.AddScoped<CloudSave>();
 builder.Services.AddScoped<SoundPlayer>();
 builder.Services.AddScoped<SpriteLoader>();
 builder.Services.AddScoped<PokemonDex>();

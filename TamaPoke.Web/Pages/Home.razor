@@ -9,6 +9,8 @@
 @inject Loc Loc
 @inject PokemonDex Dex
 @inject SoundPlayer Sound
+@inject CloudSave CloudSave
+@inject NavigationManager Navigation
 @inject SkillDex Skills
 
 <PageTitle>TamaPoke</PageTitle>
@@ -32,7 +34,18 @@ else
 
         <p class="pet-mood" role="status">@MoodText</p>
 
-        @if (_pet.IsBattleOpen)
+        @if (CloudSave.Conflict is { } conflict)
+        {
+            <section class="pet-panel cloud-conflict" role="dialog" aria-label="@Loc.T("web.cloud.conflict.title")">
+                <h2>@Loc.T("web.cloud.conflict.title")</h2>
+                <p>@Loc.T("web.cloud.conflict.message")</p>
+                <div class="pet-prompt">
+                    <button type="button" class="pet-prompt-main" @onclick="CloudSave.ChooseCloudAsync">@Loc.T("web.cloud.useCloud")<br />@Summary(conflict.Remote)</button>
+                    <button type="button" class="pet-prompt-main" @onclick="CloudSave.ChooseThisDeviceAsync">@Loc.T("web.cloud.useLocal")<br />@Summary(_pet)</button>
+                </div>
+            </section>
+        }
+        else if (_pet.IsBattleOpen)
         {
             <BattleStage Pet="_pet" Dex="Dex" />
         }
@@ -155,7 +168,20 @@ else
         }
     </section>
 
-    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnStartBattle="StartBattle" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync" />
+    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnStartBattle="StartBattle" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync">
+        <Cloud>
+            @if (CloudSave.IsSignedIn)
+            {
+                <button type="button" @onclick="CloudSave.SaveNowAsync">☁️ @Loc.T("web.cloud.saveNow")</button>
+                <button type="button" @onclick="CloudSave.SignOutAsync">@Loc.T("web.cloud.signOut")</button>
+            }
+            else if (CloudSave.Status != CloudStatus.Unavailable)
+            {
+                <button type="button" disabled="@(CloudSave.Status == CloudStatus.Loading)" @onclick="CloudSave.SignInAsync">☁️ @Loc.T("web.cloud.signIn")</button>
+            }
+            <p class="cloud-status" role="status">@CloudStatusText</p>
+        </Cloud>
+    </PetMenu>
     </div>
 }
 
@@ -208,6 +234,8 @@ else
         pet.RegisterCurrentInDex();
         if (!pet.IsEgg && pet.SkillCount == 0) pet.RelearnFromLevel();
         _pet = pet;
+        CloudSave.Changed += OnCloudChanged;
+        _ = CloudSave.InitializeAsync(() => _pet!, ReloadWithSaveAsync);
         _ = RunLoopAsync();
     }
 
@@ -273,6 +301,26 @@ else
         _pet!.StartWildBattle();
     }
 
+    private string Summary(PokemonState pet) =>
+        pet.IsEgg ? Loc.T("pokemon.egg") : $"{Dex.GetName(pet.SpeciesId, Loc.Language)} Lv.{pet.Level}";
+
+    private string CloudStatusText => CloudSave.SignInError is not null
+        ? Loc.T("web.cloud.signInFailed")
+        : CloudSave.Status switch
+        {
+            CloudStatus.Unavailable => Loc.T("web.cloud.unavailable"),
+            CloudStatus.Syncing => Loc.T("web.cloud.syncing"),
+            CloudStatus.Saved => Loc.T("web.cloud.saved"),
+            CloudStatus.Failed => Loc.T("web.cloud.failed"),
+            _ => "",
+        };
+
+    private async Task ReloadWithSaveAsync(string json)
+    {
+        await Store.ReplaceAsync(json);
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+    }
+
     private void CloseProfile() => _pet!.IsProfileOpen = false;
 
     private void ToggleMute()
@@ -298,6 +346,7 @@ else
                 if (elapsedMs > MAX_CATCH_UP_MS) continue;
 
                 _pet!.Update(elapsedMs);
+                CloudSave.Tick(elapsedMs);
 
                 if (_pet.NeedsSave)
                 {
@@ -320,8 +369,11 @@ else
         catch (OperationCanceledException) { }
     }
 
+    private void OnCloudChanged() => InvokeAsync(StateHasChanged);
+
     public void Dispose()
     {
+        CloudSave.Changed -= OnCloudChanged;
         _cts.Cancel();
         _cts.Dispose();
     }

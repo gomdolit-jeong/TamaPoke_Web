@@ -613,5 +613,17 @@
   "web.menu.party": "📂 Party",
   "web.menu.bag": "🎒 Bag",
   "web.menu.release": "🍃 Release",
-  "web.menu.battle": "⚔️ Battle"
+  "web.menu.battle": "⚔️ Battle",
+  "web.cloud.signIn": "Google sign-in",
+  "web.cloud.signOut": "Sign out",
+  "web.cloud.saveNow": "Save now",
+  "web.cloud.syncing": "Saving...",
+  "web.cloud.saved": "Saved online",
+  "web.cloud.failed": "Online save failed",
+  "web.cloud.unavailable": "Online save unavailable",
+  "web.cloud.signInFailed": "Sign-in failed",
+  "web.cloud.conflict.title": "Saves differ",
+  "web.cloud.conflict.message": "The online save and this device differ. Which one do you want? The other will be overwritten.",
+  "web.cloud.useCloud": "Online",
+  "web.cloud.useLocal": "This device"
 }

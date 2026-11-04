@@ -30,10 +30,24 @@ public sealed class SaveStore(IJSRuntime js)
     {
         string? previous = await GetAsync(SaveKey);
         if (previous is not null) await SetAsync(BackupKey, previous);
-        await SetAsync(SaveKey, JsonSerializer.Serialize(state, SaveJsonContext.Default.PokemonState));
+        await SetAsync(SaveKey, Serialize(state));
     }
 
-    private static PokemonState? Parse(string? json)
+    public static string Serialize(PokemonState state) => JsonSerializer.Serialize(state, SaveJsonContext.Default.PokemonState);
+
+    // 서버 세이브로 바꿀 때 씁니다. 이전 세이브는 백업에 남깁니다.
+    public async Task ReplaceAsync(string json)
+    {
+        string? previous = await GetAsync(SaveKey);
+        if (previous is not null) await SetAsync(BackupKey, previous);
+        await SetAsync(SaveKey, json);
+    }
+
+    public Task<string?> GetTextAsync(string key) => GetAsync(key);
+
+    public Task SetTextAsync(string key, string value) => SetAsync(key, value);
+
+    public static PokemonState? Parse(string? json)
     {
         if (json is null) return null;
         try
