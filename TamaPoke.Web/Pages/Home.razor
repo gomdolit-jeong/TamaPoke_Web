@@ -127,25 +127,23 @@ else
             </div>
         }
 
-        <div class="pet-actions">
-            <button type="button" disabled="@(!_pet.CanCare || _pet.IsSleeping)" aria-expanded="@(_pet.IsFeedMenuOpen ? "true" : "false")" title="@Loc.T("web.btn.feed")" aria-label="@Loc.T("web.btn.feed")" @onclick="ToggleFeedMenu">
-                <img src="ui/icon_feed.png" alt="" />
-            </button>
-            <button type="button" disabled="@(!_pet.CanStartActivity)" aria-expanded="@(_pet.IsPlayMenuOpen ? "true" : "false")" title="@Loc.T("web.btn.play")" aria-label="@Loc.T("web.btn.play")" @onclick="TogglePlayMenu">
-                <img src="ui/icon_play.png" alt="" />
-            </button>
-            <button type="button" disabled="@(!_pet.CanCare)" title="@Loc.T(_pet.IsSleeping ? "web.btn.wake" : "web.btn.sleep")" aria-label="@Loc.T(_pet.IsSleeping ? "web.btn.wake" : "web.btn.sleep")" @onclick="() => Act(p => p.ToggleSleep())">
-                <img src="ui/icon_sleep.png" alt="" />
-            </button>
-            <button type="button" disabled="@(!_pet.CanCare || _pet.IsSleeping)" title="@Loc.T("web.btn.bath")" aria-label="@Loc.T("web.btn.bath")" @onclick="() => Act(p => p.Clean())">
-                <img src="ui/icon_bath.png" alt="" />
-            </button>
-        </div>
-
         }
     </section>
 
-    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync" />
+    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync">
+        <button type="button" disabled="@(!CanUseCareButtons || !_pet.CanStartActivity)" aria-expanded="@(_pet.IsFeedMenuOpen ? "true" : "false")" @onclick="ToggleFeedMenu">
+            <img src="ui/icon_feed.png" alt="" /><span>@Loc.T("web.btn.feed")</span>
+        </button>
+        <button type="button" disabled="@(!CanUseCareButtons || !_pet.CanStartActivity)" aria-expanded="@(_pet.IsPlayMenuOpen ? "true" : "false")" @onclick="TogglePlayMenu">
+            <img src="ui/icon_play.png" alt="" /><span>@Loc.T("web.btn.play")</span>
+        </button>
+        <button type="button" disabled="@(!CanUseCareButtons || !_pet.CanCare)" @onclick="ToggleSleep">
+            <img src="ui/icon_sleep.png" alt="" /><span>@Loc.T(_pet.IsSleeping ? "web.btn.wake" : "web.btn.sleep")</span>
+        </button>
+        <button type="button" disabled="@(!CanUseCareButtons || !_pet.CanStartActivity)" @onclick="Bath">
+            <img src="ui/icon_bath.png" alt="" /><span>@Loc.T("web.btn.bath")</span>
+        </button>
+    </PetMenu>
     </div>
 }
 
@@ -200,6 +198,23 @@ else
     }
 
     private void Act(Action<PokemonState> action) => action(_pet!);
+
+    // 프로필, 도감, 미니게임 화면에서는 돌봄 버튼을 잠급니다.
+    private bool CanUseCareButtons => !_isDexOpen && !_pet!.IsProfileOpen && _pet.ShownGame == MiniGame.None;
+
+    private void ToggleSleep()
+    {
+        _pet!.IsFeedMenuOpen = false;
+        _pet.IsPlayMenuOpen = false;
+        _pet.ToggleSleep();
+    }
+
+    private void Bath()
+    {
+        _pet!.IsFeedMenuOpen = false;
+        _pet.IsPlayMenuOpen = false;
+        _pet.Clean();
+    }
 
     private void Tap() => _pet!.Tap();
 

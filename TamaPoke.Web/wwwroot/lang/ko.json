@@ -607,5 +607,10 @@
   "web.medal.earned": "획득",
   "web.medal.locked": "미획득",
   "web.dex.region": "지방 선택",
-  "web.dex.empty": "아직 잡은 포켓몬이 없어요."
+  "web.dex.empty": "아직 잡은 포켓몬이 없어요.",
+  "web.menu.dex": "📖 도감",
+  "web.menu.profile": "📋 프로필",
+  "web.menu.party": "📂 파티",
+  "web.menu.bag": "🎒 가방",
+  "web.menu.release": "🍃 놔주기"
 }
