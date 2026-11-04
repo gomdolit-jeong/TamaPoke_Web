@@ -1,0 +1,54 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Publish
+        run: dotnet publish TamaPoke.Web/TamaPoke.Web.csproj -c Release -o publish
+
+      - name: Prepare for the /<repo>/ sub-path
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+        run: |
+          # 프로젝트 사이트는 하위 경로에서 서비스되므로 기준 경로를 바꾼다
+          sed -i "s|<base href=\"/\" />|<base href=\"${BASE_PATH}\" />|" publish/wwwroot/index.html
+          grep -q "<base href=\"${BASE_PATH}\" />" publish/wwwroot/index.html
+          # 주소를 직접 열거나 새로고침해도 Blazor 라우터가 처리하도록 한다
+          cp publish/wwwroot/index.html publish/wwwroot/404.html
+          # Jekyll이 _framework 폴더를 빼지 않게 한다
+          touch publish/wwwroot/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: publish/wwwroot
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
