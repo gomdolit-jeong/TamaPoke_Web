@@ -87,8 +87,8 @@
   "idle.btn.bath": "목욕",
   "idle.btn.sound": "소리 설정",
   "idle.btn.stealth": "몰래 하기 (투명도 조절)",
-  "release.confirm.title": "자연으로 배웅하기",
-  "release.confirm.message": "정말 이 친구를 자연으로 배웅할까요?\n다시 되돌릴 수 없어요.",
+  "release.confirm.title": "자연으로 돌려보내기",
+  "release.confirm.message": "정말 이 친구를 자연으로 돌려보낼까요?\n다시 되돌릴 수 없어요.",
   "settings.title": "게임 설정",
   "settings.language": "언어 (Language):",
   "settings.tray": "시스템 트레이 알림 사용",
@@ -612,7 +612,7 @@
   "web.menu.profile": "📋 프로필",
   "web.menu.party": "📂 파티",
   "web.menu.bag": "🎒 가방",
-  "web.menu.release": "🍃 배웅하기",
+  "web.menu.release": "🍃 자연으로 돌려보내기",
   "web.menu.battle": "⚔️ 배틀",
   "web.cloud.signIn": "구글 로그인",
   "web.cloud.signOut": "로그아웃",
@@ -655,5 +655,6 @@
   "web.walk.hintTouch": "끌어서 돌리기 · 두 손가락으로 확대·회전",
   "web.settings.defaults": "기본값으로 되돌리기",
   "web.settings.defaults.hint": "설정만 처음 값으로 돌아가요. 포켓몬과 도감은 그대로예요.",
-  "web.settings.defaults.done": "설정을 기본값으로 되돌렸어요."
+  "web.settings.defaults.done": "설정을 기본값으로 되돌렸어요.",
+  "web.menu.more": "☰ 더보기"
 }

@@ -2723,13 +2723,35 @@ select {
     display: none;
 }
 
-/* 좁은 화면(휴대폰): 아이콘 격자로 작게 */
+/* 넓은 화면에서는 오른쪽 세로 메뉴를 그대로 씁니다. */
+.pet-menu button.menu-more,
+.menu-backdrop {
+    display: none;
+}
+
+/* 좁은 화면(휴대폰): 화면 맨 아래 탭 바. 나머지는 더보기에 있습니다. */
 @media (max-width: 463px) {
+    .page {
+        padding-bottom: 5.5rem;
+    }
+
     nav.pet-menu {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 60;
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 4px;
-        padding: 6px;
+        grid-template-columns: repeat(20, 1fr);
+        gap: 4px 2px;
+        width: auto;
+        margin: 0;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+        border: 0;
+        border-top: 3px solid var(--tp-line);
+        border-radius: 1rem 1rem 0 0;
+        background: var(--tp-cream);
+        box-shadow: 0 -4px 14px rgb(0 0 0 / 28%);
     }
 
     nav.pet-menu .pet-menu-title,
@@ -2737,35 +2759,86 @@ select {
         display: none;
     }
 
+    /* 탭 바에는 자주 쓰는 것만 */
+    nav.pet-menu:not(.is-more-open) > :not(.menu-primary):not(.menu-more) {
+        display: none;
+    }
+
+    nav.pet-menu > button {
+        grid-column: span 5;
+    }
+
+    nav.pet-menu > .menu-primary {
+        order: 2;
+        grid-column: span 4;
+    }
+
+    nav.pet-menu > .menu-more {
+        order: 3;
+        display: flex;
+        grid-column: span 4;
+    }
+
+    /* 탭 줄은 항상 새 줄에서 시작합니다. */
+    nav.pet-menu > .menu-battle {
+        grid-column: 1 / span 4;
+    }
+
     nav.pet-menu button {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 1px;
+        gap: 2px;
         min-width: 0;
-        min-height: 3rem;
+        min-height: 3.25rem;
         padding: 3px 1px;
-        border-width: 2px;
-        border-bottom-width: 3px;
-        border-radius: 0.5rem;
+        border: 0;
+        border-radius: 0.625rem;
+        background: #fff;
+        color: var(--tp-ink);
         font-size: 11px;
         line-height: 1.15;
         word-break: keep-all;
+        box-shadow: none;
+    }
+
+    /* 탭은 상자 없이 아이콘과 글자만 */
+    nav.pet-menu > .menu-primary,
+    nav.pet-menu > .menu-more {
+        background: transparent;
+    }
+
+    nav.pet-menu > .menu-primary:active:not(:disabled),
+    nav.pet-menu > .menu-more:active {
+        background: var(--tp-cream-dark);
+    }
+
+    nav.pet-menu > .menu-battle,
+    nav.pet-menu > .menu-battle:hover:not(:disabled) {
+        background: transparent;
+        color: var(--tp-red);
+        text-shadow: none;
     }
 
     nav.pet-menu button .menu-icon {
-        font-size: 17px;
+        font-size: 20px;
         line-height: 1.1;
     }
 
     nav.pet-menu button img {
-        width: 17px;
-        height: 17px;
+        width: 20px;
+        height: 20px;
     }
 
-    nav.pet-menu .pet-menu-confirm,
-    nav.pet-menu .cloud-status {
+    nav.pet-menu .pet-menu-confirm p {
+        margin: 2px 0 4px;
+        text-align: center;
+        font-size: 12px;
+    }
+
+    nav.pet-menu.is-more-open > .pet-menu-confirm,
+    nav.pet-menu.is-more-open > .cloud-status {
         grid-column: 1 / -1;
     }
 
@@ -2780,5 +2853,20 @@ select {
 
     nav.pet-menu .pet-menu-row button {
         min-height: 2rem;
+        background: var(--tp-cream-dark);
     }
+
+    .menu-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+        display: block;
+        border: 0;
+        background: rgb(0 0 0 / 35%);
+    }
+}
+
+/* 메뉴 글자가 단어 중간에서 끊기지 않게 합니다. */
+.menu-label {
+    word-break: keep-all;
 }

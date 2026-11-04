@@ -2,15 +2,22 @@
 @using TamaPoke.Web.Utils
 @inject Loc Loc
 
-<nav class="pet-menu" aria-label="@Loc.T("web.menu")">
+@if (_isMoreOpen)
+{
+    <button type="button" class="menu-backdrop" aria-label="@Loc.T("common.close")" @onclick="() => _isMoreOpen = false"></button>
+}
+<nav class="pet-menu @(_isMoreOpen ? "is-more-open" : "")" aria-label="@Loc.T("web.menu")">
     <h2 class="pet-menu-title">@Loc.T("web.menu")</h2>
-    <button type="button" class="menu-battle" disabled="@(!Pet.CanStartActivity)" @onclick="OnStartBattle">@Label(Loc.T("web.menu.battle"))</button>
-    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenGym">@Label(Loc.T("web.menu.gym"))</button>
-    <button type="button" disabled="@(!Pet.CanStartWalk)" @onclick="OnStartWalk">@Label(Loc.T("web.menu.walk"))</button>
-    <button type="button" @onclick="OnOpenDex">@Label(Loc.T("web.menu.dex"))</button>
-    <button type="button" disabled="@(!CanOpenProfile)" @onclick="OnOpenProfile">@Label(Loc.T("web.menu.profile"))</button>
-    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenParty">@Label(Loc.T("web.menu.party"))</button>
-    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenBag">@Label(Loc.T("web.menu.bag"))</button>
+    <button type="button" class="menu-primary menu-battle" disabled="@(!Pet.CanStartActivity)" @onclick="() => Run(OnStartBattle)">@Label(Loc.T("web.menu.battle"))</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenGym)">@Label(Loc.T("web.menu.gym"))</button>
+    <button type="button" class="menu-primary" disabled="@(!Pet.CanStartWalk)" @onclick="() => Run(OnStartWalk)">@Label(Loc.T("web.menu.walk"))</button>
+    <button type="button" class="menu-primary" @onclick="() => Run(OnOpenDex)">@Label(Loc.T("web.menu.dex"))</button>
+    <button type="button" disabled="@(!CanOpenProfile)" @onclick="() => Run(OnOpenProfile)">@Label(Loc.T("web.menu.profile"))</button>
+    <button type="button" class="menu-primary" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenParty)">@Label(Loc.T("web.menu.party"))</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenBag)">@Label(Loc.T("web.menu.bag"))</button>
+    <button type="button" class="menu-more" aria-expanded="@(_isMoreOpen ? "true" : "false")" @onclick="() => _isMoreOpen = !_isMoreOpen">
+        @Label(_isMoreOpen ? "✕ " + Loc.T("common.close") : Loc.T("web.menu.more"))
+    </button>
 
     @if (_confirmRelease)
     {
@@ -29,7 +36,7 @@
 
     <hr />
 
-    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenSettings">@Label(Loc.T("web.menu.settings"))</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenSettings)">@Label(Loc.T("web.menu.settings"))</button>
     @Cloud
 
     <button type="button" aria-pressed="@(Pet.IsMuted ? "true" : "false")" @onclick="OnToggleMute">
@@ -64,6 +71,13 @@
     [Parameter] public EventCallback OnToggleLanguage { get; set; }
 
     private bool _confirmRelease;
+    private bool _isMoreOpen; // 휴대폰 탭 바의 더보기
+
+    private Task Run(EventCallback action)
+    {
+        _isMoreOpen = false;
+        return action.InvokeAsync();
+    }
 
     private bool CanOpenProfile => Pet.CanStartActivity;
     private bool CanOpenPanels => !Pet.IsAnyMiniGameOpen && !Pet.IsBattleOpen && !Pet.IsCeremony;
@@ -71,6 +85,7 @@
 
     private void Release()
     {
+        _isMoreOpen = false;
         _confirmRelease = false;
         Pet.StartRelease();
     }
