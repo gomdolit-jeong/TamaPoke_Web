@@ -81,6 +81,8 @@
     private const double PERSPECTIVE = 900, TILT_DEGREES = 62, HORIZON_GAP = 30, HORIZON_FRACTION = 0.36;
     private const double WORLD_RADIUS = 500, WALK_RADIUS = 440;
     private const double MIN_PAN_RADIUS = 180; // 확대하지 않아도 이만큼은 화면을 옮길 수 있습니다.
+    private const double WORLD_AREA_PER_GROVE = 42000, GROVE_SIZE = 150, PROP_EXTENT_STEP = 200;
+    private const int MAX_GROVES = 150;
     private const double NEAR_CLIP = PERSPECTIVE * 0.9;
     private const double MIN_ZOOM = 1.0, MAX_ZOOM = 2.2, ZOOM_STEP = 0.15;
     private const double ROTATE_STEP = Math.PI / 6, KEY_ROTATE_STEP = Math.PI / 12, DRAG_ROTATE_PER_PX = 0.006;
@@ -139,7 +141,8 @@
 
     private readonly CancellationTokenSource _cts = new();
     private readonly List<WalkPet> _pets = [];
-    private readonly List<WalkProp> _props = CreateProps();
+    private List<WalkProp> _props = [];
+    private int _propExtentBucket = -1;
     private ElementReference _layer;
     private double _width = 800, _height = 600;
     private double _tickMs;
@@ -178,56 +181,85 @@
         }
     }
 
-    // 정해진 씨앗으로 소품을 흩어 놓습니다. 나무는 들판 가장자리에, 작은 풀꽃은 어디에나 둡니다.
-    private static List<WalkProp> CreateProps()
+    // 정해진 씨앗으로 소품을 놓습니다. 포켓몬이 다니는 들판은 듬성하게, 그 바깥은 창 크기에 맞춰 숲으로 채웁니다.
+    private static List<WalkProp> CreateProps(double extent)
     {
         var random = new Random(20261104);
         var props = new List<WalkProp>();
 
-        void Scatter(string image, int width, int height, int count, double minRadius, double maxRadius, bool sways)
+        (double X, double Y) RandomPoint(double minRadius, double maxRadius)
+        {
+            // 넓이 기준으로 고르게 뽑아 가운데에 몰리지 않게 합니다.
+            double radius = Math.Sqrt(minRadius * minRadius + random.NextDouble() * (maxRadius * maxRadius - minRadius * minRadius));
+            double angle = random.NextDouble() * Math.Tau;
+            return (Math.Cos(angle) * radius, Math.Sin(angle) * radius);
+        }
+
+        void Add(PropKind kind, double x, double y) =>
+            props.Add(new WalkProp(kind.Image, kind.Width, kind.Height, x, y, kind.Sways, -random.NextDouble() * 4));
+
+        void Scatter(PropKind kind, int count, double minRadius, double maxRadius)
         {
             for (int i = 0; i < count; i++)
             {
-                double angle = random.NextDouble() * Math.Tau;
-                double radius = minRadius + random.NextDouble() * (maxRadius - minRadius);
-                double delay = -random.NextDouble() * 4;
-                props.Add(new WalkProp(image, width, height, Math.Cos(angle) * radius, Math.Sin(angle) * radius, sways, delay));
+                var (x, y) = RandomPoint(minRadius, maxRadius);
+                Add(kind, x, y);
             }
         }
 
-        Scatter("tree_green", 63, 72, 4, 330, 490, true);
-        Scatter("tree_deep", 69, 81, 3, 350, 490, true);
-        Scatter("tree_blossom", 63, 69, 2, 310, 480, true);
-        Scatter("tree_autumn", 57, 65, 1, 320, 480, true);
-        Scatter("pine", 42, 75, 4, 350, 495, true);
-        Scatter("bush", 40, 26, 3, 180, 470, false);
-        Scatter("bush_berry", 40, 26, 2, 180, 470, false);
-        Scatter("mushroom", 20, 20, 4, 160, 460, false);
-        Scatter("rock", 33, 25, 4, 200, 480, false);
-        Scatter("rock_big", 48, 35, 3, 300, 490, false);
-        Scatter("rock_small", 24, 14, 6, 120, 490, false);
-        Scatter("flowers_white", 36, 21, 5, 150, 490, false);
-        Scatter("flowers_yellow", 36, 21, 5, 150, 490, false);
-        Scatter("flowers_pink", 36, 21, 5, 150, 490, false);
-        Scatter("flowers_blue", 36, 21, 4, 150, 490, false);
-        Scatter("tulip_red", 24, 24, 4, 170, 480, true);
-        Scatter("tulip_yellow", 24, 24, 3, 170, 480, true);
-        Scatter("sunflower", 30, 46, 3, 200, 460, true);
-        Scatter("fern", 34, 28, 3, 200, 480, true);
-        Scatter("grass", 26, 22, 5, 170, 480, true);
+        // 들판 안쪽
+        Scatter(TreeGreen, 5, 300, 490);
+        Scatter(TreeDeep, 4, 320, 490);
+        Scatter(TreeBlossom, 3, 280, 480);
+        Scatter(TreeAutumn, 2, 300, 480);
+        Scatter(Pine, 5, 320, 495);
+        Scatter(Bush, 3, 180, 470);
+        Scatter(BushBerry, 2, 180, 470);
+        Scatter(Rock, 4, 200, 480);
+        Scatter(RockBig, 3, 300, 490);
+        Scatter(RockSmall, 6, 120, 490);
+        Scatter(Mushroom, 4, 160, 460);
+        Scatter(FlowersWhite, 5, 150, 490);
+        Scatter(FlowersYellow, 5, 150, 490);
+        Scatter(FlowersPink, 5, 150, 490);
+        Scatter(FlowersBlue, 4, 150, 490);
+        Scatter(TulipRed, 4, 170, 480);
+        Scatter(TulipYellow, 3, 170, 480);
+        Scatter(Sunflower, 3, 200, 460);
+        Scatter(Fern, 3, 200, 480);
+        Scatter(GrassTuft, 5, 170, 480);
 
-        // 들판 바깥: 넓은 창에서 양옆이 비어 보이지 않게 합니다. 포켓몬은 여기까지 오지 않습니다.
-        Scatter("tree_deep", 69, 81, 6, 530, 800, true);
-        Scatter("tree_green", 63, 72, 5, 530, 800, true);
-        Scatter("pine", 42, 75, 7, 530, 800, true);
-        Scatter("bush", 40, 26, 5, 520, 800, false);
-        Scatter("grass", 26, 22, 7, 520, 800, true);
-        Scatter("flowers_yellow", 36, 21, 6, 520, 800, false);
-        Scatter("flowers_pink", 36, 21, 5, 520, 800, false);
-        Scatter("rock", 33, 25, 5, 520, 800, false);
-        Scatter("rock_big", 48, 35, 4, 530, 800, false);
+        // 들판 바깥: 나무를 몇 그루씩 모아 숲처럼 심고, 사이사이에 풀꽃을 둡니다.
+        if (extent <= WORLD_RADIUS) return props;
+        double outerArea = Math.PI * (extent * extent - WORLD_RADIUS * WORLD_RADIUS);
+        int groves = Math.Min((int)(outerArea / WORLD_AREA_PER_GROVE), MAX_GROVES);
+        for (int i = 0; i < groves; i++)
+        {
+            var (x, y) = RandomPoint(WORLD_RADIUS + 40, extent);
+            int trees = random.Next(2, 5);
+            for (int tree = 0; tree < trees; tree++)
+            {
+                Add(GroveTrees[random.Next(GroveTrees.Length)], x + (random.NextDouble() - 0.5) * GROVE_SIZE, y + (random.NextDouble() - 0.5) * GROVE_SIZE);
+            }
+            var ground = GroundCover[random.Next(GroundCover.Length)];
+            Add(ground, x + (random.NextDouble() - 0.5) * GROVE_SIZE * 2, y + (random.NextDouble() - 0.5) * GROVE_SIZE * 2);
+        }
         return props;
     }
+
+    private sealed record PropKind(string Image, int Width, int Height, bool Sways);
+
+    private static readonly PropKind TreeGreen = new("tree_green", 63, 72, true), TreeDeep = new("tree_deep", 69, 81, true),
+        TreeBlossom = new("tree_blossom", 63, 69, true), TreeAutumn = new("tree_autumn", 57, 65, true), Pine = new("pine", 42, 75, true),
+        Bush = new("bush", 40, 26, false), BushBerry = new("bush_berry", 40, 26, false),
+        Rock = new("rock", 33, 25, false), RockBig = new("rock_big", 48, 35, false), RockSmall = new("rock_small", 24, 14, false),
+        Mushroom = new("mushroom", 20, 20, false), FlowersWhite = new("flowers_white", 36, 21, false),
+        FlowersYellow = new("flowers_yellow", 36, 21, false), FlowersPink = new("flowers_pink", 36, 21, false), FlowersBlue = new("flowers_blue", 36, 21, false),
+        TulipRed = new("tulip_red", 24, 24, true), TulipYellow = new("tulip_yellow", 24, 24, true),
+        Sunflower = new("sunflower", 30, 46, true), Fern = new("fern", 34, 28, true), GrassTuft = new("grass", 26, 22, true);
+
+    private static readonly PropKind[] GroveTrees = [TreeGreen, TreeGreen, TreeDeep, TreeDeep, Pine, Pine, TreeBlossom, TreeAutumn];
+    private static readonly PropKind[] GroundCover = [Bush, BushBerry, Rock, RockBig, FlowersWhite, FlowersYellow, FlowersPink, FlowersBlue, GrassTuft, Fern];
 
     protected override async Task OnInitializedAsync()
     {
@@ -285,6 +317,22 @@
         double farRate = PERSPECTIVE / (TiltCos * PERSPECTIVE + HORIZON_GAP * TiltSin);
         _pivotDistance = (nearRate * groundHeight + farRate * HORIZON_GAP) / (nearRate + farRate);
         _fieldRadius = nearRate * (groundHeight - _pivotDistance);
+        UpdatePropExtent();
+    }
+
+    // 지금 창에서 화면 구석까지 보이는 들판 넓이에 맞춰 소품을 다시 놓습니다. (창이 커질 때만)
+    private void UpdatePropExtent()
+    {
+        double farY = _fieldRadius;
+        double depth = PERSPECTIVE / (PERSPECTIVE + farY * TiltSin);
+        double farX = _width / 2 / depth;
+        double extent = Math.Sqrt(farX * farX + farY * farY) / WorldToPlane + MIN_PAN_RADIUS;
+
+        int bucket = (int)Math.Ceiling(extent / PROP_EXTENT_STEP);
+        if (bucket <= _propExtentBucket) return;
+        _propExtentBucket = bucket;
+        _props = CreateProps(bucket * PROP_EXTENT_STEP);
+        _lastPropCamera = default;
     }
 
     // 월드 좌표 → 화면 좌표. CSS의 perspective, rotateX, rotateZ, scale과 같은 계산입니다.

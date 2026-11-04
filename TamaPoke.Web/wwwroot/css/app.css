@@ -2374,14 +2374,16 @@ select {
     position: absolute;
     width: 0;
     height: 0;
-    display: grid;
-    place-items: center;
     cursor: grab;
     user-select: none;
 }
 
+    /* 그림 가운데를 기준점에 맞춥니다. (좌우 반전은 transform으로 하므로 translate를 따로 씁니다) */
     .walk-pet .sprite {
-        grid-area: 1 / 1;
+        position: absolute;
+        left: 0;
+        top: 0;
+        translate: -50% -50%;
     }
 
 .walk-bush {
@@ -2796,7 +2798,7 @@ select {
         border-radius: 0.625rem;
         background: #fff;
         color: var(--tp-ink);
-        font-size: 11px;
+        font-size: 12px;
         line-height: 1.15;
         word-break: keep-all;
         box-shadow: none;
@@ -2868,4 +2870,40 @@ select {
 /* 메뉴 글자가 단어 중간에서 끊기지 않게 합니다. */
 .menu-label {
     word-break: keep-all;
+}
+
+/* 작은 글자를 또렷하게: 밝은 바탕의 글자에는 그림자를 넣지 않고, 색 버튼의 그림자는 부드럽게 합니다. */
+body {
+    text-rendering: geometricPrecision;
+}
+
+nav.pet-menu button {
+    font-size: 13px;
+    text-shadow: none;
+}
+
+nav.pet-menu .menu-battle {
+    text-shadow: 0 1px 1px rgb(0 0 0 / 30%);
+}
+
+.pet-mood {
+    font-size: 13px;
+}
+
+.pet-stat-value,
+.pet-stats li span {
+    font-size: 12px;
+}
+
+.pet-actions button {
+    text-shadow: 0 1px 1px rgb(0 0 0 / 30%);
+}
+
+/* 놀기 버튼: 게임기 아이콘(보라색)과 구분되는 초록색 */
+.pet-actions button.care-play:not(:disabled) {
+    background: #4f9a2c;
+}
+
+.pet-actions button.care-play:hover:not(:disabled) {
+    background: #5aad33;
 }

@@ -2,6 +2,7 @@
 
 포켓몬별로 폼 접미사(PC판 스프라이트 파일명과 같은 규칙: Shiny, Female, Alola, Mega_X ...)와
 SpriteCollab 폴더 경로를 짝지어 둡니다. 이미지가 없는 폼과 PC판 블랙리스트 폼은 뺍니다.
+메가진화는 전투에서 잠깐 쓰는 폼이라 대기 모션만 있어도 넣습니다. (없는 모션은 게임이 대기 모션으로 대체)
 
 사용법:
     python tools/make_form_data.py <tracker.json 경로>
@@ -25,7 +26,8 @@ def collect(node: dict, path: list[str], names: list[str], out: dict) -> None:
         child_names = names + ([name] if name else [])
         suffix = "_".join(child_names)
         lower = suffix.lower()
-        if child.get("sprite_complete", 0) > 0 and suffix and not any(word in lower for word in BLACKLIST):
+        is_partial_mega = "mega" in lower.split("_") and "Idle" in child.get("sprite_files", {})
+        if (child.get("sprite_complete", 0) > 0 or is_partial_mega) and suffix and not any(word in lower for word in BLACKLIST):
             out[suffix] = "/".join(child_path)
         collect(child, child_path, child_names, out)
 
