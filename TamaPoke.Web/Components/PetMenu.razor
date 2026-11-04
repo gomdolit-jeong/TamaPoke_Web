@@ -1,0 +1,54 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+
+<nav class="pet-menu" aria-label="@Loc.T("web.menu")">
+    <button type="button" @onclick="OnOpenDex">@Loc.T("idle.menu.dex")</button>
+    <button type="button" disabled="@(!CanOpenProfile)" @onclick="OnOpenProfile">@Loc.T("idle.menu.profile")</button>
+    <button type="button" disabled title="@Loc.T("web.comingSoon")">@Loc.T("idle.menu.party")</button>
+    <button type="button" disabled title="@Loc.T("web.comingSoon")">@Loc.T("idle.menu.bag")</button>
+
+    @if (_confirmRelease)
+    {
+        <div class="pet-menu-confirm" role="alertdialog" aria-label="@Loc.T("release.confirm.title")">
+            <p>@Loc.T("release.confirm.message")</p>
+            <div class="pet-menu-row">
+                <button type="button" @onclick="Release">@Loc.T("common.yes")</button>
+                <button type="button" @onclick="() => _confirmRelease = false">@Loc.T("common.no")</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <button type="button" disabled="@(!CanRelease)" @onclick="() => _confirmRelease = true">@Loc.T("idle.menu.release")</button>
+    }
+
+    <hr />
+
+    <button type="button" aria-pressed="@(Pet.IsMuted ? "true" : "false")" @onclick="OnToggleMute">
+        <img src="ui/@(Pet.IsMuted ? "icon_sound_off.png" : "icon_sound_on.png")" alt="" />
+        <span>@Loc.T(Pet.IsMuted ? "web.sound.off" : "web.sound.on")</span>
+    </button>
+    <button type="button" lang="@(Loc.Language == Loc.Korean ? "en" : "ko")" @onclick="OnToggleLanguage">
+        @(Loc.Language == Loc.Korean ? "English" : "한국어")
+    </button>
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnOpenDex { get; set; }
+    [Parameter] public EventCallback OnOpenProfile { get; set; }
+    [Parameter] public EventCallback OnToggleMute { get; set; }
+    [Parameter] public EventCallback OnToggleLanguage { get; set; }
+
+    private bool _confirmRelease;
+
+    private bool CanOpenProfile => Pet.CanStartActivity;
+    private bool CanRelease => Pet.CanStartActivity || (Pet.IsSleeping && !Pet.IsAnyMiniGameOpen);
+
+    private void Release()
+    {
+        _confirmRelease = false;
+        Pet.StartRelease();
+    }
+}

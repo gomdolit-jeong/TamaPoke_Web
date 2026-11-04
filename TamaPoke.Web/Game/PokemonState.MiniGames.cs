@@ -49,6 +49,7 @@ public sealed partial class PokemonState
         IsFeedMenuOpen = false;
         if (!CanStartActivity) return;
 
+        PlaySound?.Invoke(SoundEffects.Play);
         ResetPosition();
         _targetX = 0;
         _targetY = 0;
@@ -212,6 +213,7 @@ public sealed partial class PokemonState
         double dy = BallY + 16 - 160;
         if (Math.Sqrt(dx * dx + dy * dy) > 70) return;
 
+        PlaySound?.Invoke(SoundEffects.Tap);
         GameScore++;
         _ballVelY = -(5.0 + (GameScore > 16 ? 2.5 : GameScore * 0.15));
         _ballVelX = Math.Clamp(_ballVelX + dx * 0.05, -5.0, 5.0);
@@ -343,6 +345,7 @@ public sealed partial class PokemonState
     {
         if (ActiveGame != MiniGame.Memo || _memoPhase != MemoPhase.Input) return;
 
+        PlaySound?.Invoke(SoundEffects.Tap);
         _memoPendingInput = button;
         MemoLit = button;
         SetMemoPhase(MemoPhase.InputFlash, 200);
@@ -427,6 +430,7 @@ public sealed partial class PokemonState
         int index = _dirtItems.FindIndex(d => d.Id == id);
         if (index < 0) return;
 
+        PlaySound?.Invoke(SoundEffects.Tap);
         _dirtItems.RemoveAt(index);
         CleanScore++;
         _cleanHitMs = CLEAN_HIT_MS;

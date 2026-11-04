@@ -1,0 +1,70 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+@inject PokemonDex Dex
+
+<section class="pet-panel" aria-label="@Loc.T("idle.menu.profile")">
+    <header class="pet-panel-header">
+        <h2>@Dex.GetName(Pet.SpeciesId, Loc.Language)</h2>
+        <button type="button" @onclick="OnClose">@Loc.T("profile.close")</button>
+    </header>
+
+    <h3>@Loc.T("web.profile.info")</h3>
+    <dl class="pet-facts">
+        <dt>@Loc.T("web.profile.gender")</dt>
+        <dd>@(Pet.IsGenderless ? "-" : Pet.IsFemale ? "♀" : "♂")</dd>
+        <dt>@Loc.T("profile.streak")</dt>
+        <dd>@string.Format(Loc.T("profile.streak.days"), Pet.Streak)</dd>
+        <dt>@Loc.T("profile.bond")</dt>
+        <dd>@Pet.Bond</dd>
+        <dt>@Loc.T("profile.favoriteBerry")</dt>
+        <dd>@(Pet.BerryKnown ? Loc.T(BerryKeys[Pet.FavoriteBerry]) : "???")</dd>
+    </dl>
+
+    <h3>@Loc.T("profile.growth")</h3>
+    <label class="pet-growth">
+        <span>@Loc.T("profile.nextLevel") (@Pet.LevelProgressMinutes / 60)</span>
+        <progress max="60" value="@Pet.LevelProgressMinutes"></progress>
+    </label>
+    <dl class="pet-facts">
+        <dt>@Loc.T("profile.evolution")</dt>
+        <dd>@EvolveProgress</dd>
+        <dt>@Loc.T("profile.mistakes")</dt>
+        <dd>@string.Format(Loc.T("profile.mistakes.count"), Pet.CareMistakes)</dd>
+        <dt>@Loc.T("profile.weight")</dt>
+        <dd>@Pet.Weight</dd>
+    </dl>
+
+    <h3>@Loc.T("profile.medals") · @string.Format(Loc.T("profile.medals.count"), Pet.MedalCount)</h3>
+    <ul class="pet-medals">
+        @foreach (var (bit, key) in PokemonState.MedalList)
+        {
+            bool has = (Pet.Medals & bit) != 0;
+            <li class="@(has ? "has" : "")">
+                <img src="ui/icon_medal.png" alt="" />
+                <span>@Loc.T(key)</span>
+                <span class="visually-hidden">@(has ? Loc.T("web.medal.earned") : Loc.T("web.medal.locked"))</span>
+            </li>
+        }
+    </ul>
+</section>
+
+@code {
+    private static readonly string[] BerryKeys = ["berry.red", "berry.blue", "berry.green"];
+
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string EvolveProgress
+    {
+        get
+        {
+            if (Pet.IsFinalEvolution) return Loc.T("evolve.progress.final");
+            if (Dex.GetEvolution(Pet.SpeciesId) is not { } evolution) return Loc.T("evolve.progress.noInfo");
+
+            int remaining = evolution.EvolveLevel + Pet.CareMistakes - Pet.Level;
+            if (remaining > 0) return string.Format(Loc.T("evolve.progress.remaining"), remaining);
+            return Loc.T(Pet.LowestStat >= 40 ? "evolve.progress.ready" : "evolve.progress.lowCondition");
+        }
+    }
+}

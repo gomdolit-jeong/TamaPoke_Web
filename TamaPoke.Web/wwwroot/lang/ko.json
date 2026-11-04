@@ -598,5 +598,14 @@
   "web.btn.sleep": "재우기",
   "web.btn.wake": "깨우기",
   "web.btn.bath": "씻기기",
-  "web.comingSoon": "준비 중입니다"
+  "web.comingSoon": "준비 중입니다",
+  "web.menu": "메뉴",
+  "web.sound.on": "소리 켜짐",
+  "web.sound.off": "음소거",
+  "web.profile.info": "정보",
+  "web.profile.gender": "성별",
+  "web.medal.earned": "획득",
+  "web.medal.locked": "미획득",
+  "web.dex.region": "지방 선택",
+  "web.dex.empty": "아직 잡은 포켓몬이 없어요."
 }

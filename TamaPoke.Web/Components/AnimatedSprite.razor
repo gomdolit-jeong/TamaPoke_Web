@@ -25,6 +25,9 @@ else if (_strip is not null)
     [Parameter] public int Row { get; set; } = PokemonAnim.ROW_FRONT;
     [Parameter] public int Scale { get; set; } = 3;
     [Parameter] public bool Flipped { get; set; }
+
+    // 도감 썸네일처럼 첫 장면만 보여줄 때 씁니다. (미리 받기와 재생을 하지 않음)
+    [Parameter] public bool Paused { get; set; }
     [Parameter] public string Alt { get; set; } = "";
 
     private readonly CancellationTokenSource _cts = new();
@@ -39,7 +42,10 @@ else if (_strip is not null)
     // 그림과 방향 줄을 함께 바꿉니다. (새 모션을 받는 동안 지금 그림의 다른 줄이 보이지 않도록)
     private int SafeRow => _strip is null ? 0 : Math.Clamp(_stripRow, 0, _strip.Rows - 1);
 
-    protected override void OnInitialized() => _ = RunLoopAsync();
+    protected override void OnInitialized()
+    {
+        if (!Paused) _ = RunLoopAsync();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -48,7 +54,7 @@ else if (_strip is not null)
         bool isNewSprite = request.SpritePath != _request.SpritePath;
         _request = request;
 
-        if (isNewSprite) _ = Loader.PreloadAsync(SpritePath);
+        if (isNewSprite && !Paused) _ = Loader.PreloadAsync(SpritePath);
 
         // 새 모션을 받는 동안에는 지금 모션을 계속 보여줍니다.
         try

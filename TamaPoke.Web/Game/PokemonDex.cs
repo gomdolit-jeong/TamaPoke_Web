@@ -41,6 +41,13 @@ public sealed class PokemonDex(HttpClient http)
     private const int TEST_HATCH_SPECIES_ID = 4;
 #endif
 
+    // 세대(지방)별 도감 번호 범위 (PC판 GameRegions.cs와 같음)
+    public static readonly (int Generation, int StartId, int EndId)[] Regions =
+    [
+        (1, 1, 151), (2, 152, 251), (3, 252, 386), (4, 387, 493), (5, 494, 649),
+        (6, 650, 721), (7, 722, 809), (8, 810, 905), (9, 906, 1025),
+    ];
+
     private static readonly HashSet<int> LegendaryIds =
     [
         144, 145, 146, 150, 151,

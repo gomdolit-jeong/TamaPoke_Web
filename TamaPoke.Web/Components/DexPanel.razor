@@ -1,0 +1,70 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+@inject PokemonDex Dex
+
+<section class="pet-panel" aria-label="@Loc.T("dex.title")">
+    <header class="pet-panel-header">
+        <h2>@Loc.T("dex.title")</h2>
+        <button type="button" @onclick="OnClose">@Loc.T("profile.close")</button>
+    </header>
+
+    <div class="dex-filters">
+        <select aria-label="@Loc.T("web.dex.region")" @bind="_generation">
+            @foreach (var region in PokemonDex.Regions)
+            {
+                <option value="@region.Generation">
+                    @Loc.T($"region.{region.Generation}") (@Pet.UnlockedPokemon.Count(id => id >= region.StartId && id <= region.EndId)/@(region.EndId - region.StartId + 1))
+                </option>
+            }
+        </select>
+        <label>
+            <input type="checkbox" @bind="_caughtOnly" />
+            @Loc.T("dex.caughtOnly")
+        </label>
+    </div>
+
+    @if (Entries.Count == 0)
+    {
+        <p class="dex-empty">@Loc.T("web.dex.empty")</p>
+    }
+    <ul class="dex-grid">
+        @foreach (int id in Entries)
+        {
+            bool unlocked = Pet.UnlockedPokemon.Contains(id);
+            <li class="@(unlocked ? "" : "is-locked")" @key="id">
+                <span class="dex-thumb">
+                    @if (unlocked)
+                    {
+                        <AnimatedSprite SpritePath="@($"{id:D4}")" Paused="true" Scale="1" Alt="" />
+                    }
+                    else
+                    {
+                        <span aria-hidden="true">?</span>
+                    }
+                </span>
+                <span class="dex-number">#@id.ToString("D4")</span>
+                <span class="dex-name">@(unlocked ? Dex.GetName(id, Loc.Language) : "???")</span>
+            </li>
+        }
+    </ul>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private int _generation = 1;
+    private bool _caughtOnly;
+
+    private List<int> Entries
+    {
+        get
+        {
+            var region = PokemonDex.Regions.First(r => r.Generation == _generation);
+            return Enumerable.Range(region.StartId, region.EndId - region.StartId + 1)
+                .Where(id => !_caughtOnly || Pet.UnlockedPokemon.Contains(id))
+                .ToList();
+        }
+    }
+}

@@ -8,6 +8,7 @@
 @inject SaveStore Store
 @inject Loc Loc
 @inject PokemonDex Dex
+@inject SoundPlayer Sound
 
 <PageTitle>TamaPoke</PageTitle>
 
@@ -17,17 +18,23 @@
 }
 else
 {
+    <div class="pet-layout">
     <section class="pet-device">
         <header class="pet-header">
             <h1>@Name</h1>
-            <button type="button" class="pet-lang" lang="@(Loc.Language == Loc.Korean ? "en" : "ko")" @onclick="ToggleLanguageAsync">
-                @(Loc.Language == Loc.Korean ? "English" : "한국어")
-            </button>
         </header>
 
         <p class="pet-mood" role="status">@MoodText</p>
 
-        @if (_pet.ShownGame != MiniGame.None)
+        @if (_pet.IsProfileOpen)
+        {
+            <ProfilePanel Pet="_pet" OnClose="CloseProfile" />
+        }
+        else if (_isDexOpen)
+        {
+            <DexPanel Pet="_pet" OnClose="() => _isDexOpen = false" />
+        }
+        else if (_pet.ShownGame != MiniGame.None)
         {
             <MiniGameStage Pet="_pet" />
         }
@@ -134,25 +141,11 @@ else
             </button>
         </div>
 
-        @if (_pet.CanCare)
-        {
-            @if (_confirmRelease)
-            {
-                <div class="pet-release-confirm" role="alertdialog" aria-label="@Loc.T("release.confirm.title")">
-                    <p>@Loc.T("release.confirm.message")</p>
-                    <div class="pet-prompt">
-                        <button type="button" @onclick="Release">@Loc.T("common.yes")</button>
-                        <button type="button" @onclick="() => _confirmRelease = false">@Loc.T("common.no")</button>
-                    </div>
-                </div>
-            }
-            else
-            {
-                <button type="button" class="pet-release" @onclick="() => _confirmRelease = true">@Loc.T("idle.menu.release")</button>
-            }
-        }
         }
     </section>
+
+    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync" />
+    </div>
 }
 
 @code {
@@ -173,7 +166,7 @@ else
     private readonly CancellationTokenSource _cts = new();
     private PokemonState? _pet;
     private object? _lastRendered;
-    private bool _confirmRelease;
+    private bool _isDexOpen;
 
     private string Name => _pet!.IsEgg ? Loc.T("pokemon.egg") : $"{Dex.GetName(_pet.SpeciesId, Loc.Language)} Lv.{_pet.Level}";
     private string MoodText
@@ -199,6 +192,8 @@ else
     {
         var pet = await Store.LoadAsync();
         pet.Dex = Dex;
+        pet.PlaySound = PlaySound;
+        pet.RegisterCurrentInDex();
         _pet = pet;
         _ = RunLoopAsync();
     }
@@ -209,20 +204,48 @@ else
 
     private void ToggleFeedMenu()
     {
+        PlaySound(SoundEffects.Tap);
         _pet!.IsPlayMenuOpen = false;
         _pet.IsFeedMenuOpen = !_pet.IsFeedMenuOpen;
     }
 
     private void TogglePlayMenu()
     {
+        PlaySound(SoundEffects.Tap);
         _pet!.IsFeedMenuOpen = false;
         _pet.IsPlayMenuOpen = !_pet.IsPlayMenuOpen;
     }
 
-    private void Release()
+    private void PlaySound(int[][] notes)
     {
-        _confirmRelease = false;
-        _pet!.StartRelease();
+        if (!_pet!.IsMuted) Sound.Play(notes);
+    }
+
+    private void OpenDex()
+    {
+        PlaySound(SoundEffects.Tap);
+        _pet!.IsFeedMenuOpen = false;
+        _pet.IsPlayMenuOpen = false;
+        _pet.IsProfileOpen = false;
+        _isDexOpen = true;
+    }
+
+    private void OpenProfile()
+    {
+        PlaySound(SoundEffects.Tap);
+        _pet!.IsFeedMenuOpen = false;
+        _pet.IsPlayMenuOpen = false;
+        _isDexOpen = false;
+        _pet.IsProfileOpen = true;
+    }
+
+    private void CloseProfile() => _pet!.IsProfileOpen = false;
+
+    private void ToggleMute()
+    {
+        _pet!.IsMuted = !_pet.IsMuted;
+        _pet.NeedsSave = true;
+        PlaySound(SoundEffects.Tap);
     }
 
     private Task ToggleLanguageAsync() => Loc.ToggleLanguageAsync();

@@ -598,5 +598,14 @@
   "web.btn.sleep": "Sleep",
   "web.btn.wake": "Wake",
   "web.btn.bath": "Bath",
-  "web.comingSoon": "Coming soon"
+  "web.comingSoon": "Coming soon",
+  "web.menu": "Menu",
+  "web.sound.on": "Sound on",
+  "web.sound.off": "Muted",
+  "web.profile.info": "Info",
+  "web.profile.gender": "Gender",
+  "web.medal.earned": "earned",
+  "web.medal.locked": "not earned",
+  "web.dex.region": "Choose region",
+  "web.dex.empty": "No Pokémon caught yet."
 }

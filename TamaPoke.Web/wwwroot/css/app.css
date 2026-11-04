@@ -30,9 +30,16 @@ body {
     text-align: center;
 }
 
+.pet-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 26rem) 11rem;
+    gap: 1rem;
+    justify-content: center;
+    align-items: start;
+}
+
 .pet-device {
-    max-width: 26rem;
-    margin: 0 auto;
+    min-width: 0;
     padding: 1rem;
     border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
     border-radius: 1.5rem;
@@ -50,11 +57,245 @@ body {
         font-size: 1.25rem;
     }
 
-.pet-lang {
-    min-height: 2.75rem;
-    font: inherit;
+/* 오른쪽 메뉴: 다크 모드에서도 흰색 상자로 둡니다. */
+.pet-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border: 1px solid #c8c8c8;
+    border-radius: 0.75rem;
+    background: #fff;
+    color: #222;
+    color-scheme: light;
+}
+
+    .pet-menu button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        min-height: 2.75rem;
+        padding: 0.25rem 0.5rem;
+        border: 1px solid #bbb;
+        border-radius: 0.375rem;
+        background: #f4f4f4;
+        color: #222;
+        font: inherit;
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+
+        .pet-menu button:hover:not(:disabled) {
+            background: #e6e6e6;
+        }
+
+        .pet-menu button:disabled {
+            color: #767676;
+            background: #fafafa;
+            cursor: not-allowed;
+        }
+
+        .pet-menu button img {
+            width: 18px;
+            height: 18px;
+            image-rendering: pixelated;
+        }
+
+    .pet-menu hr {
+        width: 100%;
+        margin: 0.25rem 0;
+        border: 0;
+        border-top: 1px solid #ddd;
+    }
+
+.pet-menu-confirm {
     font-size: 0.85rem;
-    cursor: pointer;
+    white-space: pre-line;
+}
+
+    .pet-menu-confirm p {
+        margin: 0 0 0.5rem;
+    }
+
+.pet-menu-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+    .pet-menu-row button {
+        flex: 1;
+    }
+
+.pet-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+    .pet-panel-header h2 {
+        margin: 0;
+        font-size: 1.1rem;
+    }
+
+    .pet-panel-header button {
+        min-height: 2.75rem;
+        padding: 0 0.75rem;
+        font: inherit;
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+
+.pet-panel h3 {
+    margin: 1rem 0 0.25rem;
+    font-size: 0.95rem;
+}
+
+.pet-facts {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.25rem 0.75rem;
+    margin: 0;
+}
+
+    .pet-facts dd {
+        margin: 0;
+        text-align: right;
+    }
+
+.pet-growth {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+    .pet-growth progress {
+        display: block;
+        width: 100%;
+    }
+
+.pet-medals {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.85rem;
+}
+
+    .pet-medals li {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        opacity: 0.45;
+    }
+
+        .pet-medals li.has {
+            opacity: 1;
+            font-weight: bold;
+        }
+
+    .pet-medals img {
+        width: 18px;
+        height: 18px;
+        image-rendering: pixelated;
+    }
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.dex-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin: 0.5rem 0;
+}
+
+    .dex-filters select {
+        flex: 1;
+        min-width: 10rem;
+        min-height: 2.75rem;
+        font: inherit;
+    }
+
+    .dex-filters label {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        min-height: 2.75rem;
+        cursor: pointer;
+    }
+
+.dex-empty {
+    text-align: center;
+    opacity: 0.8;
+}
+
+.dex-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
+    gap: 0.5rem;
+    max-height: 26rem;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+    .dex-grid li {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.25rem;
+        border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+        border-radius: 0.375rem;
+        text-align: center;
+    }
+
+    .dex-grid .is-locked {
+        opacity: 0.55;
+    }
+
+.dex-thumb {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 56px;
+    overflow: hidden;
+}
+
+.dex-number {
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.dex-name {
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 719px) {
+    .pet-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pet-menu {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+        .pet-menu hr,
+        .pet-menu-confirm {
+            grid-column: 1 / -1;
+        }
 }
 
 .pet-mood {
@@ -368,30 +609,6 @@ body {
     .pet-prompt .pet-prompt-main {
         flex: 2;
         font-weight: bold;
-    }
-
-.pet-release {
-    display: block;
-    min-height: 2.75rem;
-    margin: 0.5rem auto 0;
-    padding: 0 0.75rem;
-    border: 0;
-    background: none;
-    color: inherit;
-    font: inherit;
-    font-size: 0.85rem;
-    text-decoration: underline;
-    opacity: 0.8;
-    cursor: pointer;
-}
-
-.pet-release-confirm {
-    margin-top: 0.75rem;
-    white-space: pre-line;
-}
-
-    .pet-release-confirm p {
-        margin: 0;
     }
 
 .pet-poops {

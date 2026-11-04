@@ -49,6 +49,13 @@ public sealed partial class PokemonState
         PokemonAnim.HURT, PokemonAnim.PAIN, PokemonAnim.CRINGE,
     ];
 
+    // 메달 (비트 값은 PC판과 같음)
+    public static readonly (int Bit, string Key)[] MedalList =
+    [
+        (1 << 0, "medal.lv10"), (1 << 1, "medal.lv25"), (1 << 2, "medal.lv50"), (1 << 3, "medal.berry"),
+        (1 << 4, "medal.streak7"), (1 << 5, "medal.bond"), (1 << 6, "medal.final"), (1 << 7, "medal.fit"),
+    ];
+
     // 저장되는 값
     public int SaveVersion { get; set; } = 1;
     public int SpeciesId { get; set; } = -1;
@@ -73,6 +80,11 @@ public sealed partial class PokemonState
     public bool IsFarewellPostponed { get; set; }
     public int LastEnd { get; set; } = CEREMONY_FAREWELL; // 이로치 확률에 씁니다. (1 작별, 2 가출, 3 놔주기)
     public int EvolvedFromSpeciesId { get; set; }
+    public bool IsMuted { get; set; }
+    public List<int> UnlockedPokemon { get; set; } = [];
+    public int Medals { get; set; }
+    public int Streak { get; set; }
+    public DateTime LastPlayedDate { get; set; } = DateTime.Now.Date;
     public int Ceremony { get; set; }
     public double CeremonyElapsedMs { get; set; }
 
@@ -93,6 +105,8 @@ public sealed partial class PokemonState
     [JsonIgnore] public bool NeedsSave { get; set; }
 
     [JsonIgnore] public PokemonDex Dex { get; set; } = null!;
+    [JsonIgnore] public Action<int[][]>? PlaySound { get; set; }
+    [JsonIgnore] public bool IsProfileOpen { get; set; }
 
     [JsonIgnore] public bool IsEgg => SpeciesId < 0;
     [JsonIgnore] public bool IsCeremony => Ceremony != 0;
@@ -102,6 +116,8 @@ public sealed partial class PokemonState
     [JsonIgnore] public int FavoriteBerry => Math.Abs(SpeciesId) % 3;
     [JsonIgnore] public bool CanRunawayNow => !IsEgg && !IsSleeping && !IsCeremony && NeglectTicks >= RUNAWAY_TICKS;
     [JsonIgnore] public bool CanCare => !IsEgg && !IsCeremony;
+    [JsonIgnore] public int LevelProgressMinutes => AgeMinutes % MINUTES_PER_LEVEL;
+    [JsonIgnore] public int MedalCount => MedalList.Count(m => (Medals & m.Bit) != 0);
     [JsonIgnore] public bool IsFinalEvolution => !IsEgg && Dex.Get(SpeciesId)?.EvolveTo == 0;
     [JsonIgnore] public bool CanFarewellNow => !IsEgg && !IsSleeping && !IsCeremony && AgeMinutes >= FAREWELL_AGE_DAYS * 24 * 60;
     [JsonIgnore] public bool CanShowEvolvePrompt => CanEvolveNow && !IsEvolutionPostponed;
@@ -286,7 +302,11 @@ public sealed partial class PokemonState
 
     private void Tick()
     {
+        // 프로필을 보는 동안에는 시간이 멈춥니다.
+        if (IsProfileOpen) return;
+
         AgeSeconds++;
+        if (DateTime.Now.Date > LastPlayedDate.Date) CheckDailyStreak();
         if (AgeSeconds % 10 == 0) NeedsSave = true;
 
         if (IsEgg)
@@ -301,6 +321,42 @@ public sealed partial class PokemonState
         if ((Poops > 0 || Hygiene < 30) && _tempActionMs > 0 && _isAutoAction) _tempActionMs = 0;
 
         ProcessIdleBehaviors();
+        CheckMedals();
+    }
+
+    private void CheckDailyStreak()
+    {
+        int daysPassed = (DateTime.Now.Date - LastPlayedDate.Date).Days;
+        if (daysPassed == 1) Streak++;
+        else if (daysPassed > 1) Streak = 0;
+        LastPlayedDate = DateTime.Now.Date;
+        NeedsSave = true;
+    }
+
+    private void CheckMedals()
+    {
+        int medals = Medals;
+        if (Level >= 10) medals |= MedalList[0].Bit;
+        if (Level >= 25) medals |= MedalList[1].Bit;
+        if (Level >= 50) medals |= MedalList[2].Bit;
+        if (BerryKnown) medals |= MedalList[3].Bit;
+        if (Streak >= 7) medals |= MedalList[4].Bit;
+        if (Bond >= 100) medals |= MedalList[5].Bit;
+        if (IsFinalEvolution) medals |= MedalList[6].Bit;
+        if (Weight == 0 && Level >= 5 && CareMistakes == 0) medals |= MedalList[7].Bit;
+        if (medals == Medals) return;
+
+        Medals = medals;
+        NeedsSave = true;
+    }
+
+    // 이전 세이브의 포켓몬도 도감에 올라가도록 불러온 뒤에 한 번 부릅니다.
+    public void RegisterCurrentInDex()
+    {
+        if (IsEgg || UnlockedPokemon.Contains(SpeciesId)) return;
+        UnlockedPokemon.Add(SpeciesId);
+        UnlockedPokemon.Sort();
+        NeedsSave = true;
     }
 
     private void UpdateVitalsAndNeeds()
@@ -398,6 +454,7 @@ public sealed partial class PokemonState
         IsFeedMenuOpen = false;
         if (!CanCare || IsSleeping) return;
 
+        PlaySound?.Invoke(SoundEffects.Eat);
         if (foodType == 3)
         {
             Fullness = Clamp100(Fullness + 10);
@@ -429,6 +486,7 @@ public sealed partial class PokemonState
     {
         if (!CanCare || IsSleeping) return;
 
+        PlaySound?.Invoke(SoundEffects.Medal);
         Poops = 0;
         Hygiene = 100;
         Bond = Clamp100(Bond + 1);
@@ -446,6 +504,7 @@ public sealed partial class PokemonState
     {
         if (!CanCare) return;
 
+        PlaySound?.Invoke(SoundEffects.Tap);
         if (IsSleeping)
         {
             WakeUp();
@@ -472,6 +531,7 @@ public sealed partial class PokemonState
 
         if (IsEgg)
         {
+            PlaySound?.Invoke(SoundEffects.Tap);
             EggTaps++;
             NeedsSave = true;
             if (EggTaps >= EGG_HATCH_TAPS) Hatch();
@@ -480,6 +540,7 @@ public sealed partial class PokemonState
 
         if (IsSleeping) return;
 
+        PlaySound?.Invoke(SoundEffects.Heart);
         IsFeedMenuOpen = false;
         IsPlayMenuOpen = false;
         Joy = Clamp100(Joy + 5);
@@ -495,6 +556,7 @@ public sealed partial class PokemonState
     {
         SpeciesId = Dex.PickHatchSpecies();
         (IsGenderless, IsFemale) = Dex.RollGender(SpeciesId);
+        RegisterCurrentInDex();
         BerryKnown = false;
         NeglectTicks = 0;
         AgeSeconds = 0;
@@ -513,6 +575,7 @@ public sealed partial class PokemonState
     {
         if (!CanEvolveNow) return;
 
+        PlaySound?.Invoke(SoundEffects.Medal);
         IsFeedMenuOpen = false;
         IsEvolutionPostponed = false;
         ResetPosition();
@@ -528,6 +591,7 @@ public sealed partial class PokemonState
         if (Dex.GetEvolution(SpeciesId) is not { } evolution || evolution.NextSpeciesIds.Length == 0) return;
 
         SpeciesId = evolution.NextSpeciesIds[Random.Shared.Next(evolution.NextSpeciesIds.Length)];
+        RegisterCurrentInDex();
         IsEvolutionPostponed = false;
         NeedsSave = true;
     }
@@ -546,15 +610,23 @@ public sealed partial class PokemonState
 
     public void StartFarewell()
     {
-        if (CanFarewellNow) StartEnding(CEREMONY_FAREWELL);
+        if (!CanFarewellNow) return;
+        PlaySound?.Invoke(SoundEffects.Medal);
+        StartEnding(CEREMONY_FAREWELL);
     }
 
     public void StartRelease()
     {
-        if (!IsEgg && !IsCeremony) StartEnding(CEREMONY_RELEASE);
+        if (IsEgg || IsCeremony) return;
+        PlaySound?.Invoke(SoundEffects.Deny);
+        StartEnding(CEREMONY_RELEASE);
     }
 
-    private void StartRunaway() => StartEnding(CEREMONY_RUNAWAY);
+    private void StartRunaway()
+    {
+        PlaySound?.Invoke(SoundEffects.Deny);
+        StartEnding(CEREMONY_RUNAWAY);
+    }
 
     private void StartEnding(int ceremony)
     {
@@ -589,6 +661,7 @@ public sealed partial class PokemonState
         IsEvolutionPostponed = false;
         IsFarewellPostponed = false;
         EvolvedFromSpeciesId = 0;
+        Medals = 0;
         BerryKnown = false;
         Ceremony = 0;
         CeremonyElapsedMs = 0;
