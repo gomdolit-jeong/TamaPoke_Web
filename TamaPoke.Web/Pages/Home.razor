@@ -22,7 +22,12 @@ else
     <div class="pet-layout">
     <section class="pet-device">
         <header class="pet-header">
+            <img class="pet-header-ball" src="ui/icon_ball.png" alt="" />
             <h1>@Name</h1>
+            @if (!_pet.IsEgg)
+            {
+                <span class="pet-level">Lv.@_pet.Level</span>
+            }
         </header>
 
         <p class="pet-mood" role="status">@MoodText</p>
@@ -84,10 +89,10 @@ else
             @if (!_pet.IsPlayMenuOpen && !_pet.IsFeedMenuOpen)
             {
             <ul class="pet-stats">
-                @StatBar("stat.fullness", _pet.Fullness)
-                @StatBar("stat.joy", _pet.Joy)
-                @StatBar("stat.energy", _pet.Energy)
-                @StatBar("stat.hygiene", _pet.Hygiene)
+                @StatBar("stat.fullness", "fullness", _pet.Fullness)
+                @StatBar("stat.joy", "joy", _pet.Joy)
+                @StatBar("stat.energy", "energy", _pet.Energy)
+                @StatBar("stat.hygiene", "hygiene", _pet.Hygiene)
             </ul>
             }
 
@@ -133,16 +138,16 @@ else
         }
 
         <div class="pet-actions">
-            <button type="button" disabled="@(!_pet.CanStartActivity)" aria-expanded="@(_pet.IsFeedMenuOpen ? "true" : "false")" @onclick="ToggleFeedMenu">
+            <button type="button" class="care-feed" disabled="@(!_pet.CanStartActivity)" aria-expanded="@(_pet.IsFeedMenuOpen ? "true" : "false")" @onclick="ToggleFeedMenu">
                 <img src="ui/icon_feed.png" alt="" /><span>@Loc.T("web.btn.feed")</span>
             </button>
-            <button type="button" disabled="@(!_pet.CanStartActivity)" aria-expanded="@(_pet.IsPlayMenuOpen ? "true" : "false")" @onclick="TogglePlayMenu">
+            <button type="button" class="care-play" disabled="@(!_pet.CanStartActivity)" aria-expanded="@(_pet.IsPlayMenuOpen ? "true" : "false")" @onclick="TogglePlayMenu">
                 <img src="ui/icon_play.png" alt="" /><span>@Loc.T("web.btn.play")</span>
             </button>
-            <button type="button" disabled="@(!_pet.CanCare)" @onclick="ToggleSleep">
+            <button type="button" class="care-sleep" disabled="@(!_pet.CanCare)" @onclick="ToggleSleep">
                 <img src="ui/icon_sleep.png" alt="" /><span>@Loc.T(_pet.IsSleeping ? "web.btn.wake" : "web.btn.sleep")</span>
             </button>
-            <button type="button" disabled="@(!_pet.CanStartActivity)" @onclick="Bath">
+            <button type="button" class="care-bath" disabled="@(!_pet.CanStartActivity)" @onclick="Bath">
                 <img src="ui/icon_bath.png" alt="" /><span>@Loc.T("web.btn.bath")</span>
             </button>
         </div>
@@ -174,7 +179,7 @@ else
     private object? _lastRendered;
     private bool _isDexOpen;
 
-    private string Name => _pet!.IsEgg ? Loc.T("pokemon.egg") : $"{Dex.GetName(_pet.SpeciesId, Loc.Language)} Lv.{_pet.Level}";
+    private string Name => _pet!.IsEgg ? Loc.T("pokemon.egg") : Dex.GetName(_pet.SpeciesId, Loc.Language);
     private string MoodText
     {
         get
@@ -188,7 +193,7 @@ else
 
     private string BackgroundUrl => $"backgrounds/{Dex.GetBiomeName(_pet!.SpeciesId)}{(_pet.IsNight ? " NIGHT" : "")}.png";
 
-    private RenderFragment StatBar(string key, int value) => @<li>
+    private RenderFragment StatBar(string key, string kind, int value) => @<li class="pet-stat-@kind">
         <span class="pet-stat-name">@Loc.T(key)</span>
         <progress max="100" value="@value" aria-label="@Loc.T(key)"></progress>
         <span class="pet-stat-value">@value</span>

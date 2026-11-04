@@ -3,7 +3,7 @@
 @inject Loc Loc
 @inject PokemonDex Dex
 
-<section class="pet-panel" aria-label="@Loc.T("idle.menu.profile")">
+<section class="pet-panel pet-panel-scroll" aria-label="@Loc.T("idle.menu.profile")">
     <header class="pet-panel-header">
         <h2>@Dex.GetName(Pet.SpeciesId, Loc.Language)</h2>
         <button type="button" @onclick="OnClose">@Loc.T("profile.close")</button>

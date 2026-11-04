@@ -3,7 +3,8 @@
 @inject Loc Loc
 
 <nav class="pet-menu" aria-label="@Loc.T("web.menu")">
-    <button type="button" disabled="@(!Pet.CanStartActivity)" @onclick="OnStartBattle">@Loc.T("web.menu.battle")</button>
+    <h2 class="pet-menu-title">@Loc.T("web.menu")</h2>
+    <button type="button" class="menu-battle" disabled="@(!Pet.CanStartActivity)" @onclick="OnStartBattle">@Loc.T("web.menu.battle")</button>
     <button type="button" @onclick="OnOpenDex">@Loc.T("web.menu.dex")</button>
     <button type="button" disabled="@(!CanOpenProfile)" @onclick="OnOpenProfile">@Loc.T("web.menu.profile")</button>
     <button type="button" disabled title="@Loc.T("web.comingSoon")">@Loc.T("web.menu.party")</button>
