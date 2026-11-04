@@ -4,12 +4,12 @@
 
 @* 게임판 좌표는 PC판 BattleView와 같은 288x288입니다. *@
 <div class="game-arena battle-arena @(Pet.IsDefeatedFadeOut ? "is-defeated" : "")">
-    <div class="battle-field" style="background-image:url('backgrounds/@(Dex.GetBiomeName(Pet.SpeciesId)).png')">
+    <div class="battle-field" style="background-image:url('backgrounds/@(Dex.GetBiomeName(Pet.SpeciesId, Pet.SpriteForm)).png')">
         <div class="battle-platform battle-platform-enemy"></div>
         <div class="battle-platform battle-platform-player"></div>
 
         <div class="battle-panel battle-panel-enemy">
-            <div class="battle-panel-name"><span>@Pet.EnemyName</span><span>Lv.@Pet.EnemyLevel</span></div>
+            <div class="battle-panel-name"><span>@(Pet.IsEnemyShiny ? "✨" : "")@Pet.EnemyName</span><span>Lv.@Pet.EnemyLevel</span></div>
             <div class="battle-panel-hp">
                 @AilmentBadge(Pet.EnemyAilment)
                 <progress class="@HpClass(Pet.EnemyHp, Pet.EnemyMaxHp)" max="@Pet.EnemyMaxHp" value="@Pet.EnemyHp"></progress>
@@ -19,13 +19,17 @@
         @if (Pet.IsEnemyVisible)
         {
             <div class="battle-sprite battle-sprite-enemy @(Pet.IsEnemyTakingDamage ? "is-hit" : "")">
-                <AnimatedSprite SpritePath="@Pet.EnemySpritePath" Action="Pet.EnemyCurrentAction" Row="Pet.EnemyRow" FitBox="72" Alt="@Pet.EnemyName" />
+                <AnimatedSprite SpritePath="@Pet.EnemySpritePath" FallbackPath="@Pet.EnemyBasePath" Action="Pet.EnemyCurrentAction" Row="Pet.EnemyRow" FitBox="72" Alt="@Pet.EnemyName" />
             </div>
         }
         @if (Pet.IsPlayerVisible)
         {
             <div class="battle-sprite battle-sprite-player @(Pet.IsPlayerTakingDamage ? "is-hit" : "")">
-                <AnimatedSprite SpritePath="@Pet.SpritePath" Action="Pet.CurrentAction" Row="Pet.CurrentRow" FitBox="108" Alt="@Pet.Name" />
+                <AnimatedSprite SpritePath="@Pet.SpritePath" FallbackPath="@($"{Pet.SpeciesId:D4}")" Action="Pet.CurrentAction" Row="Pet.CurrentRow" FitBox="108" Alt="@Pet.Name" />
+                @if (Pet.IsMegaEvolving)
+                {
+                    <span class="walk-mega-ring"></span>
+                }
             </div>
         }
 
@@ -39,7 +43,7 @@
         }
 
         <div class="battle-panel battle-panel-player">
-            <div class="battle-panel-name"><span>@Pet.Name</span><span>Lv.@Pet.Level</span></div>
+            <div class="battle-panel-name"><span>@Pet.PlayerBattleName</span><span>Lv.@Pet.Level</span></div>
             <div class="battle-panel-hp">
                 @AilmentBadge(Pet.PlayerAilment)
                 <progress class="@HpClass(Pet.PlayerHp, Pet.PlayerMaxHp)" max="@Pet.PlayerMaxHp" value="@Pet.PlayerHp"></progress>
@@ -50,6 +54,13 @@
 
     <div class="battle-controls">
         <div class="battle-message" role="status">@Pet.BattleMessage</div>
+
+        @if (Pet.IsMainMenuVisible && Pet.CanMegaEvolveNow)
+        {
+            <button type="button" class="battle-mega" @onclick="Pet.RequestMegaEvolution">
+                <img src="ui/icon_mega.png" alt="" /> @Loc.T("battle.ui.mega")
+            </button>
+        }
 
         @if (Pet.IsMainMenuVisible)
         {
@@ -102,6 +113,19 @@
             </div>
         </div>
     }
+    @if (Pet.IsMegaChoiceOpen)
+    {
+        <div class="battle-popup" role="dialog">
+            <p>@Loc.T("mega.battle.choose")</p>
+            <div class="battle-popup-row">
+                @foreach (var form in Pet.MegaChoices)
+                {
+                    <button type="button" class="battle-learn" @onclick="() => Pet.ChooseMegaForm(form)">@Pet.Megas.DisplayName(form)</button>
+                }
+            </div>
+            <button type="button" class="battle-run battle-wide" @onclick="Pet.CancelMegaChoice">@Loc.T("common.cancel")</button>
+        </div>
+    }
     @if (Pet.IsSkillLearnMenuOpen)
     {
         <div class="battle-popup" role="dialog">
@@ -146,7 +170,18 @@
         return ratio > 0.5 ? "hp-good" : ratio > 0.2 ? "hp-warn" : "hp-low";
     }
 
-    private RenderFragment AilmentBadge(SkillAilment ailment) => @<span class="battle-ailment battle-ailment-@ailment.ToString().ToLowerInvariant()">@AilmentText(ailment)</span>;
+    private RenderFragment AilmentBadge(SkillAilment ailment) => ailment == SkillAilment.None ? _ => { } :
+        @<span class="battle-ailment battle-ailment-@ailment.ToString().ToLowerInvariant()"><img src="ui/@AilmentIcon(ailment)" alt="" />@AilmentText(ailment)</span>;
+
+    private static string AilmentIcon(SkillAilment ailment) => ailment switch
+    {
+        SkillAilment.Burn => "fx_burn.png",
+        SkillAilment.Poison => "fx_poison.png",
+        SkillAilment.BadPoison => "fx_badpoison.png",
+        SkillAilment.Paralysis => "fx_paralysis.png",
+        SkillAilment.Freeze => "fx_freeze.png",
+        _ => "icon_sleep.png",
+    };
 
     private string AilmentText(SkillAilment ailment) => ailment switch
     {

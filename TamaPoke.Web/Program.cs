@@ -18,10 +18,12 @@ builder.Services.AddScoped<SoundPlayer>();
 builder.Services.AddScoped<SpriteLoader>();
 builder.Services.AddScoped<PokemonDex>();
 builder.Services.AddScoped<SkillDex>();
+builder.Services.AddScoped<MegaDex>();
 
 var host = builder.Build();
 await Task.WhenAll(
     host.Services.GetRequiredService<Loc>().InitializeAsync(),
     host.Services.GetRequiredService<PokemonDex>().InitializeAsync(),
-    host.Services.GetRequiredService<SkillDex>().InitializeAsync());
+    host.Services.GetRequiredService<SkillDex>().InitializeAsync(),
+    host.Services.GetRequiredService<MegaDex>().InitializeAsync());
 await host.RunAsync();

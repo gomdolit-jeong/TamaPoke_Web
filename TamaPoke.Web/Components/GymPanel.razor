@@ -1,0 +1,65 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+
+<section class="pet-panel pet-panel-scroll" aria-label="@Loc.T("profile.gyms")">
+    <header class="pet-panel-header">
+        <h2>@Loc.T("profile.gyms")</h2>
+        <button type="button" @onclick="OnClose">@Loc.T("profile.close")</button>
+    </header>
+
+    <p class="party-note">@string.Format(Loc.T("profile.badges"), Pet.GymBadges)</p>
+
+    @if (_selected is { } leader)
+    {
+        <div class="gym-confirm" role="dialog">
+            <p>@string.Format(Loc.T("gym.challenge.prompt"), leader.GymName)</p>
+            <p class="gym-leader">@leader.LeaderName · Lv.@leader.Level</p>
+            <div class="pet-prompt">
+                <button type="button" class="pet-prompt-main" disabled="@(!Pet.CanStartActivity)" @onclick="Challenge">@Loc.T("profile.challenge")</button>
+                <button type="button" @onclick="() => _selected = null">@Loc.T("common.cancel")</button>
+            </div>
+        </div>
+    }
+
+    @{ int index = 0; }
+    @foreach (var (region, generation) in Regions)
+    {
+        <h3>@Loc.T($"gen.{generation}")</h3>
+        <div class="gym-badges">
+            @for (int number = 1; number <= 8; number++)
+            {
+                int gymIndex = index++;
+                var gym = GymManager.GetLeader(gymIndex);
+                bool isOpen = gymIndex <= Pet.GymBadges;
+                bool isEarned = gymIndex < Pet.GymBadges;
+                <button type="button" class="gym-badge @(isEarned ? "is-earned" : "") @(isOpen && !isEarned ? "is-next" : "")"
+                        disabled="@(!isOpen)" title="@gym?.BadgeName" aria-label="@gym?.GymName"
+                        @onclick="() => _selected = gym">
+                    <img src="badges/@(region)_@(number).png" alt="" />
+                </button>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private static readonly (string Region, int Generation)[] Regions =
+    [
+        ("Kanto", 1), ("Johto", 2), ("Hoenn", 3), ("Sinnoh", 4), ("Unova", 5), ("Kalos", 6), ("Galar", 8), ("Paldea", 9),
+    ];
+
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<int> OnChallenge { get; set; }
+
+    private GymLeaderInfo? _selected;
+
+    private async Task Challenge()
+    {
+        if (_selected is null) return;
+        int index = _selected.Index;
+        _selected = null;
+        await OnChallenge.InvokeAsync(index);
+    }
+}

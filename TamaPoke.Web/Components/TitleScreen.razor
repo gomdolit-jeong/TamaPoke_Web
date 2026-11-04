@@ -1,0 +1,143 @@
+@using System.Diagnostics
+@using Microsoft.JSInterop
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Sprites
+@using TamaPoke.Web.Utils
+@implements IDisposable
+@inject Loc Loc
+@inject PokemonDex Dex
+@inject IJSRuntime JS
+
+@* 로그인 전 시작 화면: 포켓몬들이 풀밭을 뛰어다닙니다. *@
+<section class="title-screen">
+    <div class="title-stage">
+        @foreach (var runner in _runners)
+        {
+            <div class="title-runner" @key="runner.SpeciesId"
+                 style="transform:translate(@(runner.X.ToString("F1"))px,@(runner.Y.ToString("F0"))px);z-index:@((int)runner.Y)">
+                <AnimatedSprite SpritePath="@runner.SpritePath" FallbackPath="@($"{runner.SpeciesId:D4}")" Action="runner.Action" Row="PokemonAnim.ROW_LEFT"
+                                Flipped="runner.Direction > 0" Scale="2" NoPreload="true" Alt="" />
+            </div>
+        }
+        <div class="title-logo">
+            <img src="ui/icon_ball.png" alt="" />
+            <h1>TamaPoke</h1>
+        </div>
+    </div>
+
+    <div class="title-actions">
+        <p class="title-tagline">@Loc.T("web.title.tagline")</p>
+        @if (CanSignIn)
+        {
+            <button type="button" class="title-login" disabled="@(!IsSignInReady)" @onclick="OnSignIn">☁️ @Loc.T("web.cloud.signIn")</button>
+        }
+        <button type="button" class="title-guest" @onclick="OnGuest">@Loc.T(HasSave ? "web.guest.continue" : "web.guest.start")</button>
+        <p class="title-note" role="status">@Note</p>
+        <button type="button" class="title-lang" lang="@(Loc.Language == Loc.Korean ? "en" : "ko")" @onclick="OnToggleLanguage">
+            @(Loc.Language == Loc.Korean ? "English" : "한국어")
+        </button>
+    </div>
+</section>
+
+@code {
+    private const int RUNNER_COUNT = 6;
+    private const double STAGE_WIDTH = 440;
+    private const double GROUND_TOP = 95, GROUND_BOTTOM = 165;
+    private const double MIN_SPEED = 25, MAX_SPEED = 60;
+    private const double HOP_MS = 700;
+    private const int SHINY_CHANCE_PERCENT = 25; // 시작 화면이 화려해 보이도록 게임 속 확률보다 높게 둡니다.
+
+    [Parameter] public bool CanSignIn { get; set; }
+    [Parameter] public bool IsSignInReady { get; set; }
+    [Parameter] public bool HasSave { get; set; }
+    [Parameter] public string? Note { get; set; }
+    [Parameter] public EventCallback OnSignIn { get; set; }
+    [Parameter] public EventCallback OnGuest { get; set; }
+    [Parameter] public EventCallback OnToggleLanguage { get; set; }
+
+    private sealed class Runner
+    {
+        public int SpeciesId { get; init; }
+        public string SpritePath { get; init; } = "";
+        public double X { get; set; }
+        public double Y { get; init; }
+        public int Direction { get; set; }
+        public double Speed { get; init; }
+        public double HopMs { get; set; }
+        public int Action => HopMs > 0 ? PokemonAnim.HOP : PokemonAnim.WALK;
+    }
+
+    private readonly CancellationTokenSource _cts = new();
+    private List<Runner> _runners = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _runners = Dex.PickTitleSpecies(RUNNER_COUNT).Select((id, index) => new Runner
+        {
+            SpeciesId = id,
+            SpritePath = Random.Shared.Next(100) < SHINY_CHANCE_PERCENT ? $"{id:D4}/0000/0001" : $"{id:D4}",
+            X = Random.Shared.NextDouble() * STAGE_WIDTH,
+            Y = GROUND_TOP + (GROUND_BOTTOM - GROUND_TOP) * index / (RUNNER_COUNT - 1),
+            Direction = Random.Shared.Next(2) == 0 ? -1 : 1,
+            Speed = MIN_SPEED + Random.Shared.NextDouble() * (MAX_SPEED - MIN_SPEED),
+        }).ToList();
+
+        // 움직임을 줄이도록 설정한 사용자에게는 제자리에 서 있는 모습만 보여줍니다.
+        if (!await PrefersReducedMotionAsync()) _ = RunAsync();
+    }
+
+    private async Task<bool> PrefersReducedMotionAsync()
+    {
+        try
+        {
+            return await JS.InvokeAsync<bool>("tamaPoke.prefersReducedMotion");
+        }
+        catch (JSException)
+        {
+            return false;
+        }
+    }
+
+    private async Task RunAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(33));
+        long last = Stopwatch.GetTimestamp();
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+            {
+                long now = Stopwatch.GetTimestamp();
+                double ms = Math.Min(Stopwatch.GetElapsedTime(last, now).TotalMilliseconds, 100);
+                last = now;
+
+                foreach (var runner in _runners)
+                {
+                    if (runner.HopMs > 0)
+                    {
+                        runner.HopMs -= ms;
+                        continue;
+                    }
+
+                    runner.X += runner.Direction * runner.Speed * ms / 1000;
+                    if (runner.X < 0 || runner.X > STAGE_WIDTH)
+                    {
+                        runner.X = Math.Clamp(runner.X, 0, STAGE_WIDTH);
+                        runner.Direction = -runner.Direction;
+                    }
+                    else if (Random.Shared.NextDouble() < ms / 8000)
+                    {
+                        runner.HopMs = HOP_MS;
+                    }
+                }
+                StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

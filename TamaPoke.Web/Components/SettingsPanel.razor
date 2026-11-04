@@ -1,0 +1,159 @@
+@using Microsoft.JSInterop
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+@inject IJSRuntime JS
+
+<section class="pet-panel pet-panel-scroll" aria-label="@Loc.T("settings.title")">
+    <header class="pet-panel-header">
+        <h2>@Loc.T("settings.title")</h2>
+        <button type="button" @onclick="CloseAsync">@Loc.T("settings.save")</button>
+    </header>
+
+    <label class="setting-row">
+        <span>@Loc.T("settings.farewell")</span>
+        <input type="number" min="1" max="365" @bind="Pet.Settings.FarewellAgeDays" />
+    </label>
+    <p class="setting-hint">@Loc.T("settings.farewell.hint")</p>
+
+    <label class="setting-row">
+        <span>@Loc.T("web.settings.roamCount")</span>
+        <input type="number" min="1" max="6" @bind="Pet.Settings.RoamingPokemonCount" />
+    </label>
+    <p class="setting-hint">@Loc.T("settings.roamCount.hint")</p>
+
+    <label class="setting-row">
+        <span>@Loc.T("settings.scale") @Pet.Settings.RoamingPetScale.ToString("0.0")</span>
+        <input type="range" min="@GameSettings.MinPetScale" max="@GameSettings.MaxPetScale" step="0.5" @bind="Pet.Settings.RoamingPetScale" @bind:event="oninput" />
+    </label>
+    <p class="setting-hint">@Loc.T("settings.scale.hint")</p>
+
+    <label class="setting-row">
+        <span>@Loc.T("web.settings.notify")</span>
+        <input type="checkbox" checked="@Pet.Settings.UseNotifications" @onchange="ToggleNotifications" />
+    </label>
+    <p class="setting-hint @(_notifyDenied ? "is-warning" : "")">@Loc.T(_notifyDenied ? "web.settings.notifyDenied" : "web.settings.notify.hint")</p>
+
+    <h3>@Loc.T("settings.generations")</h3>
+    <div class="setting-generations">
+        @for (int g = 1; g <= 9; g++)
+        {
+            int generation = g;
+            <label>
+                <input type="checkbox" checked="@Pet.Settings.SelectedGenerations.Contains(generation)" @onchange="e => ToggleGeneration(generation, (bool)e.Value!)" />
+                @Loc.T($"region.{generation}")
+            </label>
+        }
+    </div>
+
+    <h3>@Loc.T("web.settings.save")</h3>
+    <p class="setting-hint">@Loc.T("web.settings.save.hint")</p>
+    <div class="pet-prompt">
+        <button type="button" @onclick="ExportAsync">@Loc.T("web.settings.export")</button>
+        <label class="setting-file">
+            @Loc.T("web.settings.import")
+            <InputFile accept=".json,application/json" OnChange="ImportAsync" />
+        </label>
+    </div>
+    @if (_importError)
+    {
+        <p class="party-note is-warning" role="alert">@Loc.T("web.settings.importFailed")</p>
+    }
+
+    <a class="setting-link" href="@ManualUrl" target="_blank" rel="noopener">📖 @Loc.T("tray.manual")</a>
+
+    <h3>@Loc.T("settings.reset")</h3>
+    <p class="setting-hint">@Loc.T("settings.reset.tooltip")</p>
+    @if (_confirmReset)
+    {
+        <div class="pet-prompt">
+            <button type="button" class="pet-prompt-main" @onclick="ResetAsync">@Loc.T("common.yes")</button>
+            <button type="button" @onclick="() => _confirmReset = false">@Loc.T("common.no")</button>
+        </div>
+    }
+    else
+    {
+        <div class="pet-prompt">
+            <button type="button" @onclick="() => _confirmReset = true">@Loc.T("settings.reset")</button>
+        </div>
+    }
+</section>
+
+@code {
+    private const int MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public Func<string, Task>? ReplaceSave { get; set; }
+    [Parameter] public Func<Task>? BeforeReset { get; set; }
+
+    private bool _confirmReset;
+    private bool _importError;
+    private bool _notifyDenied;
+
+    private string ManualUrl => Loc.Language == Loc.English
+        ? "https://github.com/gomdolit-jeong/TamaPoke_PC/blob/main/MANUAL.md"
+        : "https://github.com/gomdolit-jeong/TamaPoke_PC/blob/main/MANUAL.ko.md";
+
+    // 켤 때 브라우저에 알림 권한을 요청합니다. 거절하면 꺼진 채로 둡니다.
+    private async Task ToggleNotifications(ChangeEventArgs e)
+    {
+        bool enable = (bool)e.Value!;
+        _notifyDenied = false;
+        if (enable && !await JS.InvokeAsync<bool>("tamaPoke.requestNotificationPermission"))
+        {
+            enable = false;
+            _notifyDenied = true;
+        }
+        Pet.Settings.UseNotifications = enable;
+        Pet.NeedsSave = true;
+    }
+
+    private void ToggleGeneration(int generation, bool selected)
+    {
+        var list = Pet.Settings.SelectedGenerations;
+        if (selected && !list.Contains(generation)) list.Add(generation);
+        else if (!selected && list.Count > 1) list.Remove(generation); // 최소 한 지방은 남깁니다.
+        Pet.NeedsSave = true;
+    }
+
+    private async Task CloseAsync()
+    {
+        Pet.NormalizeSettings();
+        Pet.NeedsSave = true;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task ExportAsync()
+    {
+        await JS.InvokeVoidAsync("tamaPoke.downloadText", $"tamapoke-save-{DateTime.Now:yyyyMMdd-HHmm}.json", SaveStore.Serialize(Pet));
+    }
+
+    private async Task ImportAsync(InputFileChangeEventArgs e)
+    {
+        _importError = false;
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(MAX_IMPORT_BYTES));
+            string json = await reader.ReadToEndAsync();
+            if (SaveStore.Parse(json) is null)
+            {
+                _importError = true;
+                return;
+            }
+            if (ReplaceSave is not null) await ReplaceSave(json);
+        }
+        catch (IOException)
+        {
+            _importError = true;
+        }
+    }
+
+    // 모든 포켓몬과 도감을 지웁니다. 설정은 유지합니다. (PC판과 같음)
+    private async Task ResetAsync()
+    {
+        if (ReplaceSave is null) return;
+        if (BeforeReset is not null) await BeforeReset();
+        await ReplaceSave(SaveStore.Serialize(new PokemonState { Settings = Pet.Settings, IsMuted = Pet.IsMuted, PendingNoticeKey = "reset.done.message" }));
+    }
+}

@@ -23,7 +23,7 @@ else if (_strip is not null)
     [Parameter, EditorRequired] public required string SpritePath { get; set; }
     [Parameter] public int Action { get; set; } = PokemonAnim.IDLE;
     [Parameter] public int Row { get; set; } = PokemonAnim.ROW_FRONT;
-    [Parameter] public int Scale { get; set; } = 3;
+    [Parameter] public double Scale { get; set; } = 3;
 
     // 값이 있으면 대기 모션이 이 크기(px)에 맞도록 배율을 정합니다. (포켓몬마다 크기가 달라도 배틀에서 비슷하게 보임)
     [Parameter] public double? FitBox { get; set; }
@@ -31,10 +31,17 @@ else if (_strip is not null)
 
     // 도감 썸네일처럼 첫 장면만 보여줄 때 씁니다. (미리 받기와 재생을 하지 않음)
     [Parameter] public bool Paused { get; set; }
+
+    // 시작 화면처럼 한두 가지 모션만 쓸 때 다른 모션을 미리 받지 않습니다.
+    [Parameter] public bool NoPreload { get; set; }
+
+    // 이 스프라이트를 받지 못하면 대신 쓸 경로 (이로치가 없는 포켓몬은 기본 색으로)
+    [Parameter] public string? FallbackPath { get; set; }
     [Parameter] public string Alt { get; set; } = "";
 
     private readonly CancellationTokenSource _cts = new();
     private (string? SpritePath, int Action, int Row) _request;
+    private string? _failedPath;
     private SpriteStrip? _strip;
     private string? _stripUrl;
     private int _stripRow;
@@ -52,20 +59,24 @@ else if (_strip is not null)
 
     protected override async Task OnParametersSetAsync()
     {
-        var request = (SpritePath, Action, Row);
+        // 이로치를 받지 못한 포켓몬은 다음 모션부터 다시 시도하지 않습니다.
+        if (_failedPath is not null && _failedPath != SpritePath) _failedPath = null;
+        string path = _failedPath is not null && FallbackPath is not null ? FallbackPath : SpritePath;
+
+        (string? SpritePath, int Action, int Row) request = (path, Action, Row);
         if (request == _request) return;
         bool isNewSprite = request.SpritePath != _request.SpritePath;
         _request = request;
 
-        if (isNewSprite && !Paused) _ = Loader.PreloadAsync(SpritePath);
+        if (isNewSprite && !Paused && !NoPreload) _ = Loader.PreloadAsync(path);
 
         // 새 모션을 받는 동안에는 지금 모션을 계속 보여줍니다.
         try
         {
-            var strip = await Loader.GetStripAsync(SpritePath, Action);
+            var strip = await Loader.GetStripAsync(path, Action);
             if (FitBox is double box)
             {
-                var (idleWidth, idleHeight) = await Loader.GetIdleFrameSizeAsync(SpritePath);
+                var (idleWidth, idleHeight) = await Loader.GetIdleFrameSizeAsync(path);
                 _fitScale = box / Math.Max(idleWidth, idleHeight);
             }
             if (request != _request) return;
@@ -79,7 +90,14 @@ else if (_strip is not null)
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Xml.XmlException)
         {
-            Console.WriteLine($"스프라이트 로드 실패 {SpritePath}: {ex.Message}");
+            if (FallbackPath is not null && path != FallbackPath)
+            {
+                _failedPath = SpritePath;
+                await OnParametersSetAsync();
+                return;
+            }
+
+            Console.WriteLine($"스프라이트 로드 실패 {path}: {ex.Message}");
             _failed = _strip is null;
             if (request == _request) _request = default;
         }

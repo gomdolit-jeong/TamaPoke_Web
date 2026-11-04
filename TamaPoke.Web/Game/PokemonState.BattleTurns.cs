@@ -286,7 +286,7 @@ public sealed partial class PokemonState
             {
                 _isCounterReady = false;
                 ClearMoveLock(userIsPlayer: true);
-                BattleMessage = L.F("battle.noEffectOn", L.F("battle.wildName", EnemyName));
+                BattleMessage = L.F("battle.noEffectOn", EnemyBattleName);
                 await Task.Delay(1500);
                 return;
             }
@@ -374,7 +374,7 @@ public sealed partial class PokemonState
     // isStatusMove: 위력 0인 변화 기술이면 실패/무효 메시지도 보여줍니다.
     private async Task<bool> TryInflictAilmentAsync(SkillInfo skill, bool targetIsEnemy, bool isStatusMove)
     {
-        string targetName = targetIsEnemy ? L.F("battle.wildName", EnemyName) : Name;
+        string targetName = targetIsEnemy ? EnemyBattleName : Name;
 
         if ((targetIsEnemy ? EnemyHp : PlayerHp) <= 0) return false; // 쓰러진 쪽에는 걸리지 않음
 
@@ -453,7 +453,7 @@ public sealed partial class PokemonState
     {
         if (!IsBattleOpen || PlayerHp <= 0 || EnemyHp <= 0 || IsBattleResolved) return;
 
-        string enemyName = L.F("battle.wildName", EnemyName);
+        string enemyName = EnemyBattleName;
         if (await RestIfRechargingAsync(userIsPlayer: false, enemyName)) return;
 
         var myInfo = MyBattleInfo;
@@ -463,7 +463,7 @@ public sealed partial class PokemonState
         {
             if (_enemyAilmentTurns > 0) _enemyAilmentTurns--;
 
-            bool canAct = AilmentHelper.CanActThisTurn(EnemyAilment, ref _enemyAilmentTurns, L.F("battle.wildName", EnemyName), out string statusMsg, out bool cured);
+            bool canAct = AilmentHelper.CanActThisTurn(EnemyAilment, ref _enemyAilmentTurns, EnemyBattleName, out string statusMsg, out bool cured);
             if (cured) EnemyAilment = SkillAilment.None;
             if (!string.IsNullOrEmpty(statusMsg))
             {
@@ -581,7 +581,7 @@ public sealed partial class PokemonState
             if (tickDamage > 0)
             {
                 EnemyHp = Math.Max(0, EnemyHp - tickDamage);
-                BattleMessage = L.F("battle.ailment.tick", L.F("battle.wildName", EnemyName), ailmentMsg, tickDamage);
+                BattleMessage = L.F("battle.ailment.tick", EnemyBattleName, ailmentMsg, tickDamage);
                 await Task.Delay(1500);
             }
         }
@@ -695,7 +695,7 @@ public sealed partial class PokemonState
         if (turns <= 0 || hp <= 0) return;
 
         int maxHp = targetIsPlayer ? PlayerMaxHp : EnemyMaxHp;
-        string who = targetIsPlayer ? PlayerBattleName : L.F("battle.wildName", EnemyName);
+        string who = targetIsPlayer ? PlayerBattleName : EnemyBattleName;
         string moveName = (targetIsPlayer ? _playerTrapSkill : _enemyTrapSkill)?.Name ?? "";
         int damage = Math.Max(1, maxHp / TRAP_DAMAGE_DIVISOR);
 
@@ -724,7 +724,7 @@ public sealed partial class PokemonState
 
         if (targetIsPlayer) { PlayerAilment = SkillAilment.None; _playerAilmentTurns = 0; }
         else { EnemyAilment = SkillAilment.None; _enemyAilmentTurns = 0; }
-        BattleMessage = L.F("battle.uproarWake", targetIsPlayer ? PlayerBattleName : L.F("battle.wildName", EnemyName));
+        BattleMessage = L.F("battle.uproarWake", targetIsPlayer ? PlayerBattleName : EnemyBattleName);
         await Task.Delay(1000);
     }
     private readonly MoveLock _playerLock = new(), _enemyLock = new();
@@ -902,7 +902,7 @@ public sealed partial class PokemonState
             int turns = rand.Next(4, 6);
             if (userIsPlayer) { _enemyTrapTurns = turns; _enemyTrapSkill = skill; }
             else { _playerTrapTurns = turns; _playerTrapSkill = skill; }
-            BattleMessage = L.F("battle.trapStart", userIsPlayer ? L.F("battle.wildName", EnemyName) : PlayerBattleName, skill.Name);
+            BattleMessage = L.F("battle.trapStart", userIsPlayer ? EnemyBattleName : PlayerBattleName, skill.Name);
             await Task.Delay(1000);
         }
 
@@ -923,7 +923,7 @@ public sealed partial class PokemonState
 
         int hp = userIsPlayer ? PlayerHp : EnemyHp;
         int maxHp = userIsPlayer ? PlayerMaxHp : EnemyMaxHp;
-        string who = userIsPlayer ? PlayerBattleName : L.F("battle.wildName", EnemyName);
+        string who = userIsPlayer ? PlayerBattleName : EnemyBattleName;
         int amount = Math.Max(1, dealt * Math.Abs(skill.Drain) / 100);
 
         if (skill.Drain > 0)
@@ -997,7 +997,7 @@ public sealed partial class PokemonState
         if (targetIsPlayer ? PlayerHp <= 0 : EnemyHp <= 0) return; // 쓰러진 쪽은 변하지 않음
 
         int[] stages = targetIsPlayer ? _playerStages : _enemyStages;
-        string who = targetIsPlayer ? PlayerBattleName : L.F("battle.wildName", EnemyName);
+        string who = targetIsPlayer ? PlayerBattleName : EnemyBattleName;
 
         // 원시의힘처럼 여러 능력치가 한꺼번에 오르면 한 문장으로 묶어서 보여줍니다.
         var results = skill.StatChanges!.Select(c =>

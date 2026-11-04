@@ -31,6 +31,7 @@ public sealed class PokemonInfo
 }
 
 [JsonSerializable(typeof(List<PokemonInfo>))]
+[JsonSerializable(typeof(Dictionary<int, Dictionary<string, string>>), TypeInfoPropertyName = "Forms")]
 internal sealed partial class DexJsonContext : JsonSerializerContext;
 
 // 포켓몬 데이터와 진화 갈래. 규칙은 PC판 PokemonDex.cs / PokemonState.LifeCycle.cs와 같습니다.
@@ -42,6 +43,8 @@ public sealed class PokemonDex(HttpClient http)
 #endif
 
     private const int WILD_LEGENDARY_CHANCE_PERCENT = 1;
+    private const int LEGENDARY_HATCH_MIN_DEX = 30;
+    private const int LEGENDARY_HATCH_CHANCE_PERCENT = 3;
 
     // 세대(지방)별 도감 번호 범위 (PC판 GameRegions.cs와 같음)
     public static readonly (int Generation, int StartId, int EndId)[] Regions =
@@ -95,9 +98,46 @@ public sealed class PokemonDex(HttpClient http)
     private int[] _wildCandidates = [];
     private int[] _wildLegendaries = [];
 
+    private const int SPECIAL_FORM_CHANCE = 10; // 특수 폼(알로라 등)이 나올 확률(%)
+    private static readonly string[] BattleOnlyFormTokens = ["mega", "primal", "gigantamax", "shadow"];
+
+    private Dictionary<int, Dictionary<string, string>> _forms = [];
+
+    // 폼 접미사(Shiny, Alola, Mega_X ...)로 스프라이트 경로를 찾습니다. 없으면 기본 모습입니다.
+    public string SpritePath(int speciesId, string? form) =>
+        !string.IsNullOrEmpty(form) && _forms.GetValueOrDefault(speciesId)?.GetValueOrDefault(form) is { } path ? path : $"{speciesId:D4}";
+
+    public bool HasForm(int speciesId, string form) => _forms.GetValueOrDefault(speciesId)?.ContainsKey(form) == true;
+
+    // 폼이 여러 개면 10% 확률로 특수 폼 하나를 고릅니다. (이로치/암컷/배틀 전용 폼 제외)
+    public string PickBaseForm(int speciesId)
+    {
+        if (Random.Shared.Next(100) >= SPECIAL_FORM_CHANCE || !_forms.TryGetValue(speciesId, out var forms)) return "";
+        var special = forms.Keys.Where(f =>
+        {
+            string lower = f.ToLowerInvariant();
+            return !lower.Contains("shiny") && !lower.Contains("female") && !lower.Split('_').Any(BattleOnlyFormTokens.Contains);
+        }).ToArray();
+        return special.Length > 0 ? special[Random.Shared.Next(special.Length)] : "";
+    }
+
+    // 기준 폼에 이로치/암컷 변형이 있으면 그 폼으로 바꿉니다. 없으면 기준 폼 그대로입니다.
+    public string ApplyVariants(int speciesId, string baseForm, bool shiny, bool female)
+    {
+        string prefix = baseForm.Length > 0 ? baseForm + "_" : "";
+        string? Find(string suffix) => HasForm(speciesId, prefix + suffix) ? prefix + suffix : null;
+
+        string? match = null;
+        if (shiny && female) match = Find("Shiny_Female") ?? Find("Female_Shiny") ?? Find("Shiny");
+        else if (female) match = Find("Female");
+        else if (shiny) match = Find("Shiny");
+        return match ?? baseForm;
+    }
+
     public async Task InitializeAsync()
     {
         var all = await http.GetFromJsonAsync(Utils.BuildInfo.Versioned("data/pokemon.json"), DexJsonContext.Default.ListPokemonInfo) ?? [];
+        _forms = await http.GetFromJsonAsync(Utils.BuildInfo.Versioned("data/forms.json"), DexJsonContext.Default.Forms) ?? [];
         _byId = all.GroupBy(p => p.Id).ToDictionary(g => g.Key, g => g.First());
 
         // 레벨이 아닌 방법(돌, 교환 등)으로 진화하는 포켓몬은 Lv.36에 진화합니다.
@@ -115,12 +155,18 @@ public sealed class PokemonDex(HttpClient http)
         _wildLegendaries = all.Where(p => p.HasSprite && LegendaryIds.Contains(p.Id)).Select(p => p.Id).ToArray();
     }
 
+    // 시작 화면에서 뛰어다닐 포켓몬: 진화형과 전설까지 스프라이트가 있는 포켓몬 중 겹치지 않게 고릅니다.
+    public int[] PickTitleSpecies(int count) =>
+        _wildCandidates.Concat(_wildLegendaries).OrderBy(_ => Random.Shared.Next()).Take(count).ToArray();
+
     // 야생 상대: 스프라이트가 있는 포켓몬. 전설은 1% 확률입니다.
-    public int PickWildSpecies()
+    public int PickWildSpecies(IReadOnlyCollection<int> generations)
     {
-        if (_wildLegendaries.Length > 0 && Random.Shared.Next(100) < WILD_LEGENDARY_CHANCE_PERCENT)
-            return _wildLegendaries[Random.Shared.Next(_wildLegendaries.Length)];
-        return _wildCandidates.Length > 0 ? _wildCandidates[Random.Shared.Next(_wildCandidates.Length)] : 1;
+        var legendaries = _wildLegendaries.Where(id => IsInGenerations(id, generations)).ToArray();
+        if (legendaries.Length > 0 && Random.Shared.Next(100) < WILD_LEGENDARY_CHANCE_PERCENT)
+            return legendaries[Random.Shared.Next(legendaries.Length)];
+        var candidates = _wildCandidates.Where(id => IsInGenerations(id, generations)).ToArray();
+        return candidates.Length > 0 ? candidates[Random.Shared.Next(candidates.Length)] : 1;
     }
 
     public PokemonInfo? Get(int speciesId) => _byId.GetValueOrDefault(speciesId);
@@ -132,15 +178,24 @@ public sealed class PokemonDex(HttpClient http)
         return language == Utils.Loc.English && !string.IsNullOrEmpty(info.NameEn) ? info.NameEn : info.NameKo;
     }
 
-    // 전설 부화는 도감을 옮긴 뒤 PC판처럼 도감 등록 수 조건과 함께 넣습니다.
-    public int PickHatchSpecies()
+    // 고른 세대의 부화 후보에서 고릅니다. 도감이 30마리 이상이면 3% 확률로 전설이 나옵니다.
+    public int PickHatchSpecies(IReadOnlyCollection<int> generations, int registeredCount)
     {
 #if DEBUG
         return TEST_HATCH_SPECIES_ID;
 #else
-        return _hatchCandidates.Length > 0 ? _hatchCandidates[Random.Shared.Next(_hatchCandidates.Length)] : 1;
+        if (registeredCount >= LEGENDARY_HATCH_MIN_DEX && Random.Shared.Next(100) < LEGENDARY_HATCH_CHANCE_PERCENT)
+        {
+            var legendaries = _wildLegendaries.Where(id => IsInGenerations(id, generations)).ToArray();
+            if (legendaries.Length > 0) return legendaries[Random.Shared.Next(legendaries.Length)];
+        }
+        var candidates = _hatchCandidates.Where(id => IsInGenerations(id, generations)).ToArray();
+        return candidates.Length > 0 ? candidates[Random.Shared.Next(candidates.Length)] : 1;
 #endif
     }
+
+    private static bool IsInGenerations(int speciesId, IReadOnlyCollection<int> generations) =>
+        Regions.Any(r => generations.Contains(r.Generation) && speciesId >= r.StartId && speciesId <= r.EndId);
 
     // 종족의 성비에 따라 성별을 정합니다. (무성 종족은 IsGenderless = true)
     public (bool IsGenderless, bool IsFemale) RollGender(int speciesId)
@@ -159,10 +214,10 @@ public sealed class PokemonDex(HttpClient http)
             : null;
 
     // 타입별 배경. 알은 풀숲입니다. (PC판 GetBiomeFromType과 같음)
-    public string GetBiomeName(int speciesId)
+    public string GetBiomeName(int speciesId, string? form = null)
     {
         if (speciesId < 0) return "TALL GRASS";
-        return Get(speciesId)?.Type1 switch
+        return PokemonForms.GetTypes(this, speciesId, string.IsNullOrEmpty(form) ? null : $"p{speciesId:D4}_{form}.bin").Type1 switch
         {
             PokemonType.Water => "BEACH",
             PokemonType.Normal or PokemonType.Flying or PokemonType.Electric => "PATH",

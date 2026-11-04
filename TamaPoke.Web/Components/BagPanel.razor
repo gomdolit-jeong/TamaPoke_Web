@@ -1,0 +1,44 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+
+<section class="pet-panel pet-panel-scroll" aria-label="@Loc.T("bag.title")">
+    <header class="pet-panel-header">
+        <h2>@Loc.T("bag.title")</h2>
+        <button type="button" @onclick="OnClose">@Loc.T("profile.close")</button>
+    </header>
+
+    <ul class="bag-list">
+        @foreach (var item in ItemDex.All)
+        {
+            <li class="@(Pet.ItemCount(item.Id) > 0 ? "" : "is-empty")">
+                <img src="ui/@item.Icon" alt="" />
+                <span class="bag-text">
+                    <span class="bag-name">@Loc.T($"item.{item.Id}.name")</span>
+                    <span class="bag-desc">@Loc.T($"item.{item.Id}.desc")</span>
+                </span>
+                <span class="bag-count">×@Pet.ItemCount(item.Id)</span>
+            </li>
+        }
+    </ul>
+
+    <h3>@Loc.T("bag.mega.title")</h3>
+    <p class="setting-hint">
+        @(Pet.HasMegaRing ? string.Format(Loc.T("bag.mega.ring.has"), Pet.MegaStones.Count) : string.Format(Loc.T("bag.mega.ring.hint"), PokemonState.MEGA_RING_BADGES))
+    </p>
+    <ul class="bag-mega">
+        @foreach (var id in Pet.MegaStones)
+        {
+            <li><span>@(Pet.Megas.FindStone(id)?.StoneName ?? id)</span><span class="bag-count">@Loc.T("bag.mega.complete")</span></li>
+        }
+        @foreach (var (id, count) in Pet.MegaShards.OrderByDescending(p => p.Value))
+        {
+            <li><span>@(Pet.Megas.FindStone(id)?.StoneName ?? id)</span><span class="bag-count">@count/@PokemonState.MEGA_SHARDS_PER_STONE</span></li>
+        }
+    </ul>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+}

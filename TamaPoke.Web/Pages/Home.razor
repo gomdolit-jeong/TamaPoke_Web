@@ -12,6 +12,8 @@
 @inject CloudSave CloudSave
 @inject NavigationManager Navigation
 @inject SkillDex Skills
+@inject MegaDex Megas
+@inject IJSRuntime JS
 
 <PageTitle>TamaPoke</PageTitle>
 
@@ -19,10 +21,31 @@
 {
     <p class="pet-loading">@Loc.T("web.loading")</p>
 }
+else if (_isOtherTabActive)
+{
+    <div class="pet-tab-guard" role="alert">
+        <p>@Loc.T("web.otherTab")</p>
+        <button type="button" @onclick="ReloadThisTab">@Loc.T("web.otherTab.reload")</button>
+    </div>
+}
+else if (_pet.IsWalking)
+{
+    <WalkLayer Pet="_pet" OnEnd="() => _pet.EndWalk()" />
+}
+else if (ShowTitle)
+{
+    <TitleScreen CanSignIn="CloudSave.Status != CloudStatus.Unavailable"
+                 IsSignInReady="CloudSave.Status != CloudStatus.Loading"
+                 HasSave="!_pet.HasNoProgress"
+                 Note="@TitleNote"
+                 OnSignIn="CloudSave.SignInAsync"
+                 OnGuest="StartAsGuest"
+                 OnToggleLanguage="ToggleLanguageAsync" />
+}
 else
 {
     <div class="pet-layout">
-    <section class="pet-device">
+    <section class="pet-device" style="opacity:@(_pet.Settings.PageOpacity.ToString("F2"))">
         <header class="pet-header">
             <img class="pet-header-ball" src="ui/icon_ball.png" alt="" />
             <h1>@Name</h1>
@@ -57,6 +80,22 @@ else
         {
             <DexPanel Pet="_pet" OnClose="() => _isDexOpen = false" />
         }
+        else if (_isPartyOpen || _pet.IsSwapMode)
+        {
+            <PartyPanel Pet="_pet" OnClose="() => _isPartyOpen = false" />
+        }
+        else if (_isBagOpen)
+        {
+            <BagPanel Pet="_pet" OnClose="() => _isBagOpen = false" />
+        }
+        else if (_isGymOpen)
+        {
+            <GymPanel Pet="_pet" OnClose="() => _isGymOpen = false" OnChallenge="StartGym" />
+        }
+        else if (_isSettingsOpen)
+        {
+            <SettingsPanel Pet="_pet" OnClose="() => _isSettingsOpen = false" ReplaceSave="ReloadWithSaveAsync" BeforeReset="CloudSave.MarkFactoryResetAsync" />
+        }
         else if (_pet.ShownGame != MiniGame.None)
         {
             <MiniGameStage Pet="_pet" />
@@ -66,7 +105,7 @@ else
         <div class="pet-stage" style="background-image:url('@BackgroundUrl')">
             <button type="button" class="pet-actor" aria-label="@(Loc.T(_pet.IsEgg ? "web.tap.egg" : "web.tap.pet"))"
                     style="transform:translate(@(_pet.PosX.ToString("F1"))px,@(_pet.PosY.ToString("F0"))px)" @onclick="Tap">
-                <AnimatedSprite SpritePath="@_pet.SpritePath" Action="_pet.CurrentAction" Row="_pet.CurrentRow" Flipped="_pet.FlipX < 0" Scale="@(_pet.IsEgg ? 3 : 2)" Alt="" />
+                <AnimatedSprite SpritePath="@_pet.SpritePath" FallbackPath="@(_pet.IsEgg ? null : $"{_pet.SpeciesId:D4}")" Action="_pet.CurrentAction" Row="_pet.CurrentRow" Flipped="_pet.FlipX < 0" Scale="@(_pet.IsEgg ? 3 : 2)" Alt="" />
             </button>
 
             @if (_pet.EatingFood is int food)
@@ -168,7 +207,7 @@ else
         }
     </section>
 
-    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnStartBattle="StartBattle" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync">
+    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnOpenParty="OpenParty" OnOpenGym="OpenGym" OnStartWalk="StartWalk" OnOpenSettings="OpenSettings" OnOpenBag="OpenBag" OnStartBattle="StartBattle" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync">
         <Cloud>
             @if (CloudSave.IsSignedIn)
             {
@@ -204,20 +243,35 @@ else
     private PokemonState? _pet;
     private object? _lastRendered;
     private bool _isDexOpen;
+    private bool _isGuest;
+    private bool _isPartyOpen;
+    private bool _isBagOpen;
+    private bool _isGymOpen;
+    private bool _isOtherTabActive;
+    private DotNetObjectReference<Home>? _pageRef;
+    private bool _isSettingsOpen;
 
-    private string Name => _pet!.IsEgg ? Loc.T("pokemon.egg") : Dex.GetName(_pet.SpeciesId, Loc.Language);
+    // 로그인하지 않았고 게스트도 고르지 않았으면 시작 화면을 보여줍니다. (이때는 시간이 흐르지 않습니다)
+    private bool ShowTitle => !_isGuest && !CloudSave.IsSignedIn;
+
+    private string TitleNote => CloudSave.SignInError is not null
+        ? Loc.T("web.cloud.signInFailed")
+        : CloudSave.Status == CloudStatus.Unavailable ? Loc.T("web.cloud.unavailable") : Loc.T("web.guest.note");
+
+    private string Name => _pet!.IsEgg ? Loc.T("pokemon.egg") : (_pet.IsShiny ? "✨" : "") + Dex.GetName(_pet.SpeciesId, Loc.Language);
     private string MoodText
     {
         get
         {
-            if (!_pet!.IsEvolving) return Loc.T(_pet.MoodKey);
+            if (_pet!.EventMessage is { } message) return message;
+            if (!_pet.IsEvolving) return Loc.T(_pet.MoodKey);
             string oldName = Dex.GetName(_pet.EvolvedFromSpeciesId, Loc.Language);
             if (_pet.HasEvolved) return string.Format(Loc.T("evolve.done"), oldName, Dex.GetName(_pet.SpeciesId, Loc.Language));
             return _pet.IsEvolvingFlash ? string.Format(Loc.T("evolve.happening"), oldName) : Loc.T("evolve.what");
         }
     }
 
-    private string BackgroundUrl => $"backgrounds/{Dex.GetBiomeName(_pet!.SpeciesId)}{(_pet.IsNight ? " NIGHT" : "")}.png";
+    private string BackgroundUrl => $"backgrounds/{Dex.GetBiomeName(_pet!.SpeciesId, _pet.SpriteForm)}{(_pet.IsNight ? " NIGHT" : "")}.png";
 
     private RenderFragment StatBar(string key, string kind, int value) => @<li class="pet-stat-@kind">
         <span class="pet-stat-name">@Loc.T(key)</span>
@@ -231,12 +285,38 @@ else
         pet.Dex = Dex;
         pet.PlaySound = PlaySound;
         pet.SkillBook = Skills;
+        pet.Megas = Megas;
+        pet.SendNotification = (title, body) => _ = JS.InvokeVoidAsync("tamaPoke.notify", title, body);
+        ShowLoadNotice(pet);
         pet.RegisterCurrentInDex();
         if (!pet.IsEgg && pet.SkillCount == 0) pet.RelearnFromLevel();
         _pet = pet;
         CloudSave.Changed += OnCloudChanged;
         _ = CloudSave.InitializeAsync(() => _pet!, ReloadWithSaveAsync);
         _ = RunLoopAsync();
+
+        _pageRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("tamaPoke.claimTab", _pageRef);
+    }
+
+    // 다른 탭에서 게임을 열었습니다. 이 탭은 멈춰서 세이브를 덮어쓰지 않습니다.
+    [JSInvokable]
+    public void OnOtherTabOpened()
+    {
+        _cts.Cancel();
+        _isOtherTabActive = true;
+        StateHasChanged();
+    }
+
+    private void ReloadThisTab() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+
+    private void ShowLoadNotice(PokemonState pet)
+    {
+        string? key = Store.LoadNoticeKey ?? pet.PendingNoticeKey;
+        if (key is null) return;
+        pet.ShowEvent(Loc.T(key), 10000);
+        pet.PendingNoticeKey = null;
+        pet.NeedsSave = true;
     }
 
     private void Act(Action<PokemonState> action) => action(_pet!);
@@ -271,6 +351,12 @@ else
         _pet.IsPlayMenuOpen = !_pet.IsPlayMenuOpen;
     }
 
+    private void StartAsGuest()
+    {
+        _isGuest = true;
+        PlaySound(SoundEffects.Play);
+    }
+
     private void PlaySound(int[][] notes)
     {
         if (!_pet!.IsMuted) Sound.Play(notes);
@@ -281,7 +367,7 @@ else
         PlaySound(SoundEffects.Tap);
         _pet!.IsFeedMenuOpen = false;
         _pet.IsPlayMenuOpen = false;
-        _pet.IsProfileOpen = false;
+        CloseSidePanels();
         _isDexOpen = true;
     }
 
@@ -290,14 +376,68 @@ else
         PlaySound(SoundEffects.Tap);
         _pet!.IsFeedMenuOpen = false;
         _pet.IsPlayMenuOpen = false;
-        _isDexOpen = false;
+        CloseSidePanels();
         _pet.IsProfileOpen = true;
+    }
+
+    private void OpenParty()
+    {
+        PlaySound(SoundEffects.Tap);
+        CloseSidePanels();
+        _isPartyOpen = true;
+    }
+
+    private void OpenBag()
+    {
+        PlaySound(SoundEffects.Tap);
+        CloseSidePanels();
+        _isBagOpen = true;
+    }
+
+    private void CloseSidePanels()
+    {
+        _pet!.IsFeedMenuOpen = false;
+        _pet.IsPlayMenuOpen = false;
+        _pet.IsProfileOpen = false;
+        _isDexOpen = false;
+        _isPartyOpen = false;
+        _isBagOpen = false;
+        _isGymOpen = false;
+        _isSettingsOpen = false;
+    }
+
+    private void OpenGym()
+    {
+        PlaySound(SoundEffects.Tap);
+        CloseSidePanels();
+        _isGymOpen = true;
+    }
+
+    private void OpenSettings()
+    {
+        PlaySound(SoundEffects.Tap);
+        CloseSidePanels();
+        _isSettingsOpen = true;
+    }
+
+    private void StartWalk()
+    {
+        PlaySound(SoundEffects.Play);
+        CloseSidePanels();
+        _pet!.BeginWalk();
+    }
+
+    private void StartGym(int index)
+    {
+        PlaySound(SoundEffects.Play);
+        CloseSidePanels();
+        _pet!.StartGymBattle(index);
     }
 
     private void StartBattle()
     {
         PlaySound(SoundEffects.Play);
-        _isDexOpen = false;
+        CloseSidePanels();
         _pet!.StartWildBattle();
     }
 
@@ -317,6 +457,7 @@ else
 
     private async Task ReloadWithSaveAsync(string json)
     {
+        _cts.Cancel(); // 다시 불러오기 전에 지금 세이브가 새 세이브를 덮어쓰지 않게 멈춥니다.
         await Store.ReplaceAsync(json);
         Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
     }
@@ -343,7 +484,7 @@ else
                 long now = Stopwatch.GetTimestamp();
                 double elapsedMs = Stopwatch.GetElapsedTime(last, now).TotalMilliseconds;
                 last = now;
-                if (elapsedMs > MAX_CATCH_UP_MS) continue;
+                if (elapsedMs > MAX_CATCH_UP_MS || ShowTitle) continue;
 
                 _pet!.Update(elapsedMs);
                 CloudSave.Tick(elapsedMs);
@@ -358,8 +499,8 @@ else
                 object rendered = (_pet.PosX, _pet.FlipX, _pet.CurrentAction, _pet.MoodKey, _pet.IsPetting, _pet.IsNight,
                     (_pet.Fullness, _pet.Joy, _pet.Energy, _pet.Hygiene, _pet.Poops, _pet.Level, _pet.SpeciesId),
                     (_pet.IsEvolvingFlash, _pet.HasEvolved, _pet.CanShowEvolvePrompt, _pet.CanShowFarewellPrompt, _pet.IsSleeping),
-                    (_pet.EatingFood, _pet.IsBathing, _pet.ShownGame, _pet.FoodBites, Math.Round(_pet.FoodOpacity, 1)));
-                if (_pet.ShownGame != MiniGame.None || _pet.IsBattleOpen || !rendered.Equals(_lastRendered))
+                    (_pet.EatingFood, _pet.IsBathing, _pet.ShownGame, _pet.FoodBites, Math.Round(_pet.FoodOpacity, 1), _pet.IsSwapMode, _pet.EventMessage, _pet.Settings.PageOpacity));
+                if (_pet.ShownGame != MiniGame.None || _pet.IsBattleOpen || _pet.IsWalking || !rendered.Equals(_lastRendered))
                 {
                     _lastRendered = rendered;
                     StateHasChanged();
@@ -376,5 +517,6 @@ else
         CloudSave.Changed -= OnCloudChanged;
         _cts.Cancel();
         _cts.Dispose();
+        _pageRef?.Dispose();
     }
 }

@@ -1,5 +1,40 @@
 window.tamaPoke = {
     browserLanguage: () => navigator.language || "",
+    viewportSize: () => [window.innerWidth, window.innerHeight],
+
+    // 두 탭이 서로 세이브를 덮어쓰지 않도록, 새 탭이 열리면 먼저 열린 탭을 멈춥니다.
+    claimTab: (page) => {
+        if (!window.BroadcastChannel) return;
+        const channel = new BroadcastChannel("tamapoke.tab");
+        channel.onmessage = () => {
+            channel.close();
+            page.invokeMethodAsync("OnOtherTabOpened");
+        };
+        channel.postMessage("claim");
+    },
+
+    requestNotificationPermission: async () => {
+        if (!("Notification" in window)) return false;
+        return (await Notification.requestPermission()) === "granted";
+    },
+
+    // 탭을 보고 있을 때는 화면에서 바로 보이므로 알리지 않습니다.
+    notify: (title, body) => {
+        if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
+        new Notification(title, { body });
+    },
+
+    // 세이브 내보내기: 글자를 파일로 내려받습니다.
+    downloadText: (fileName, text) => {
+        const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
+
+    prefersReducedMotion: () => matchMedia("(prefers-reduced-motion: reduce)").matches,
     setDocumentLanguage: (language) => { document.documentElement.lang = language; },
 
     // [주파수 Hz, 길이 ms] 목록을 사각파로 재생합니다. 브라우저 정책상 첫 클릭 이후에만 소리가 납니다.

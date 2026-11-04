@@ -12,18 +12,6 @@ public sealed class PokemonGene
     public int SpeGene { get; set; }
 }
 
-// 잡은 포켓몬. 파티 화면을 옮길 때 대표로 부르기 등을 붙입니다.
-public sealed class PartyMember
-{
-    public int SpeciesId { get; set; }
-    public int Level { get; set; }
-    public int AgeMinutes { get; set; }
-    public bool IsFemale { get; set; }
-    public bool IsGenderless { get; set; }
-    public int Weight { get; set; }
-    public int[] Skills { get; set; } = new int[4];
-}
-
 public sealed record ItemDefinition(string Id, bool IsBall, int HealPercent, string Icon);
 
 public static class ItemDex
@@ -52,6 +40,7 @@ public sealed partial class PokemonState
     private const int BATTLE_ENEMY_ROW = 7;  // 상대 포켓몬: 앞모습으로 나(왼쪽 아래)를 바라봄
     private const int AUTO_ENCOUNTER_TIMEOUT_SECONDS = 60; // 대기 중 저절로 시작된 배틀은 1분 동안 조작이 없으면 자동 도망
     private const int WILD_ENCOUNTER_PER_10000 = 3;
+    private const int WILD_SHINY_CHANCE_PERCENT = 1;
 
     // 게임판 좌표 (PC판 BattleView와 같음)
     private const double ENEMY_CENTER_X = 214, ENEMY_CENTER_Y = 90, PLAYER_CENTER_X = 80, PLAYER_CENTER_Y = 159;
@@ -116,13 +105,12 @@ public sealed partial class PokemonState
     [JsonIgnore] public bool IsBallVisible { get; private set; }
     [JsonIgnore] public bool IsBallWobbling { get; private set; }
 
-    // 체육관을 옮길 때 실제 값으로 바꿉니다.
-    [JsonIgnore] public bool IsGymBattle => false;
-
     [JsonIgnore] public string Name => Dex.GetName(SpeciesId, L.Language);
     [JsonIgnore] public string EnemyName => Dex.GetName(EnemySpeciesId, L.Language);
-    [JsonIgnore] public string EnemySpritePath => $"{EnemySpeciesId:D4}";
-    [JsonIgnore] public string PlayerBattleName => Name;
+    [JsonIgnore] public string EnemySpritePath => Dex.SpritePath(EnemySpeciesId, _enemyForm);
+    [JsonIgnore] public string EnemyBasePath => $"{EnemySpeciesId:D4}";
+    [JsonIgnore] public bool IsEnemyShiny { get; private set; }
+    [JsonIgnore] private string EnemyBattleName => IsGymBattle ? EnemyName : L.F("battle.wildName", EnemyName);
     [JsonIgnore] public int EnemyCurrentAction => _enemyTempActionTimer > 0 ? _enemyTempActionId : PokemonAnim.IDLE;
     [JsonIgnore] public int EnemyRow => BATTLE_ENEMY_ROW;
     [JsonIgnore] public bool IsMainMenuVisible => !IsCatchOffered && !IsBattleResolved && !IsAttackMenuOpen && !IsBattleInventoryOpen && IsPlayerTurn;
@@ -133,7 +121,8 @@ public sealed partial class PokemonState
 
     public bool KnowsSkill(int skillId) => skillId != 0 && Array.Exists(Skills, s => s == skillId);
 
-    private PokemonInfo? MyBattleInfo => WithoutTypes(Dex.Get(SpeciesId), _playerLostTypes);
+    private string _enemyForm = "";
+    private PokemonInfo? MyBattleInfo => WithoutTypes(ActiveMegaForm?.ToPokemonInfo() ?? Dex.Get(SpeciesId), _playerLostTypes);
     private int WildStat(int? baseStat) => BattleCalculator.Stat(baseStat ?? 50, BattleCalculator.WILD_GENE, EnemyLevel);
 
     private int CombatMaxHp => BattleCalculator.MaxHp(MyBattleInfo?.BaseHp ?? 50, Genes.HpGene + TrDef / 4, Level);
@@ -184,7 +173,36 @@ public sealed partial class PokemonState
     {
         if (!CanStartActivity) return;
         BeginBattleSession();
+        PrepareBattleScreen();
+        if (autoEncounter) Notify(L.T("notify.wild.title"), "⚔️");
 
+        EnemySpeciesId = Dex.PickWildSpecies(Settings.SelectedGenerations);
+        EnemyLevel = Math.Max(1, Level + Random.Shared.Next(-2, 3));
+        PlayerMaxHp = CombatMaxHp;
+        PlayerHp = PlayerMaxHp;
+        (IsEnemyGenderless, IsEnemyFemale) = Dex.RollGender(EnemySpeciesId);
+        IsEnemyShiny = Random.Shared.Next(100) < WILD_SHINY_CHANCE_PERCENT;
+        _enemyForm = Dex.ApplyVariants(EnemySpeciesId, Dex.PickBaseForm(EnemySpeciesId), IsEnemyShiny, IsEnemyFemale);
+
+        EnemyMaxHp = BattleCalculator.MaxHp(Dex.Get(EnemySpeciesId)?.BaseHp ?? 50, BattleCalculator.WILD_GENE, EnemyLevel);
+        EnemyHp = EnemyMaxHp;
+
+        GenerateEnemySkills();
+        _enemyTempActionTimer = 0;
+
+        IsBattleOpen = true;
+        IsPlayerTurn = false;
+        BattleMessage = L.F(IsEnemyShiny ? "battle.appear.shiny" : "battle.appear", EnemyName);
+
+        await Task.Delay(1500);
+        BattleMessage = L.T("battle.choose");
+        IsPlayerTurn = true;
+
+        if (autoEncounter) FleeIfUnattendedAsync(_battleSerial);
+    }
+
+    private void PrepareBattleScreen()
+    {
         IsFeedMenuOpen = false;
         IsPlayMenuOpen = false;
         IsProfileOpen = false;
@@ -196,36 +214,18 @@ public sealed partial class PokemonState
         IsEnemyVisible = true;
         IsSkillLearnMenuOpen = false;
         IsSkillReplaceMenuOpen = false;
+        IsGymBattle = false;
+        ResetMegaForBattle();
         ResetPosition();
 
         PlayerAilment = SkillAilment.None; _playerAilmentTurns = 0; _playerBadPoisonTurnCount = 0;
         EnemyAilment = SkillAilment.None; _enemyAilmentTurns = 0; _enemyBadPoisonTurnCount = 0;
-
-        EnemySpeciesId = Dex.PickWildSpecies();
-        EnemyLevel = Math.Max(1, Level + Random.Shared.Next(-2, 3));
-        PlayerMaxHp = CombatMaxHp;
-        PlayerHp = PlayerMaxHp;
-        (IsEnemyGenderless, IsEnemyFemale) = Dex.RollGender(EnemySpeciesId);
-
-        EnemyMaxHp = BattleCalculator.MaxHp(Dex.Get(EnemySpeciesId)?.BaseHp ?? 50, BattleCalculator.WILD_GENE, EnemyLevel);
-        EnemyHp = EnemyMaxHp;
-
-        GenerateEnemySkills();
-        _enemyTempActionTimer = 0;
-
-        IsBattleOpen = true;
-        IsPlayerTurn = false;
-        BattleMessage = L.F("battle.appear", EnemyName);
-
-        await Task.Delay(1500);
-        BattleMessage = L.T("battle.choose");
-        IsPlayerTurn = true;
-
-        if (autoEncounter) FleeIfUnattendedAsync(_battleSerial);
     }
 
     public void CloseBattle()
     {
+        ResetMegaForBattle();
+        IsGymBattle = false;
         IsBattleOpen = false;
         BattleMessage = "";
         BattleFx = null;
@@ -310,6 +310,11 @@ public sealed partial class PokemonState
 
         if (item.IsBall)
         {
+            if (IsGymBattle)
+            {
+                BattleMessage = L.T("battle.noBallInGym");
+                return;
+            }
             IsBattleInventoryOpen = false;
             await ThrowBallAsync();
             return;
@@ -382,20 +387,21 @@ public sealed partial class PokemonState
                 UnlockedPokemon.Sort();
             }
 
-            Party.Add(new PartyMember
+            bool wasFull = Party.Count >= MAX_OTHER_PARTY_MEMBERS;
+            AddCaughtMember(new PartyMember
             {
                 SpeciesId = EnemySpeciesId,
-                Level = EnemyLevel,
+                SpriteForm = _enemyForm,
+                IsShiny = IsEnemyShiny,
                 AgeMinutes = (EnemyLevel - 1) * MINUTES_PER_LEVEL,
                 IsFemale = IsEnemyFemale,
                 IsGenderless = IsEnemyGenderless,
                 Weight = Random.Shared.Next(10, 31), // 야생에서 막 온 포켓몬: 바로 퍼펙트 바디를 받지 않도록
                 Skills = (int[])EnemySkills.Clone(),
             });
-            NeedsSave = true;
 
-            BattleMessage = L.F("battle.caught", EnemyName);
-            await Task.Delay(2000);
+            BattleMessage = L.F(wasFull ? "battle.caught.full" : "battle.caught", EnemyName);
+            await Task.Delay(wasFull ? 2500 : 2000);
             await ProcessWildBattleRewardsAsync();
             return;
         }
@@ -422,7 +428,7 @@ public sealed partial class PokemonState
         if (PlayerHp <= 0)
         {
             IsBattleResolved = true;
-            BattleMessage = L.T("battle.lost.wild");
+            BattleMessage = L.T(IsGymBattle ? "battle.lost.gym" : "battle.lost.wild");
             Joy = Math.Max(0, Joy - 10);
             Energy = Math.Max(0, Energy - 20);
 
@@ -439,14 +445,27 @@ public sealed partial class PokemonState
             Bond = Math.Min(100, Bond + 5);
             NeedsSave = true;
 
-            BattleMessage = L.T("battle.won");
-            await Task.Delay(2000);
+            if (IsGymBattle)
+            {
+                await AnnounceGymWinAsync();
+            }
+            else
+            {
+                BattleMessage = L.T("battle.won");
+                await Task.Delay(2000);
+            }
             CheckAndLearnSkillAfterVictory();
         }
     }
 
     private void ProceedToCatchOrEnd()
     {
+        if (IsGymBattle)
+        {
+            _ = ProcessGymBattleRewardsAsync();
+            return;
+        }
+
         BattleMessage = L.T("battle.askCatch");
         IsCatchOffered = true;
     }
@@ -474,6 +493,12 @@ public sealed partial class PokemonState
             await Task.Delay(2000);
         }
 
+        if (Random.Shared.Next(100) < WILD_SHARD_CHANCE && GiveMegaShards(1) is { } shardMessage)
+        {
+            BattleMessage = shardMessage;
+            await Task.Delay(2000);
+        }
+
         CloseBattle();
         IsPlayerTurn = true;
     }
@@ -490,8 +515,11 @@ public sealed partial class PokemonState
         IsBattleInventoryOpen = open;
     }
 
-    private async Task ProcessBattleExitAsync()
+    // 설정 값을 PC판과 같은 범위로 맞춥니다.
+    public void NormalizeSettings()
     {
-        await Task.CompletedTask;
+        Settings.FarewellAgeDays = Math.Clamp(Settings.FarewellAgeDays, 1, 365);
+        Settings.RoamingPokemonCount = Math.Clamp(Settings.RoamingPokemonCount, 1, 6);
+        Settings.RoamingPetScale = Math.Clamp(Settings.RoamingPetScale, GameSettings.MinPetScale, GameSettings.MaxPetScale);
     }
 }

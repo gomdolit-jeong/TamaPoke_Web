@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using TamaPoke.Web.Sprites;
+using TamaPoke.Web.Utils;
 
 namespace TamaPoke.Web.Game;
 
@@ -16,7 +17,7 @@ public sealed partial class PokemonState
     private const int WEIGHT_BURN_EVERY_MINUTES = 3;
     private const int EGG_HATCH_SECONDS = 180;
     private const int EGG_HATCH_TAPS = 3;
-    private const int FAREWELL_AGE_DAYS = 3; // 설정을 옮기면 PC판처럼 바꿀 수 있게 합니다.
+    private const int SHINY_ODDS_AFTER_FAREWELL = 24, SHINY_ODDS_DEFAULT = 48, SHINY_ODDS_MIN = 8;
     private const int EVOLVE_MIN_STAT = 40;
     private const int FEMALE_ONLY_EVOLUTION_SPECIES = 415; // 세꿀버리는 암컷만 진화합니다.
 
@@ -81,6 +82,9 @@ public sealed partial class PokemonState
     public int LastEnd { get; set; } = CEREMONY_FAREWELL; // 이로치 확률에 씁니다. (1 작별, 2 가출, 3 놔주기)
     public int EvolvedFromSpeciesId { get; set; }
     public bool IsMuted { get; set; }
+    public string SpriteForm { get; set; } = "";
+    public bool IsShiny { get; set; }
+    public GameSettings Settings { get; set; } = new();
     public List<int> UnlockedPokemon { get; set; } = [];
     public int Medals { get; set; }
     public int Streak { get; set; }
@@ -112,7 +116,7 @@ public sealed partial class PokemonState
     [JsonIgnore] public bool IsCeremony => Ceremony != 0;
 
     // 막 시작한 기기의 세이브인지 (로그인할 때 물어보지 않고 서버 세이브를 받습니다)
-    [JsonIgnore] public bool HasNoProgress => IsEgg && AgeSeconds < 60 && UnlockedPokemon.Count == 0 && Party.Count == 0;
+    [JsonIgnore] public bool HasNoProgress => IsEgg && UnlockedPokemon.Count == 0 && Party.Count == 0;
     [JsonIgnore] public bool IsPetting => _pettingMs > 0;
     [JsonIgnore] public int Level => 1 + AgeMinutes / MINUTES_PER_LEVEL;
     [JsonIgnore] public int LowestStat => Math.Min(Math.Min(Fullness, Joy), Math.Min(Energy, Hygiene));
@@ -122,7 +126,7 @@ public sealed partial class PokemonState
     [JsonIgnore] public int LevelProgressMinutes => AgeMinutes % MINUTES_PER_LEVEL;
     [JsonIgnore] public int MedalCount => MedalList.Count(m => (Medals & m.Bit) != 0);
     [JsonIgnore] public bool IsFinalEvolution => !IsEgg && Dex.Get(SpeciesId)?.EvolveTo == 0;
-    [JsonIgnore] public bool CanFarewellNow => !IsEgg && !IsSleeping && !IsCeremony && AgeMinutes >= FAREWELL_AGE_DAYS * 24 * 60;
+    [JsonIgnore] public bool CanFarewellNow => !IsEgg && !IsSleeping && !IsCeremony && AgeMinutes >= Math.Max(1, Settings.FarewellAgeDays) * 24 * 60;
     [JsonIgnore] public bool CanShowEvolvePrompt => CanEvolveNow && !IsEvolutionPostponed;
     [JsonIgnore] public bool CanShowFarewellPrompt => CanFarewellNow && !IsFarewellPostponed;
     [JsonIgnore] public bool IsEvolving => Ceremony == CEREMONY_EVOLVE;
@@ -147,7 +151,9 @@ public sealed partial class PokemonState
             return Level >= evolution.EvolveLevel + CareMistakes && LowestStat >= EVOLVE_MIN_STAT;
         }
     }
-    [JsonIgnore] public string SpritePath => IsEgg ? "0000/0004" : $"{SpeciesId:D4}";
+    [JsonIgnore] public string SpritePath => IsEgg ? "0000/0004"
+        : Dex.SpritePath(SpeciesId, ActiveMegaForm is { } mega ? Dex.ApplyVariants(SpeciesId, mega.Form, IsShiny, IsFemale) : SpriteForm);
+    [JsonIgnore] public string FormDescription => IsEgg ? "" : PokemonForms.GetDescription(SpeciesId, string.IsNullOrEmpty(SpriteForm) ? null : $"p{SpeciesId:D4}_{SpriteForm}.bin", IsShiny);
     [JsonIgnore] public bool IsNight => IsSleeping || DateTime.Now.Hour is < 6 or >= 20;
 
     [JsonIgnore]
@@ -211,6 +217,19 @@ public sealed partial class PokemonState
     public void Update(double elapsedMs)
     {
         UpdateMotion(Math.Min(elapsedMs, MAX_MOTION_STEP_MS));
+        UpdateEventMessage(elapsedMs);
+
+        // 산책 중에는 산책 규칙으로 시간이 흐릅니다.
+        if (IsWalking)
+        {
+            _secondElapsedMs += elapsedMs;
+            while (_secondElapsedMs >= 1000)
+            {
+                _secondElapsedMs -= 1000;
+                WalkTick();
+            }
+            return;
+        }
 
         // 연출, 미니게임, 배틀 중에는 나이를 먹지 않습니다.
         if (IsBattleOpen)
@@ -415,6 +434,7 @@ public sealed partial class PokemonState
         if (Fullness > 40 && Poops < MAX_POOPS && Random.Shared.Next(100) < POOP_CHANCE)
         {
             Poops++;
+            Notify(L.T("notify.poop.title"), "💩");
             Hygiene = Clamp100(Hygiene - 10 * Poops);
         }
 
@@ -427,6 +447,7 @@ public sealed partial class PokemonState
         }
 
         CheckCareMistake();
+        CheckCareNotifications();
 
         if (Fullness == 0 && Joy == 0 && Energy == 0 && Hygiene == 0)
         {
@@ -440,6 +461,18 @@ public sealed partial class PokemonState
     }
 
     // 스탯 하나라도 10 이하로 방치되면 1회. 같은 방치를 매분 세지 않도록 60분 쿨다운을 둡니다.
+    private bool _notifiedHunger, _notifiedSadness;
+
+    // 배고프거나 우울해지면 한 번만 알립니다. 회복하면 다시 알릴 수 있습니다.
+    private void CheckCareNotifications()
+    {
+        if (Fullness < 30 && !_notifiedHunger) Notify(L.T("notify.hunger.title"), "🍚");
+        _notifiedHunger = Fullness < 30;
+
+        if (Joy < 30 && !_notifiedSadness) Notify(L.T("notify.sad.title"), "🥹");
+        _notifiedSadness = Joy < 30;
+    }
+
     private void CheckCareMistake()
     {
         if (MistakeCooldown > 0) MistakeCooldown--;
@@ -582,8 +615,16 @@ public sealed partial class PokemonState
 
     private void Hatch()
     {
-        SpeciesId = Dex.PickHatchSpecies();
+        SpeciesId = Dex.PickHatchSpecies(Settings.SelectedGenerations, UnlockedPokemon.Count);
         (IsGenderless, IsFemale) = Dex.RollGender(SpeciesId);
+
+        // 이로치: 잘 돌봐 준 포켓몬과 작별할수록 확률이 오릅니다.
+        int shinyOdds = (LastEnd == CEREMONY_FAREWELL ? SHINY_ODDS_AFTER_FAREWELL : SHINY_ODDS_DEFAULT) - (Math.Min(Streak, 30) / 3 + Bond / 25);
+        IsShiny = Random.Shared.Next(Math.Max(shinyOdds, SHINY_ODDS_MIN)) == 0;
+        SpriteForm = Dex.ApplyVariants(SpeciesId, Dex.PickBaseForm(SpeciesId), IsShiny, IsFemale);
+
+        if (IsShiny) AnnounceBirth("notify.shiny.title", "notify.shiny.message");
+        else if (SpriteForm.Length > 0 && !SpriteForm.Contains("Female")) AnnounceBirth("notify.special.title", "notify.special.message");
         Genes = new PokemonGene
         {
             HpGene = Random.Shared.Next(0, 32), AtkGene = Random.Shared.Next(0, 32),
@@ -625,6 +666,7 @@ public sealed partial class PokemonState
         if (Dex.GetEvolution(SpeciesId) is not { } evolution || evolution.NextSpeciesIds.Length == 0) return;
 
         SpeciesId = evolution.NextSpeciesIds[Random.Shared.Next(evolution.NextSpeciesIds.Length)];
+        SpriteForm = Dex.ApplyVariants(SpeciesId, "", IsShiny, IsFemale);
         RegisterCurrentInDex();
         IsEvolutionPostponed = false;
         NeedsSave = true;
@@ -654,6 +696,12 @@ public sealed partial class PokemonState
         if (IsEgg || IsCeremony) return;
         PlaySound?.Invoke(SoundEffects.Deny);
         StartEnding(CEREMONY_RELEASE);
+    }
+
+    private void AnnounceBirth(string titleKey, string messageKey)
+    {
+        ShowEvent(L.T(messageKey));
+        Notify(L.T(titleKey), L.T(messageKey));
     }
 
     private void StartRunaway()
@@ -695,6 +743,8 @@ public sealed partial class PokemonState
         IsEvolutionPostponed = false;
         IsFarewellPostponed = false;
         EvolvedFromSpeciesId = 0;
+        SpriteForm = "";
+        IsShiny = false;
         Medals = 0;
         TrAtk = 0;
         TrDef = 0;

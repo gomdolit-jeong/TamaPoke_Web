@@ -5,10 +5,12 @@
 <nav class="pet-menu" aria-label="@Loc.T("web.menu")">
     <h2 class="pet-menu-title">@Loc.T("web.menu")</h2>
     <button type="button" class="menu-battle" disabled="@(!Pet.CanStartActivity)" @onclick="OnStartBattle">@Loc.T("web.menu.battle")</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenGym">@Loc.T("web.menu.gym")</button>
+    <button type="button" disabled="@(!Pet.CanStartWalk)" @onclick="OnStartWalk">@Loc.T("web.menu.walk")</button>
     <button type="button" @onclick="OnOpenDex">@Loc.T("web.menu.dex")</button>
     <button type="button" disabled="@(!CanOpenProfile)" @onclick="OnOpenProfile">@Loc.T("web.menu.profile")</button>
-    <button type="button" disabled title="@Loc.T("web.comingSoon")">@Loc.T("web.menu.party")</button>
-    <button type="button" disabled title="@Loc.T("web.comingSoon")">@Loc.T("web.menu.bag")</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenParty">@Loc.T("web.menu.party")</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenBag">@Loc.T("web.menu.bag")</button>
 
     @if (_confirmRelease)
     {
@@ -27,6 +29,7 @@
 
     <hr />
 
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenSettings">@Loc.T("web.menu.settings")</button>
     @Cloud
 
     <button type="button" aria-pressed="@(Pet.IsMuted ? "true" : "false")" @onclick="OnToggleMute">
@@ -36,6 +39,11 @@
     <button type="button" lang="@(Loc.Language == Loc.Korean ? "en" : "ko")" @onclick="OnToggleLanguage">
         @(Loc.Language == Loc.Korean ? "English" : "한국어")
     </button>
+    <label class="pet-stealth" title="@Loc.T("idle.btn.stealth")">
+        <span aria-hidden="true">🫥</span>
+        <input type="range" aria-label="@Loc.T("idle.btn.stealth")" min="@GameSettings.MinPageOpacity" max="@GameSettings.MaxPageOpacity" step="0.05"
+               @bind="Pet.Settings.PageOpacity" @bind:event="oninput" @bind:after="() => Pet.NeedsSave = true" />
+    </label>
 </nav>
 
 @code {
@@ -44,12 +52,18 @@
     [Parameter] public EventCallback OnStartBattle { get; set; }
     [Parameter] public EventCallback OnOpenDex { get; set; }
     [Parameter] public EventCallback OnOpenProfile { get; set; }
+    [Parameter] public EventCallback OnOpenParty { get; set; }
+    [Parameter] public EventCallback OnOpenGym { get; set; }
+    [Parameter] public EventCallback OnStartWalk { get; set; }
+    [Parameter] public EventCallback OnOpenSettings { get; set; }
+    [Parameter] public EventCallback OnOpenBag { get; set; }
     [Parameter] public EventCallback OnToggleMute { get; set; }
     [Parameter] public EventCallback OnToggleLanguage { get; set; }
 
     private bool _confirmRelease;
 
     private bool CanOpenProfile => Pet.CanStartActivity;
+    private bool CanOpenPanels => !Pet.IsAnyMiniGameOpen && !Pet.IsBattleOpen && !Pet.IsCeremony;
     private bool CanRelease => Pet.CanStartActivity || (Pet.IsSleeping && !Pet.IsAnyMiniGameOpen);
 
     private void Release()

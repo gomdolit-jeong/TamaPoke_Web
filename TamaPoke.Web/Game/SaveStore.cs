@@ -14,6 +14,9 @@ public sealed class SaveStore(IJSRuntime js)
     private const string BackupKey = "tamapoke.save.bak";
     private const string CorruptKey = "tamapoke.save.corrupt";
 
+    // 이번에 불러올 때 사용자에게 알릴 내용 (세이브 손상)
+    public string? LoadNoticeKey { get; private set; }
+
     public async Task<PokemonState> LoadAsync()
     {
         string? main = await GetAsync(SaveKey);
@@ -23,7 +26,9 @@ public sealed class SaveStore(IJSRuntime js)
 
         // 손상된 세이브는 지우지 않고 따로 남긴 뒤 백업에서 복구합니다.
         await SetAsync(CorruptKey, main);
-        return Parse(await GetAsync(BackupKey)) ?? new PokemonState();
+        var backup = Parse(await GetAsync(BackupKey));
+        LoadNoticeKey = backup is null ? "web.save.corrupted" : "web.save.restored";
+        return backup ?? new PokemonState();
     }
 
     public async Task SaveAsync(PokemonState state)

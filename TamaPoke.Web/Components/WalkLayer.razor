@@ -1,0 +1,666 @@
+@using System.Diagnostics
+@using Microsoft.JSInterop
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Sprites
+@using TamaPoke.Web.Utils
+@implements IDisposable
+@inject Loc Loc
+@inject PokemonDex Dex
+@inject IJSRuntime JS
+
+@* 산책: 둥근 들판을 돌려 볼 수 있는 2.5D 화면입니다.
+   땅은 CSS 3D 평면이고, 포켓몬과 소품은 Project()로 같은 계산을 해서 화면 위치와 크기를 정합니다. *@
+<div class="walk-layer" tabindex="0" @ref="_layer" @onpointerdown="OnGroundPointerDown" @onpointermove="OnPointerMove" @onpointerup="OnPointerUp"
+     @onpointerleave="OnPointerUp" @onwheel="OnWheel" @onkeydown="OnKeyDown">
+    <div class="walk-sky" aria-hidden="true" style="height:@(Px(_groundTop))">
+        <div class="walk-band walk-band-clouds" style="@BandStyle(0.45)"></div>
+        <div class="walk-band walk-band-mountains" style="@BandStyle(0.55)"></div>
+        <div class="walk-band walk-band-hills" style="@BandStyle(0.8)"></div>
+        <div class="walk-band walk-band-cliff" style="@BandStyle(1.0)"></div>
+    </div>
+    <div class="walk-ground" aria-hidden="true" style="top:@(Px(_groundTop));perspective:@(Px(PERSPECTIVE));perspective-origin:50% @(Px(-HORIZON_GAP))">
+        <div class="walk-plane" style="@PlaneStyle">
+            @for (int frame = 0; frame < 4; frame++)
+            {
+                <span class="walk-sway walk-sway-@frame"></span>
+            }
+        </div>
+        <span class="walk-gust"></span>
+        <span class="walk-gust walk-gust-late"></span>
+    </div>
+    @foreach (var prop in _props)
+    {
+        @if (prop.IsVisible)
+        {
+            <img @key="prop" class="walk-prop @(prop.Sways ? "is-sway" : "")" src="walk/@(prop.Image).png" alt="" style="@prop.Style" />
+        }
+    }
+    @foreach (var pet in _pets)
+    {
+        var (screenX, screenY, depth, visible) = Project(pet.X, pet.Y);
+        <div class="walk-pet" @key="pet.Id" @onpointerdown="e => OnPetPointerDown(e, pet)" @onpointerdown:stopPropagation="true"
+             style="left:@(Px(screenX));top:@(Px(screenY));z-index:@((int)screenY);transform:scale(@((depth * _zoom * PET_DEPTH_SCALE).ToString("F3")));@(visible ? "" : "display:none")">
+            <span class="walk-shadow" style="top:@(Px(SpriteScale * 7));width:@(Px(SpriteScale * 18));height:@(Px(SpriteScale * 6));margin-left:@(Px(-SpriteScale * 9))"></span>
+            @if (pet.Behavior == WalkBehavior.Rummaging && pet.IsInBush)
+            {
+                <span class="walk-bush"></span>
+            }
+            <AnimatedSprite SpritePath="@pet.SpritePath" FallbackPath="@pet.BasePath" Action="pet.Action" Row="pet.Row" Scale="SpriteScale" NoPreload="true" Alt="" />
+            @if (pet.Behavior == WalkBehavior.Transforming)
+            {
+                <span class="walk-mega-ring"></span>
+            }
+            @if (pet.Bubble is not null)
+            {
+                <img class="walk-bubble" src="ui/@pet.Bubble" alt="" />
+            }
+        </div>
+    }
+    <div class="walk-controls" @onpointerdown:stopPropagation="true">
+        <button type="button" class="walk-camera" aria-label="@Loc.T("web.walk.rotateLeft")" title="@Loc.T("web.walk.rotateLeft")" @onclick="() => Rotate(-ROTATE_STEP)">⟲</button>
+        <button type="button" class="walk-camera" aria-label="@Loc.T("web.walk.rotateRight")" title="@Loc.T("web.walk.rotateRight")" @onclick="() => Rotate(ROTATE_STEP)">⟳</button>
+        <button type="button" class="walk-camera" aria-label="@Loc.T("web.walk.zoomIn")" title="@Loc.T("web.walk.zoomIn")" @onclick="() => ChangeZoom(ZOOM_STEP)">＋</button>
+        <button type="button" class="walk-camera" aria-label="@Loc.T("web.walk.zoomOut")" title="@Loc.T("web.walk.zoomOut")" @onclick="() => ChangeZoom(-ZOOM_STEP)">－</button>
+        <button type="button" @onclick="OnEnd">🏠 @Loc.T("web.walk.end")</button>
+    </div>
+    <p class="walk-hint">@Loc.T("web.walk.hint")</p>
+    @if (Pet.EventMessage is { } message)
+    {
+        <p class="walk-toast" role="status">@message</p>
+    }
+</div>
+
+@code {
+    private const double BASE_SPEED = 3.0;
+    private const int RUMMAGE_TICKS = 130;
+    private const int MEGA_CHANGE_TICKS = 75, MEGA_SWAP_AT_TICK = 20;
+    private const int INTERACT_DISTANCE = 50;
+
+    // 카메라. 땅의 CSS(.walk-ground, .walk-plane)와 Project()는 같은 값을 씁니다.
+    private const double PERSPECTIVE = 900, TILT_DEGREES = 62, HORIZON_GAP = 30, HORIZON_FRACTION = 0.36;
+    private const double WORLD_RADIUS = 500, WALK_RADIUS = 440;
+    private const double NEAR_CLIP = PERSPECTIVE * 0.9;
+    private const double MIN_ZOOM = 1.0, MAX_ZOOM = 1.7, ZOOM_STEP = 0.15;
+    private const double ROTATE_STEP = Math.PI / 6, KEY_ROTATE_STEP = Math.PI / 12, DRAG_ROTATE_PER_PX = 0.006;
+    private const double CAMERA_EASE_MS = 120;
+    private const double PET_DEPTH_SCALE = 0.85, PROP_PIXEL_SCALE = 1.5;
+    private static readonly double TiltCos = Math.Cos(TILT_DEGREES * Math.PI / 180), TiltSin = Math.Sin(TILT_DEGREES * Math.PI / 180);
+
+    private enum WalkBehavior { Walking, Sleeping, Sinking, Interacting, Rummaging, Transforming, Dragged }
+
+    private sealed class WalkPet
+    {
+        public int Id { get; init; }
+        public int SpeciesId { get; init; }
+        public string NormalPath { get; init; } = "";
+        public string BasePath { get; init; } = "";
+        public string SpritePath { get; set; } = "";
+        public IReadOnlyList<MegaFormInfo> MegaForms { get; init; } = [];
+        public bool IsShiny { get; init; }
+        public bool IsFemale { get; init; }
+        public double X { get; set; } // 월드 좌표. 들판 중심이 (0, 0)입니다.
+        public double Y { get; set; }
+        public double TargetX { get; set; }
+        public double TargetY { get; set; }
+        public double Speed { get; init; }
+        public int Action { get; set; } = PokemonAnim.WALK;
+        public int Row { get; set; }
+        public WalkBehavior Behavior { get; set; } = WalkBehavior.Walking;
+        public int RestTicks { get; set; }
+        public int ActionTicks { get; set; }
+        public int InteractCooldown { get; set; }
+        public string? Bubble { get; set; }
+        public double BubbleMs { get; set; }
+        public string? PendingItem { get; set; }
+        public bool IsInBush { get; set; }
+        public double NextMegaMs { get; set; }
+        public double MegaEndsMs { get; set; }
+        public bool IsMega { get; set; }
+        public bool ChangingToMega { get; set; }
+    }
+
+    private sealed class WalkProp(string image, int width, int height, double x, double y, bool sways, double swayDelay)
+    {
+        public string Image => image;
+        public int Width => width;
+        public int Height => height;
+        public double X => x;
+        public double Y => y;
+        public bool Sways => sways;
+        public double SwayDelay => swayDelay;
+        public bool IsVisible { get; set; }
+        public string Style { get; set; } = "";
+    }
+
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnEnd { get; set; }
+
+    private readonly CancellationTokenSource _cts = new();
+    private readonly List<WalkPet> _pets = [];
+    private readonly List<WalkProp> _props = CreateProps();
+    private ElementReference _layer;
+    private double _width = 800, _height = 600;
+    private double _tickMs;
+
+    private double _groundTop, _pivotDistance, _fieldRadius;
+    private double _yaw, _targetYaw, _zoom = MIN_ZOOM, _targetZoom = MIN_ZOOM;
+    private (double, double, double, double) _lastPropCamera;
+
+    private WalkPet? _dragging;
+    private double _dragOffsetX, _dragOffsetY;
+    private bool _isTurning;
+    private double _turnLastX;
+
+    private double SpriteScale => Pet.Settings.RoamingPetScale;
+    private double WorldToPlane => _fieldRadius / WORLD_RADIUS;
+
+    private static string Px(double value) => $"{value:F1}px";
+
+    private string BandStyle(double speed) => $"background-position-x:{_yaw * _fieldRadius * speed:F1}px";
+
+    private string PlaneStyle
+    {
+        get
+        {
+            // 돌려도 빈 곳이 보이지 않을 만큼만 크게 만듭니다. (창이 넓을수록 커짐)
+            double half = Math.Ceiling(Math.Sqrt(Math.Pow(_width * 0.7, 2) + _fieldRadius * _fieldRadius) * 1.05);
+            double centerY = _pivotDistance - HORIZON_GAP;
+            return $"left:calc(50% - {half:F0}px);top:{centerY - half:F1}px;width:{half * 2:F0}px;height:{half * 2:F0}px;" +
+                   $"transform:rotateX({TILT_DEGREES}deg) rotateZ({_yaw:F4}rad) scale({_zoom:F3})";
+        }
+    }
+
+    // 정해진 씨앗으로 소품을 흩어 놓습니다. 나무는 들판 가장자리에, 작은 풀꽃은 어디에나 둡니다.
+    private static List<WalkProp> CreateProps()
+    {
+        var random = new Random(20261104);
+        var props = new List<WalkProp>();
+
+        void Scatter(string image, int width, int height, int count, double minRadius, double maxRadius, bool sways)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                double angle = random.NextDouble() * Math.Tau;
+                double radius = minRadius + random.NextDouble() * (maxRadius - minRadius);
+                double delay = -random.NextDouble() * 4;
+                props.Add(new WalkProp(image, width, height, Math.Cos(angle) * radius, Math.Sin(angle) * radius, sways, delay));
+            }
+        }
+
+        Scatter("tree_green", 63, 72, 4, 330, 490, true);
+        Scatter("tree_deep", 69, 81, 3, 350, 490, true);
+        Scatter("tree_blossom", 63, 69, 2, 310, 480, true);
+        Scatter("tree_autumn", 57, 65, 1, 320, 480, true);
+        Scatter("pine", 42, 75, 4, 350, 495, true);
+        Scatter("bush", 40, 26, 3, 180, 470, false);
+        Scatter("bush_berry", 40, 26, 2, 180, 470, false);
+        Scatter("mushroom", 20, 20, 4, 160, 460, false);
+        Scatter("rock", 33, 25, 4, 200, 480, false);
+        Scatter("rock_big", 48, 35, 3, 300, 490, false);
+        Scatter("rock_small", 24, 14, 6, 120, 490, false);
+        Scatter("flowers_white", 36, 21, 5, 150, 490, false);
+        Scatter("flowers_yellow", 36, 21, 5, 150, 490, false);
+        Scatter("flowers_pink", 36, 21, 5, 150, 490, false);
+        Scatter("flowers_blue", 36, 21, 4, 150, 490, false);
+        Scatter("tulip_red", 24, 24, 4, 170, 480, true);
+        Scatter("tulip_yellow", 24, 24, 3, 170, 480, true);
+        Scatter("sunflower", 30, 46, 3, 200, 460, true);
+        Scatter("fern", 34, 28, 3, 200, 480, true);
+        Scatter("grass", 26, 22, 5, 170, 480, true);
+
+        // 들판 바깥: 넓은 창에서 양옆이 비어 보이지 않게 합니다. 포켓몬은 여기까지 오지 않습니다.
+        Scatter("tree_deep", 69, 81, 6, 530, 800, true);
+        Scatter("tree_green", 63, 72, 5, 530, 800, true);
+        Scatter("pine", 42, 75, 7, 530, 800, true);
+        Scatter("bush", 40, 26, 5, 520, 800, false);
+        Scatter("grass", 26, 22, 7, 520, 800, true);
+        Scatter("flowers_yellow", 36, 21, 6, 520, 800, false);
+        Scatter("flowers_pink", 36, 21, 5, 520, 800, false);
+        Scatter("rock", 33, 25, 5, 520, 800, false);
+        Scatter("rock_big", 48, 35, 4, 530, 800, false);
+        return props;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReadViewportAsync();
+        int id = 0;
+        foreach (var (speciesId, form, isShiny, isFemale) in Pet.WalkMembers())
+        {
+            string path = Dex.SpritePath(speciesId, form);
+            var (x, y) = RandomFieldPoint();
+            var pet = new WalkPet
+            {
+                Id = id++,
+                SpeciesId = speciesId,
+                NormalPath = path,
+                BasePath = Dex.SpritePath(speciesId, ""),
+                SpritePath = path,
+                IsShiny = isShiny,
+                IsFemale = isFemale,
+                MegaForms = Pet.GetUsableMegaForms(speciesId),
+                X = x,
+                Y = y,
+                Speed = BASE_SPEED * (0.8 + Random.Shared.NextDouble() * 0.4),
+                NextMegaMs = Random.Shared.Next(60, 181) * 1000,
+            };
+            PickTarget(pet);
+            _pets.Add(pet);
+        }
+        UpdateProps();
+        _ = RunAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await _layer.FocusAsync(); // 방향키로 바로 돌릴 수 있게 합니다.
+    }
+
+    private async Task ReadViewportAsync()
+    {
+        try
+        {
+            var size = await JS.InvokeAsync<double[]>("tamaPoke.viewportSize");
+            _width = size[0];
+            _height = size[1];
+        }
+        catch (JSException) { }
+        UpdateCamera();
+    }
+
+    // 들판의 가장 먼 쪽과 가까운 쪽이 모두 땅 안에 들어오도록 회전 중심과 들판 크기를 정합니다.
+    private void UpdateCamera()
+    {
+        _groundTop = _height * HORIZON_FRACTION;
+        double groundHeight = _height - _groundTop + HORIZON_GAP;
+        double nearRate = PERSPECTIVE / (TiltCos * PERSPECTIVE + groundHeight * TiltSin);
+        double farRate = PERSPECTIVE / (TiltCos * PERSPECTIVE + HORIZON_GAP * TiltSin);
+        _pivotDistance = (nearRate * groundHeight + farRate * HORIZON_GAP) / (nearRate + farRate);
+        _fieldRadius = nearRate * (groundHeight - _pivotDistance);
+    }
+
+    // 월드 좌표 → 화면 좌표. CSS의 perspective, rotateX, rotateZ, scale과 같은 계산입니다.
+    private (double X, double Y, double Depth, bool Visible) Project(double worldX, double worldY)
+    {
+        double scale = WorldToPlane * _zoom;
+        double cos = Math.Cos(_yaw), sin = Math.Sin(_yaw);
+        double planeX = (worldX * cos - worldY * sin) * scale;
+        double planeY = (worldX * sin + worldY * cos) * scale;
+        double lift = planeY * TiltSin;
+        if (lift >= NEAR_CLIP) return (0, 0, 1, false);
+
+        double depth = PERSPECTIVE / (PERSPECTIVE - lift);
+        double originY = _groundTop - HORIZON_GAP;
+        return (_width / 2 + planeX * depth, originY + (_pivotDistance + planeY * TiltCos) * depth, depth, true);
+    }
+
+    // 화면 좌표 → 월드 좌표. 포켓몬을 끌어서 옮길 때 씁니다.
+    private (double X, double Y) Unproject(double screenX, double screenY)
+    {
+        double fromOrigin = Math.Max(screenY - (_groundTop - HORIZON_GAP), 0);
+        double planeY = PERSPECTIVE * (fromOrigin - _pivotDistance) / (TiltCos * PERSPECTIVE + fromOrigin * TiltSin);
+        double depth = PERSPECTIVE / (PERSPECTIVE - planeY * TiltSin);
+        double planeX = (screenX - _width / 2) / depth;
+        double scale = WorldToPlane * _zoom;
+        double cos = Math.Cos(_yaw), sin = Math.Sin(_yaw);
+        return ((planeX * cos + planeY * sin) / scale, (-planeX * sin + planeY * cos) / scale);
+    }
+
+    // 소품은 카메라가 움직였을 때만 다시 계산합니다.
+    private void UpdateProps()
+    {
+        var camera = (_yaw, _zoom, _width, _height);
+        if (camera == _lastPropCamera) return;
+        _lastPropCamera = camera;
+
+        double sceneScale = Math.Clamp(_fieldRadius / 320, 0.7, 1.3) * PROP_PIXEL_SCALE;
+        foreach (var prop in _props)
+        {
+            var (x, y, depth, visible) = Project(prop.X, prop.Y);
+            double width = prop.Width * depth * _zoom * sceneScale;
+            double height = prop.Height * depth * _zoom * sceneScale;
+
+            // 소품이 지평선 뒤로 넘어가면 사라지고, 화면 밖이면 그리지 않습니다.
+            double fade = Math.Clamp((y - _groundTop) / 24, 0, 1);
+            prop.IsVisible = visible && fade > 0 && y - height < _height && x + width > 0 && x - width < _width;
+            if (!prop.IsVisible) continue;
+
+            string sway = prop.Sways ? $"animation-delay:{prop.SwayDelay:F2}s;" : "";
+            prop.Style = $"left:{x:F1}px;top:{y:F1}px;width:{width:F1}px;height:{height:F1}px;z-index:{(int)y};opacity:{fade:F2};{sway}";
+        }
+    }
+
+    private async Task RunAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(33));
+        long last = Stopwatch.GetTimestamp();
+        double sinceViewport = 0;
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+            {
+                long now = Stopwatch.GetTimestamp();
+                double ms = Math.Min(Stopwatch.GetElapsedTime(last, now).TotalMilliseconds, 500);
+                last = now;
+
+                sinceViewport += ms;
+                if (sinceViewport > 2000)
+                {
+                    sinceViewport = 0;
+                    await ReadViewportAsync();
+                }
+
+                double ease = Math.Min(1, ms / CAMERA_EASE_MS);
+                _yaw += (_targetYaw - _yaw) * ease;
+                _zoom += (_targetZoom - _zoom) * ease;
+                UpdateProps();
+
+                if (Pet.WalkFoundIcons.Count > 0 && _pets.Count > 0)
+                {
+                    var finder = _pets[Random.Shared.Next(_pets.Count)];
+                    if (finder.PendingItem is null) finder.PendingItem = Pet.WalkFoundIcons.Dequeue();
+                }
+
+                _tickMs += ms;
+                while (_tickMs >= 33)
+                {
+                    _tickMs -= 33;
+                    foreach (var pet in _pets) Step(pet);
+                }
+                foreach (var pet in _pets) UpdateTimers(pet, ms);
+                StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void UpdateTimers(WalkPet pet, double ms)
+    {
+        if (pet.BubbleMs > 0)
+        {
+            pet.BubbleMs -= ms;
+            if (pet.BubbleMs <= 0) pet.Bubble = null;
+        }
+        if (pet.IsMega) pet.MegaEndsMs -= ms;
+        else pet.NextMegaMs -= ms;
+    }
+
+    // 33ms마다: 쉬는 중이면 남은 시간 처리, 아니면 이벤트 확인 후 목적지로 이동 (PC판 RoamingPet.Step과 같음)
+    private void Step(WalkPet pet)
+    {
+        if (pet.Behavior == WalkBehavior.Dragged) return;
+        if (pet.InteractCooldown > 0) pet.InteractCooldown--;
+
+        if (pet.RestTicks > 0)
+        {
+            StepRest(pet);
+            return;
+        }
+
+        if (TryStartMegaChange(pet) || TryStartRummage(pet) || TryStartInteraction(pet)) return;
+        MoveTowardTarget(pet);
+    }
+
+    private void StepRest(WalkPet pet)
+    {
+        pet.RestTicks--;
+
+        switch (pet.Behavior)
+        {
+            case WalkBehavior.Sleeping:
+                if (pet.RestTicks == 30) pet.Action = PokemonAnim.WAKE;
+                break;
+            case WalkBehavior.Sinking:
+                if (pet.RestTicks == 60) pet.Action = PokemonAnim.LEAPFORTH;
+                else if (pet.RestTicks == 30) pet.Action = PokemonAnim.HITGROUND;
+                break;
+            case WalkBehavior.Transforming:
+                if (pet.RestTicks == MEGA_SWAP_AT_TICK)
+                {
+                    if (pet.ChangingToMega) ChangeToMega(pet);
+                    else ChangeBack(pet);
+                    pet.Action = PokemonAnim.POSE;
+                }
+                break;
+            case WalkBehavior.Rummaging:
+                if (pet.RestTicks == RUMMAGE_TICKS - 30) pet.Action = PokemonAnim.PULL;
+                else if (pet.RestTicks == 40)
+                {
+                    pet.IsInBush = false;
+                    pet.Action = PokemonAnim.HOP;
+                    if (pet.PendingItem is not null)
+                    {
+                        ShowBubble(pet, pet.PendingItem);
+                        pet.PendingItem = null;
+                    }
+                }
+                break;
+        }
+
+        if (pet.RestTicks > 0) return;
+
+        if (pet.Behavior == WalkBehavior.Interacting) PickEscapeTarget(pet);
+        else PickTarget(pet);
+        pet.Behavior = WalkBehavior.Walking;
+        pet.Action = PokemonAnim.WALK;
+    }
+
+    private static void ShowBubble(WalkPet pet, string image)
+    {
+        pet.Bubble = image;
+        pet.BubbleMs = 3000;
+    }
+
+    private bool TryStartMegaChange(WalkPet pet)
+    {
+        if (pet.MegaForms.Count == 0 || pet.Behavior != WalkBehavior.Walking) return false;
+
+        if (pet.IsMega)
+        {
+            if (pet.MegaEndsMs > 0) return false;
+            pet.ChangingToMega = false;
+        }
+        else
+        {
+            if (pet.NextMegaMs > 0) return false;
+            pet.ChangingToMega = true;
+        }
+
+        pet.Behavior = WalkBehavior.Transforming;
+        pet.RestTicks = MEGA_CHANGE_TICKS;
+        pet.Row = PokemonAnim.ROW_FRONT;
+        pet.Action = PokemonAnim.CHARGE;
+        return true;
+    }
+
+    private void ChangeToMega(WalkPet pet)
+    {
+        var form = pet.MegaForms[Random.Shared.Next(pet.MegaForms.Count)];
+        pet.SpritePath = Dex.SpritePath(pet.SpeciesId, Dex.ApplyVariants(pet.SpeciesId, form.Form, pet.IsShiny, pet.IsFemale));
+        ShowBubble(pet, "icon_mega.png");
+        pet.IsMega = true;
+        pet.MegaEndsMs = 3 * 60 * 1000;
+    }
+
+    private void ChangeBack(WalkPet pet)
+    {
+        pet.SpritePath = pet.NormalPath;
+        pet.IsMega = false;
+        pet.NextMegaMs = Random.Shared.Next(600, 1201) * 1000;
+    }
+
+    private static bool TryStartRummage(WalkPet pet)
+    {
+        if (pet.Behavior != WalkBehavior.Walking || pet.PendingItem is null) return false;
+        pet.Behavior = WalkBehavior.Rummaging;
+        pet.RestTicks = RUMMAGE_TICKS;
+        pet.IsInBush = true;
+        pet.Action = PokemonAnim.LEAPFORTH;
+        return true;
+    }
+
+    private bool TryStartInteraction(WalkPet pet)
+    {
+        if (pet.InteractCooldown > 0 || pet.Behavior != WalkBehavior.Walking) return false;
+
+        foreach (var other in _pets)
+        {
+            if (other == pet) continue;
+            double diffX = other.X - pet.X, diffY = other.Y - pet.Y;
+            if (Math.Sqrt(diffX * diffX + diffY * diffY) >= INTERACT_DISTANCE * SpriteScale) continue;
+
+            pet.Behavior = WalkBehavior.Interacting;
+            pet.RestTicks = 45;
+            pet.InteractCooldown = 150;
+            pet.Row = Project(other.X, other.Y).X > Project(pet.X, pet.Y).X ? 2 : PokemonAnim.ROW_LEFT;
+            pet.Action = Random.Shared.Next(2) == 0 ? PokemonAnim.HOP : PokemonAnim.STRIKE;
+            return true;
+        }
+        return false;
+    }
+
+    private void MoveTowardTarget(WalkPet pet)
+    {
+        double dx = pet.TargetX - pet.X, dy = pet.TargetY - pet.Y;
+        double distance = Math.Sqrt(dx * dx + dy * dy);
+        if (distance < 5)
+        {
+            StartArrivalBehavior(pet);
+            return;
+        }
+        pet.X += dx / distance * pet.Speed;
+        pet.Y += dy / distance * pet.Speed;
+
+        // 카메라가 돌아가 있어도 화면에서 가는 방향을 바라봅니다.
+        double cos = Math.Cos(_yaw), sin = Math.Sin(_yaw);
+        double viewX = dx * cos - dy * sin, viewY = (dx * sin + dy * cos) * TiltCos;
+        pet.Row = DirectionFromAngle(Math.Atan2(viewY, viewX) * 180 / Math.PI);
+    }
+
+    // PMD 스프라이트 방향 행: 0=아래, 1=오른아래, 2=오른쪽, 3=오른위, 4=위, 5=왼위, 6=왼쪽, 7=왼아래
+    private static int DirectionFromAngle(double angle)
+    {
+        if (angle < 0) angle += 360;
+        if (angle >= 337.5 || angle < 22.5) return 2;
+        if (angle < 67.5) return 1;
+        if (angle < 112.5) return 0;
+        if (angle < 157.5) return 7;
+        if (angle < 202.5) return 6;
+        if (angle < 247.5) return 5;
+        if (angle < 292.5) return 4;
+        return 3;
+    }
+
+    private static void StartArrivalBehavior(WalkPet pet)
+    {
+        pet.Row = PokemonAnim.ROW_FRONT;
+        int roll = Random.Shared.Next(100);
+        if (roll < 18) Rest(pet, PokemonAnim.IDLE, 60);
+        else if (roll < 36) Rest(pet, PokemonAnim.POSE, 40);
+        else if (roll < 52) Rest(pet, PokemonAnim.DEEPBREATH, 60);
+        else if (roll < 68) Rest(pet, PokemonAnim.NOD, 60);
+        else if (roll < 84)
+        {
+            pet.Behavior = WalkBehavior.Sleeping;
+            Rest(pet, PokemonAnim.SLEEP, 300);
+        }
+        else
+        {
+            pet.Behavior = WalkBehavior.Sinking;
+            Rest(pet, PokemonAnim.SINK, 90);
+        }
+    }
+
+    private static void Rest(WalkPet pet, int action, int ticks)
+    {
+        pet.Action = action;
+        pet.RestTicks = ticks;
+    }
+
+    private static (double X, double Y) RandomFieldPoint()
+    {
+        double angle = Random.Shared.NextDouble() * Math.Tau;
+        double radius = Math.Sqrt(Random.Shared.NextDouble()) * WALK_RADIUS;
+        return (Math.Cos(angle) * radius, Math.Sin(angle) * radius);
+    }
+
+    private static (double X, double Y) ClampToField(double x, double y)
+    {
+        double radius = Math.Sqrt(x * x + y * y);
+        return radius <= WALK_RADIUS ? (x, y) : (x / radius * WALK_RADIUS, y / radius * WALK_RADIUS);
+    }
+
+    private static void PickTarget(WalkPet pet) => (pet.TargetX, pet.TargetY) = RandomFieldPoint();
+
+    private static void PickEscapeTarget(WalkPet pet)
+    {
+        double angle = Random.Shared.NextDouble() * Math.Tau;
+        (pet.TargetX, pet.TargetY) = ClampToField(pet.X + Math.Cos(angle) * 120, pet.Y + Math.Sin(angle) * 120);
+    }
+
+    // 땅을 끌면 화면이 돌고, 포켓몬을 끌면 포켓몬이 옮겨집니다.
+    private void OnGroundPointerDown(PointerEventArgs e)
+    {
+        _isTurning = true;
+        _turnLastX = e.ClientX;
+    }
+
+    private void OnPetPointerDown(PointerEventArgs e, WalkPet pet)
+    {
+        _dragging = pet;
+        var (x, y) = Unproject(e.ClientX, e.ClientY);
+        _dragOffsetX = pet.X - x;
+        _dragOffsetY = pet.Y - y;
+        pet.Behavior = WalkBehavior.Dragged;
+        pet.RestTicks = 0;
+        pet.IsInBush = false;
+        pet.Action = PokemonAnim.HURT;
+    }
+
+    private void OnPointerMove(PointerEventArgs e)
+    {
+        if (_isTurning)
+        {
+            _yaw += (e.ClientX - _turnLastX) * DRAG_ROTATE_PER_PX;
+            _targetYaw = _yaw;
+            _turnLastX = e.ClientX;
+            return;
+        }
+        if (_dragging is null) return;
+        var (x, y) = Unproject(e.ClientX, e.ClientY);
+        (_dragging.X, _dragging.Y) = ClampToField(x + _dragOffsetX, y + _dragOffsetY);
+    }
+
+    private void OnPointerUp()
+    {
+        _isTurning = false;
+        if (_dragging is null) return;
+        _dragging.Behavior = WalkBehavior.Walking;
+        _dragging.Action = PokemonAnim.WALK;
+        PickTarget(_dragging);
+        _dragging = null;
+    }
+
+    private void Rotate(double amount) => _targetYaw += amount;
+
+    private void ChangeZoom(double amount) => _targetZoom = Math.Clamp(_targetZoom + amount, MIN_ZOOM, MAX_ZOOM);
+
+    private void OnWheel(WheelEventArgs e) => ChangeZoom(e.DeltaY < 0 ? ZOOM_STEP : -ZOOM_STEP);
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowLeft": Rotate(-KEY_ROTATE_STEP); break;
+            case "ArrowRight": Rotate(KEY_ROTATE_STEP); break;
+            case "ArrowUp" or "+" or "=": ChangeZoom(ZOOM_STEP); break;
+            case "ArrowDown" or "-": ChangeZoom(-ZOOM_STEP); break;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

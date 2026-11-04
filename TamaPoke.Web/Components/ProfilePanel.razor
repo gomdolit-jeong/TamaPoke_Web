@@ -9,11 +9,16 @@
         <button type="button" @onclick="OnClose">@Loc.T("profile.close")</button>
     </header>
 
+    @if (Pet.FormDescription.Length > 0)
+    {
+        <p class="party-note">@Pet.FormDescription</p>
+    }
+
     <h3>@Loc.T("web.profile.info")</h3>
     <dl class="pet-facts">
         <dt>@Loc.T("web.profile.gender")</dt>
         <dd>@(Pet.IsGenderless ? "-" : Pet.IsFemale ? "♀" : "♂")</dd>
-        <dt>@Loc.T("profile.streak")</dt>
+        <dt><img class="pet-title-icon" src="ui/icon_streak.png" alt="" />@Loc.T("profile.streak")</dt>
         <dd>@string.Format(Loc.T("profile.streak.days"), Pet.Streak)</dd>
         <dt>@Loc.T("profile.bond")</dt>
         <dd>@Pet.Bond</dd>
@@ -21,7 +26,36 @@
         <dd>@(Pet.BerryKnown ? Loc.T(BerryKeys[Pet.FavoriteBerry]) : "???")</dd>
     </dl>
 
-    <h3>@Loc.T("profile.growth")</h3>
+    <h3><img class="pet-title-icon" src="ui/icon_sword.png" alt="" />@Loc.T("profile.stats")</h3>
+    @if (Pet.Dex.Get(Pet.SpeciesId) is { } info)
+    {
+        var (type1, type2) = PokemonForms.GetTypes(Pet.Dex, info.Id, Pet.SpriteForm.Length > 0 ? $"p{info.Id:D4}_{Pet.SpriteForm}.bin" : null);
+        <p class="party-types">
+            <span class="battle-type battle-type-@type1.ToString().ToLowerInvariant()">@type1</span>
+            @if (type2 != PokemonType.None)
+            {
+                <span class="battle-type battle-type-@type2.ToString().ToLowerInvariant()">@type2</span>
+            }
+        </p>
+    }
+    <dl class="pet-facts">
+        <dt>@Loc.T("profile.stat.atk")</dt><dd>@Pet.TrAtk</dd>
+        <dt>@Loc.T("profile.stat.def")</dt><dd>@Pet.TrDef</dd>
+        <dt>@Loc.T("profile.stat.spe")</dt><dd>@Pet.TrSpeed</dd>
+    </dl>
+
+    <h3>@Loc.T("profile.moves")</h3>
+    <ul class="profile-moves">
+        @foreach (var skill in Pet.CurrentSkills)
+        {
+            <li>
+                <span>@skill.Name</span>
+                <span class="battle-type battle-type-@skill.Type.ToString().ToLowerInvariant()">@skill.Type</span>
+            </li>
+        }
+    </ul>
+
+    <h3><img class="pet-title-icon" src="ui/icon_growth.png" alt="" />@Loc.T("profile.growth")</h3>
     <label class="pet-growth">
         <span>@Loc.T("profile.nextLevel") (@Pet.LevelProgressMinutes / 60)</span>
         <progress max="60" value="@Pet.LevelProgressMinutes"></progress>

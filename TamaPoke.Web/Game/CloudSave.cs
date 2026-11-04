@@ -13,6 +13,7 @@ public sealed class CloudSave(IJSRuntime js, SaveStore store) : IDisposable
 {
     private const double UPLOAD_INTERVAL_MS = 5 * 60 * 1000;
     private const string VersionKeyPrefix = "tamapoke.cloud.version.";
+    private const string ResetKey = "tamapoke.cloud.reset";
 
     private IJSObjectReference? _module;
     private DotNetObjectReference<CloudSave>? _self;
@@ -109,8 +110,12 @@ public sealed class CloudSave(IJSRuntime js, SaveStore store) : IDisposable
 
             var conflict = new CloudConflict(json, remoteVersion, remote);
 
+            // 이 기기에서 초기화했다면 서버 세이브를 다시 받아오지 않습니다.
+            bool wasReset = await store.GetTextAsync(ResetKey) == _userId;
+            if (wasReset) await store.SetTextAsync(ResetKey, "");
+
             // 이 기기가 막 시작한 상태면 버전과 상관없이 서버 세이브를 받습니다. (빈 세이브로 덮어쓰지 않도록)
-            if (_current!().HasNoProgress && !remote.HasNoProgress)
+            if (_current!().HasNoProgress && !remote.HasNoProgress && !wasReset)
             {
                 await UseCloudAsync(conflict);
                 return;
@@ -130,6 +135,12 @@ public sealed class CloudSave(IJSRuntime js, SaveStore store) : IDisposable
             Console.WriteLine($"클라우드 세이브 읽기 실패: {ex.Message}");
             SetStatus(CloudStatus.Failed);
         }
+    }
+
+    // 초기화 직전에 부릅니다. 다시 읽을 때 지운 세이브를 서버에서 되살리지 않게 표시해 둡니다.
+    public async Task MarkFactoryResetAsync()
+    {
+        if (IsSignedIn) await store.SetTextAsync(ResetKey, _userId!);
     }
 
     public Task ChooseCloudAsync() => Conflict is { } conflict ? UseCloudAsync(conflict) : Task.CompletedTask;

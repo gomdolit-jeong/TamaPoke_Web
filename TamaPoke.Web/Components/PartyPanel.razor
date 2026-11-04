@@ -1,0 +1,114 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+@inject PokemonDex Dex
+
+<section class="pet-panel" aria-label="@Loc.T("party.title")">
+    <header class="pet-panel-header">
+        <h2>@Loc.T("party.title")</h2>
+        <button type="button" @onclick="CloseAsync">@Loc.T("profile.close")</button>
+    </header>
+
+    <p class="party-note @(Pet.IsSwapMode ? "is-warning" : "")">
+        @(Pet.IsSwapMode ? Loc.T("party.full") : string.Format(Loc.T("party.count"), Pet.Party.Count + (Pet.IsEgg ? 0 : 1)))
+    </p>
+
+    <ul class="party-grid">
+        @if (!Pet.IsEgg)
+        {
+            @Card(Pet.SpeciesId, Pet.SpriteForm, Pet.IsShiny, Pet.Level, true, null)
+        }
+        @foreach (var member in Pet.Party)
+        {
+            @Card(member.SpeciesId, member.SpriteForm, member.IsShiny, member.Level, false, member)
+        }
+    </ul>
+
+    @if (_confirmSwap)
+    {
+        <p class="party-confirm">@string.Format(Loc.T("party.swap.with"), Dex.GetName(_selected!.SpeciesId, Loc.Language))</p>
+        <div class="pet-prompt">
+            <button type="button" class="pet-prompt-main" @onclick="ConfirmSwap">@Loc.T("common.yes")</button>
+            <button type="button" @onclick="() => _confirmSwap = false">@Loc.T("common.no")</button>
+        </div>
+    }
+    else if (_selected is not null)
+    {
+        <div class="pet-prompt">
+            @if (Pet.IsSwapMode)
+            {
+                <button type="button" class="pet-prompt-main" @onclick="() => _confirmSwap = true">@Loc.T("party.swap")</button>
+            }
+            else
+            {
+                <button type="button" class="pet-prompt-main" disabled="@(!Pet.CanChangeLeader)" @onclick="MakeLeader">@Loc.T("party.makeLead")</button>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private PartyMember? _selected;
+    private bool _confirmSwap;
+
+    private RenderFragment Card(int speciesId, string form, bool isShiny, int level, bool isLead, PartyMember? member) => __builder =>
+    {
+        var info = Dex.Get(speciesId);
+        <li>
+            <button type="button" class="party-card @(isLead ? "is-lead" : "") @(member is not null && member == _selected ? "is-selected" : "")"
+                    disabled="@isLead" aria-pressed="@(member is not null && member == _selected ? "true" : "false")"
+                    @onclick="() => Select(member)">
+                <span class="party-sprite">
+                    <AnimatedSprite SpritePath="@Dex.SpritePath(speciesId, form)" FallbackPath="@($"{speciesId:D4}")" Paused="true" Scale="1" Alt="" />
+                </span>
+                <span class="party-info">
+                    <span class="party-name">@(isShiny ? "✨" : "")@Dex.GetName(speciesId, Loc.Language)</span>
+                    <span class="party-level">Lv.@level @(isLead ? Loc.T("party.lead") : "")</span>
+                    @if (info is not null)
+                    {
+                        <span class="party-types">
+                            <span class="battle-type battle-type-@info.Type1.ToString().ToLowerInvariant()">@info.Type1</span>
+                            @if (info.Type2 != PokemonType.None)
+                            {
+                                <span class="battle-type battle-type-@info.Type2.ToString().ToLowerInvariant()">@info.Type2</span>
+                            }
+                        </span>
+                    }
+                </span>
+            </button>
+        </li>
+    };
+
+    private void Select(PartyMember? member)
+    {
+        _selected = member;
+        _confirmSwap = false;
+    }
+
+    private async Task MakeLeader()
+    {
+        if (_selected is null) return;
+        Pet.MakeLeader(_selected);
+        _selected = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task ConfirmSwap()
+    {
+        if (_selected is null) return;
+        Pet.ReplaceWithPendingCatch(_selected);
+        _selected = null;
+        _confirmSwap = false;
+        await OnClose.InvokeAsync();
+    }
+
+    // 파티가 꽉 찬 채로 닫으면 새로 잡은 포켓몬을 돌려보냅니다. (PC판과 같음)
+    private async Task CloseAsync()
+    {
+        if (Pet.IsSwapMode) Pet.ReleasePendingCatch();
+        await OnClose.InvokeAsync();
+    }
+}
