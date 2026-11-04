@@ -2204,12 +2204,11 @@ select {
         display: block;
         width: 100%;
         filter: grayscale(1);
-        opacity: 0.35;
+        opacity: 0.2;
         image-rendering: pixelated;
     }
 
-    .gym-badge.is-earned img,
-    .gym-badge.is-next img {
+    .gym-badge.is-earned img {
         filter: none;
         opacity: 1;
     }
