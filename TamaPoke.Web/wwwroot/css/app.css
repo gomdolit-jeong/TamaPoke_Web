@@ -93,6 +93,73 @@ body {
     pointer-events: none;
 }
 
+.pet-flash {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 180px;
+    height: 180px;
+    margin: -105px 0 0 -90px;
+    background: white;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: pet-flash 0.25s ease-in-out infinite alternate;
+}
+
+@keyframes pet-flash {
+    from { opacity: 0.15; }
+    to { opacity: 0.95; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pet-flash {
+        animation: none;
+        opacity: 0.7;
+    }
+}
+
+.pet-prompt {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+    .pet-prompt button {
+        flex: 1;
+        min-height: 2.75rem;
+        font: inherit;
+        cursor: pointer;
+    }
+
+    .pet-prompt .pet-prompt-main {
+        flex: 2;
+        font-weight: bold;
+    }
+
+.pet-release {
+    display: block;
+    min-height: 2.75rem;
+    margin: 0.5rem auto 0;
+    padding: 0 0.75rem;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.85rem;
+    text-decoration: underline;
+    opacity: 0.8;
+    cursor: pointer;
+}
+
+.pet-release-confirm {
+    margin-top: 0.75rem;
+    white-space: pre-line;
+}
+
+    .pet-release-confirm p {
+        margin: 0;
+    }
+
 .pet-poops {
     position: absolute;
     left: 0.5rem;

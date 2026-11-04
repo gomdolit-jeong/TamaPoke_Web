@@ -25,11 +25,11 @@ else
             </button>
         </header>
 
-        <p class="pet-mood" role="status">@Loc.T(_pet.MoodKey)</p>
+        <p class="pet-mood" role="status">@MoodText</p>
 
         <div class="pet-stage" style="background-image:url('@BackgroundUrl')">
             <button type="button" class="pet-actor" aria-label="@(Loc.T(_pet.IsEgg ? "web.tap.egg" : "web.tap.pet"))"
-                    style="transform:translateX(@(_pet.PosX.ToString("F1"))px)" @onclick="Tap">
+                    style="transform:translate(@(_pet.PosX.ToString("F1"))px,@(_pet.PosY.ToString("F0"))px)" @onclick="Tap">
                 <AnimatedSprite SpritePath="@_pet.SpritePath" Action="_pet.CurrentAction" Row="_pet.CurrentRow" Flipped="_pet.FlipX < 0" Alt="" />
             </button>
 
@@ -45,6 +45,10 @@ else
             {
                 <img class="pet-fx pet-fx-heart" src="ui/icon_heart.png" alt="" />
             }
+            @if (_pet.IsEvolvingFlash)
+            {
+                <div class="pet-flash"></div>
+            }
             <div class="pet-poops">
                 @for (int i = 0; i < _pet.Poops; i++)
                 {
@@ -52,6 +56,21 @@ else
                 }
             </div>
         </div>
+
+        @if (_pet.CanShowEvolvePrompt)
+        {
+            <div class="pet-prompt">
+                <button type="button" class="pet-prompt-main" @onclick="() => _pet.StartEvolution()">@Loc.T("idle.evolve")</button>
+                <button type="button" @onclick="() => _pet.PostponeEvolution()">@Loc.T("idle.later")</button>
+            </div>
+        }
+        @if (_pet.CanShowFarewellPrompt)
+        {
+            <div class="pet-prompt">
+                <button type="button" class="pet-prompt-main" @onclick="() => _pet.StartFarewell()">@Loc.T("idle.farewell")</button>
+                <button type="button" @onclick="() => _pet.PostponeFarewell()">@Loc.T("idle.later")</button>
+            </div>
+        }
 
         <ul class="pet-stats">
             @StatBar("stat.fullness", _pet.Fullness)
@@ -88,6 +107,24 @@ else
                 <img src="ui/icon_bath.png" alt="" /><span>@Loc.T("web.btn.bath")</span>
             </button>
         </div>
+
+        @if (_pet.CanCare)
+        {
+            @if (_confirmRelease)
+            {
+                <div class="pet-release-confirm" role="alertdialog" aria-label="@Loc.T("release.confirm.title")">
+                    <p>@Loc.T("release.confirm.message")</p>
+                    <div class="pet-prompt">
+                        <button type="button" @onclick="Release">@Loc.T("common.yes")</button>
+                        <button type="button" @onclick="() => _confirmRelease = false">@Loc.T("common.no")</button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <button type="button" class="pet-release" @onclick="() => _confirmRelease = true">@Loc.T("idle.menu.release")</button>
+            }
+        }
     </section>
 }
 
@@ -102,8 +139,20 @@ else
     private readonly CancellationTokenSource _cts = new();
     private PokemonState? _pet;
     private object? _lastRendered;
+    private bool _confirmRelease;
 
     private string Name => _pet!.IsEgg ? Loc.T("pokemon.egg") : $"{Dex.GetName(_pet.SpeciesId, Loc.Language)} Lv.{_pet.Level}";
+    private string MoodText
+    {
+        get
+        {
+            if (!_pet!.IsEvolving) return Loc.T(_pet.MoodKey);
+            string oldName = Dex.GetName(_pet.EvolvedFromSpeciesId, Loc.Language);
+            if (_pet.HasEvolved) return string.Format(Loc.T("evolve.done"), oldName, Dex.GetName(_pet.SpeciesId, Loc.Language));
+            return _pet.IsEvolvingFlash ? string.Format(Loc.T("evolve.happening"), oldName) : Loc.T("evolve.what");
+        }
+    }
+
     private string BackgroundUrl => $"backgrounds/{Dex.GetBiomeName(_pet!.SpeciesId)}{(_pet.IsNight ? " NIGHT" : "")}.png";
 
     private RenderFragment StatBar(string key, int value) => @<li>
@@ -115,7 +164,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         var pet = await Store.LoadAsync();
-        pet.PickHatchSpecies = Dex.PickHatchSpecies;
+        pet.Dex = Dex;
         _pet = pet;
         _ = RunLoopAsync();
     }
@@ -123,6 +172,12 @@ else
     private void Act(Action<PokemonState> action) => action(_pet!);
 
     private void Tap() => _pet!.Tap();
+
+    private void Release()
+    {
+        _confirmRelease = false;
+        _pet!.StartRelease();
+    }
 
     private Task ToggleLanguageAsync() => Loc.ToggleLanguageAsync();
 
@@ -149,7 +204,8 @@ else
 
                 // 값이 바뀌었을 때만 다시 그립니다.
                 object rendered = (_pet.PosX, _pet.FlipX, _pet.CurrentAction, _pet.MoodKey, _pet.IsPetting, _pet.IsNight,
-                    (_pet.Fullness, _pet.Joy, _pet.Energy, _pet.Hygiene, _pet.Poops, _pet.Level, _pet.SpeciesId));
+                    (_pet.Fullness, _pet.Joy, _pet.Energy, _pet.Hygiene, _pet.Poops, _pet.Level, _pet.SpeciesId),
+                    (_pet.IsEvolvingFlash, _pet.HasEvolved, _pet.CanShowEvolvePrompt, _pet.CanShowFarewellPrompt, _pet.IsSleeping));
                 if (!rendered.Equals(_lastRendered))
                 {
                     _lastRendered = rendered;

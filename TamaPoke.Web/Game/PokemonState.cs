@@ -16,8 +16,21 @@ public sealed class PokemonState
     private const int WEIGHT_BURN_EVERY_MINUTES = 3;
     private const int EGG_HATCH_SECONDS = 180;
     private const int EGG_HATCH_TAPS = 3;
+    private const int FAREWELL_AGE_DAYS = 3; // 설정을 옮기면 PC판처럼 바꿀 수 있게 합니다.
+    private const int EVOLVE_MIN_STAT = 40;
+    private const int FEMALE_ONLY_EVOLUTION_SPECIES = 415; // 세꿀버리는 암컷만 진화합니다.
+
+    private const int CEREMONY_FAREWELL = 1;
     private const int CEREMONY_RUNAWAY = 2;
+    private const int CEREMONY_RELEASE = 3;
+    private const int CEREMONY_EVOLVE = 4;
     private const double CEREMONY_MS = 10_000;
+
+    // 진화 연출: 오잉!? → 빛나는 동안 진화 → 축하 메시지
+    private const double EVOLVE_FLASH_START_MS = 1500;
+    private const double EVOLVE_FLASH_END_MS = 4500;
+    private const double EVOLVE_END_MS = 8000;
+    private const double EVOLVE_FLOAT_PIXELS = 30;
 
     // PC판 메인 루프 한 칸. 모션 길이는 PC판의 칸 수를 그대로 곱해서 정합니다.
     private const double LOOP_TICK_MS = 33;
@@ -50,6 +63,12 @@ public sealed class PokemonState
     public int EggTaps { get; set; }
     public bool IsSleeping { get; set; }
     public bool BerryKnown { get; set; }
+    public bool IsFemale { get; set; }
+    public bool IsGenderless { get; set; }
+    public bool IsEvolutionPostponed { get; set; }
+    public bool IsFarewellPostponed { get; set; }
+    public int LastEnd { get; set; } = CEREMONY_FAREWELL; // 이로치 확률에 씁니다. (1 작별, 2 가출, 3 놔주기)
+    public int EvolvedFromSpeciesId { get; set; }
     public int Ceremony { get; set; }
     public double CeremonyElapsedMs { get; set; }
 
@@ -69,8 +88,7 @@ public sealed class PokemonState
     [JsonIgnore] public bool IsFeedMenuOpen { get; set; }
     [JsonIgnore] public bool NeedsSave { get; set; }
 
-    // 부화할 포켓몬을 고르는 규칙 (도감 데이터가 필요해서 밖에서 넣어 줍니다)
-    [JsonIgnore] public Func<int>? PickHatchSpecies { get; set; }
+    [JsonIgnore] public PokemonDex Dex { get; set; } = null!;
 
     [JsonIgnore] public bool IsEgg => SpeciesId < 0;
     [JsonIgnore] public bool IsCeremony => Ceremony != 0;
@@ -80,6 +98,26 @@ public sealed class PokemonState
     [JsonIgnore] public int FavoriteBerry => Math.Abs(SpeciesId) % 3;
     [JsonIgnore] public bool CanRunawayNow => !IsEgg && !IsSleeping && !IsCeremony && NeglectTicks >= RUNAWAY_TICKS;
     [JsonIgnore] public bool CanCare => !IsEgg && !IsCeremony;
+    [JsonIgnore] public bool IsFinalEvolution => !IsEgg && Dex.Get(SpeciesId)?.EvolveTo == 0;
+    [JsonIgnore] public bool CanFarewellNow => !IsEgg && !IsSleeping && !IsCeremony && AgeMinutes >= FAREWELL_AGE_DAYS * 24 * 60;
+    [JsonIgnore] public bool CanShowEvolvePrompt => CanEvolveNow && !IsEvolutionPostponed;
+    [JsonIgnore] public bool CanShowFarewellPrompt => CanFarewellNow && !IsFarewellPostponed;
+    [JsonIgnore] public bool IsEvolving => Ceremony == CEREMONY_EVOLVE;
+    [JsonIgnore] public bool IsEvolvingFlash => IsEvolving && CeremonyElapsedMs is >= EVOLVE_FLASH_START_MS and < EVOLVE_FLASH_END_MS;
+    [JsonIgnore] public bool HasEvolved => IsEvolving && CeremonyElapsedMs >= EVOLVE_FLASH_END_MS;
+    [JsonIgnore] public double PosY => IsEvolvingFlash ? -EVOLVE_FLOAT_PIXELS : 0;
+
+    [JsonIgnore]
+    public bool CanEvolveNow
+    {
+        get
+        {
+            if (IsEgg || IsSleeping || IsCeremony || IsFinalEvolution) return false;
+            if (SpeciesId == FEMALE_ONLY_EVOLUTION_SPECIES && !IsFemale) return false;
+            if (Dex.GetEvolution(SpeciesId) is not { } evolution || evolution.NextSpeciesIds.Length == 0) return false;
+            return Level >= evolution.EvolveLevel + CareMistakes && LowestStat >= EVOLVE_MIN_STAT;
+        }
+    }
     [JsonIgnore] public string SpritePath => IsEgg ? "0000/0004" : $"{SpeciesId:D4}";
     [JsonIgnore] public bool IsNight => IsSleeping || DateTime.Now.Hour is < 6 or >= 20;
 
@@ -88,7 +126,10 @@ public sealed class PokemonState
     {
         get
         {
+            if (Ceremony == CEREMONY_FAREWELL) return PokemonAnim.POSE;
             if (Ceremony == CEREMONY_RUNAWAY) return PokemonAnim.WALK;
+            if (Ceremony == CEREMONY_RELEASE) return PokemonAnim.HOP;
+            if (Ceremony == CEREMONY_EVOLVE) return PokemonAnim.FLOAT;
             if (IsEgg) return PokemonAnim.IDLE;
             if (IsSleeping) return PokemonAnim.SLEEP;
 
@@ -114,10 +155,13 @@ public sealed class PokemonState
     {
         get
         {
+            if (Ceremony == CEREMONY_FAREWELL) return "mood.farewell";
             if (Ceremony == CEREMONY_RUNAWAY) return "mood.runaway";
+            if (Ceremony == CEREMONY_RELEASE) return "mood.release";
             if (IsEgg) return "mood.egg";
             if (IsSleeping) return "mood.sleeping";
             if (CanRunawayNow) return "mood.lonely";
+            if (CanFarewellNow) return "mood.wantsToTalk";
             if (Poops > 0) return "mood.poop";
             if (Hygiene < 30) return "mood.dirty";
             if (LowestStat < 30) return "mood.veryBad";
@@ -132,12 +176,39 @@ public sealed class PokemonState
     {
         UpdateMotion(Math.Min(elapsedMs, MAX_MOTION_STEP_MS));
 
+        // 연출 중에는 나이를 먹지 않습니다.
+        if (IsCeremony)
+        {
+            UpdateCeremony(elapsedMs);
+            return;
+        }
+
         // 탭이 뒤로 가면 타이머가 느려지므로, 지난 시간만큼 틱을 채웁니다.
         _secondElapsedMs += elapsedMs;
         while (_secondElapsedMs >= 1000)
         {
             _secondElapsedMs -= 1000;
             Tick();
+        }
+    }
+
+    private void UpdateCeremony(double elapsedMs)
+    {
+        double before = CeremonyElapsedMs;
+        CeremonyElapsedMs += elapsedMs;
+
+        if (!IsEvolving)
+        {
+            if (CeremonyElapsedMs >= CEREMONY_MS) PrepareNewEgg();
+            return;
+        }
+
+        if (before < EVOLVE_FLASH_END_MS && CeremonyElapsedMs >= EVOLVE_FLASH_END_MS) ExecuteActualEvolve();
+        if (CeremonyElapsedMs >= EVOLVE_END_MS)
+        {
+            Ceremony = 0;
+            CeremonyElapsedMs = 0;
+            NeedsSave = true;
         }
     }
 
@@ -194,14 +265,6 @@ public sealed class PokemonState
 
     private void Tick()
     {
-        if (IsCeremony)
-        {
-            CeremonyElapsedMs += 1000;
-            NeedsSave = true;
-            if (CeremonyElapsedMs >= CEREMONY_MS) PrepareNewEgg();
-            return;
-        }
-
         AgeSeconds++;
         if (AgeSeconds % 10 == 0) NeedsSave = true;
 
@@ -221,7 +284,14 @@ public sealed class PokemonState
 
     private void UpdateVitalsAndNeeds()
     {
+        if (AgeMinutes % MINUTES_PER_LEVEL == 0)
+        {
+            IsEvolutionPostponed = false;
+            IsFarewellPostponed = false;
+        }
+
         AgeMinutes++;
+        if (AgeMinutes % MINUTES_PER_LEVEL == 0) IsEvolutionPostponed = false;
         NeedsSave = true;
 
         // 몸무게는 자는 중에도 3분마다 1씩 빠집니다.
@@ -401,11 +471,14 @@ public sealed class PokemonState
 
     private void Hatch()
     {
-        SpeciesId = PickHatchSpecies?.Invoke() ?? throw new InvalidOperationException("부화 규칙이 없습니다.");
+        SpeciesId = Dex.PickHatchSpecies();
+        (IsGenderless, IsFemale) = Dex.RollGender(SpeciesId);
         BerryKnown = false;
         NeglectTicks = 0;
         AgeSeconds = 0;
         AgeMinutes = 0;
+        IsEvolutionPostponed = false;
+        IsFarewellPostponed = false;
         ResetPosition();
         Fullness = 80;
         Joy = 80;
@@ -414,10 +487,60 @@ public sealed class PokemonState
         NeedsSave = true;
     }
 
-    private void StartRunaway()
+    public void StartEvolution()
     {
+        if (!CanEvolveNow) return;
+
+        IsFeedMenuOpen = false;
+        IsEvolutionPostponed = false;
         ResetPosition();
-        Ceremony = CEREMONY_RUNAWAY;
+        EvolvedFromSpeciesId = SpeciesId;
+        Ceremony = CEREMONY_EVOLVE;
+        CeremonyElapsedMs = 0;
+        NeedsSave = true;
+    }
+
+    // 진화 갈래가 여러 개면 그중 하나로 무작위 진화합니다.
+    private void ExecuteActualEvolve()
+    {
+        if (Dex.GetEvolution(SpeciesId) is not { } evolution || evolution.NextSpeciesIds.Length == 0) return;
+
+        SpeciesId = evolution.NextSpeciesIds[Random.Shared.Next(evolution.NextSpeciesIds.Length)];
+        IsEvolutionPostponed = false;
+        NeedsSave = true;
+    }
+
+    public void PostponeEvolution()
+    {
+        IsEvolutionPostponed = true;
+        NeedsSave = true;
+    }
+
+    public void PostponeFarewell()
+    {
+        IsFarewellPostponed = true;
+        NeedsSave = true;
+    }
+
+    public void StartFarewell()
+    {
+        if (CanFarewellNow) StartEnding(CEREMONY_FAREWELL);
+    }
+
+    public void StartRelease()
+    {
+        if (!IsEgg && !IsCeremony) StartEnding(CEREMONY_RELEASE);
+    }
+
+    private void StartRunaway() => StartEnding(CEREMONY_RUNAWAY);
+
+    private void StartEnding(int ceremony)
+    {
+        IsFeedMenuOpen = false;
+        IsSleeping = false;
+        ResetPosition();
+        LastEnd = ceremony;
+        Ceremony = ceremony;
         CeremonyElapsedMs = 0;
         NeedsSave = true;
     }
@@ -439,6 +562,11 @@ public sealed class PokemonState
         Bond = 0;
         NeglectTicks = 0;
         IsSleeping = false;
+        IsFemale = false;
+        IsGenderless = false;
+        IsEvolutionPostponed = false;
+        IsFarewellPostponed = false;
+        EvolvedFromSpeciesId = 0;
         BerryKnown = false;
         Ceremony = 0;
         CeremonyElapsedMs = 0;

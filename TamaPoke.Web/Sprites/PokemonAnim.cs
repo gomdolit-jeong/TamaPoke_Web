@@ -14,6 +14,7 @@ public static class PokemonAnim
     public const int EAT = 15;
     public const int POSE = 17;
     public const int PAIN = 19;
+    public const int FLOAT = 20;
     public const int DEEPBREATH = 21;
     public const int NOD = 22;
     public const int SINK = 25;

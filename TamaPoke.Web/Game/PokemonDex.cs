@@ -121,7 +121,15 @@ public sealed class PokemonDex(HttpClient http)
 #endif
     }
 
-    public int HatchCandidateCount => _hatchCandidates.Length;
+    // 종족의 성비에 따라 성별을 정합니다. (무성 종족은 IsGenderless = true)
+    public (bool IsGenderless, bool IsFemale) RollGender(int speciesId)
+    {
+        int rate = Get(speciesId)?.GenderRate ?? -1;
+        if (rate == -1) return (true, false);
+        if (rate == 0) return (false, false); // 100% 수컷
+        if (rate == 8) return (false, true);  // 100% 암컷
+        return (false, Random.Shared.Next(8) < rate);
+    }
 
     // 스프라이트가 없는 진화 갈래는 뺍니다. (갈래가 모두 없으면 진화하지 않음)
     public (int EvolveLevel, int[] NextSpeciesIds)? GetEvolution(int speciesId) =>
