@@ -1,0 +1,125 @@
+@using System.Diagnostics
+@using TamaPoke.Web.Sprites
+@implements IDisposable
+@inject HttpClient Http
+
+@if (_failed)
+{
+    <p role="alert">스프라이트를 불러오지 못했습니다.</p>
+}
+else if (_strip is not null)
+{
+    @* 시트 전체를 img 하나로 두고 위치만 옮겨서, 프레임이 바뀌어도 이미지를 다시 디코딩하지 않습니다. *@
+    <div class="sprite" style="width:@(Px(_strip.FrameWidth));height:@(Px(_strip.FrameHeight))">
+        <img src="@_stripUrl" alt="@Alt" draggable="false"
+             style="width:@(Px(_strip.SheetWidth));height:@(Px(_strip.SheetHeight));transform:translate(@(Px(-_frameIndex * _strip.FrameWidth)),@(Px(-SafeRow * _strip.FrameHeight)))" />
+    </div>
+}
+
+@code {
+    private const double DEFAULT_FRAME_MS = 200.0;
+    private const double PMD_TICK_MS = 1000.0 / 60.0;
+
+    [Parameter, EditorRequired] public required string File { get; set; }
+    [Parameter] public int Action { get; set; } = PokemonAnim.IDLE;
+    [Parameter] public int Row { get; set; } = PokemonAnim.ROW_FRONT;
+    [Parameter] public int Scale { get; set; } = 3;
+    [Parameter] public string Alt { get; set; } = "";
+
+    private readonly CancellationTokenSource _cts = new();
+    private List<SpriteStrip?>? _strips;
+    private string? _loadedFile;
+    private int _loadedAction = -1;
+    private SpriteStrip? _strip;
+    private string? _stripUrl;
+    private int _frameIndex;
+    private double _frameElapsedMs;
+    private bool _failed;
+
+    private int SafeRow => _strip is null ? 0 : Math.Clamp(Row, 0, _strip.Rows - 1);
+
+    protected override void OnInitialized() => _ = RunLoopAsync();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFile != File)
+        {
+            _loadedFile = File;
+            _strips = null;
+            _loadedAction = -1;
+            try
+            {
+                _strips = BinSpriteReader.Read(await Http.GetByteArrayAsync($"sprites/{File}", _cts.Token));
+                _failed = false;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or EndOfStreamException or ArgumentOutOfRangeException)
+            {
+                Console.Error.WriteLine($"스프라이트 로드 실패 {File}: {ex.Message}");
+                _failed = true;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+
+        if (_strips is not null && _loadedAction != Action)
+        {
+            _loadedAction = Action;
+            _strip = PickStrip(Action) ?? PickStrip(PokemonAnim.IDLE) ?? _strips.FirstOrDefault(s => s is not null);
+            _stripUrl = _strip is null ? null : $"data:image/png;base64,{Convert.ToBase64String(_strip.Png)}";
+            _frameIndex = 0;
+            _frameElapsedMs = 0;
+        }
+    }
+
+    // 요청한 모션이 없는(비어 있는) 스프라이트는 IDLE → 첫 번째 유효 모션 순으로 대체합니다.
+    private SpriteStrip? PickStrip(int index) => _strips is not null && index >= 0 && index < _strips.Count ? _strips[index] : null;
+
+    private double CurrentFrameMs()
+    {
+        var durations = _strip!.Durations;
+        return durations.Length == _strip.Columns ? durations[_frameIndex] * PMD_TICK_MS : DEFAULT_FRAME_MS;
+    }
+
+    // 실제 경과 시간만큼 프레임을 넘깁니다. (타이머 간격이 흔들려도 재생 속도가 일정)
+    private async Task RunLoopAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(33));
+        long last = Stopwatch.GetTimestamp();
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+            {
+                long now = Stopwatch.GetTimestamp();
+                double elapsedMs = Stopwatch.GetElapsedTime(last, now).TotalMilliseconds;
+                last = now;
+
+                if (_strip is null || _strip.Columns <= 1) continue;
+
+                // 탭이 잠시 멈췄다 돌아온 경우 한꺼번에 여러 바퀴 돌지 않도록 상한을 둡니다.
+                _frameElapsedMs = Math.Min(_frameElapsedMs + elapsedMs, 1000);
+
+                bool changed = false;
+                double frameMs = CurrentFrameMs();
+                while (_frameElapsedMs >= frameMs)
+                {
+                    _frameElapsedMs -= frameMs;
+                    _frameIndex = (_frameIndex + 1) % _strip.Columns;
+                    frameMs = CurrentFrameMs();
+                    changed = true;
+                }
+                if (changed) StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private string Px(int sourcePixels) => $"{sourcePixels * Scale}px";
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

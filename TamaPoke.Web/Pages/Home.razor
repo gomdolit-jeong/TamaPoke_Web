@@ -1,8 +1,75 @@
 ﻿@page "/"
+@using System.Diagnostics
+@using TamaPoke.Web.Components
+@using TamaPoke.Web.Sprites
+@implements IDisposable
 
 <PageTitle>TamaPoke</PageTitle>
 
 <h1>TamaPoke</h1>
 
-<p>웹버전을 만들고 있습니다.</p>
-<p lang="en">The web version is under construction.</p>
+<div class="stage">
+    <div class="stage-actor" style="transform:translateX(@(_posX.ToString("F1"))px) scaleX(@_flipX)">
+        <AnimatedSprite File="p0025.bin" Alt="피카츄" Action="_action" Row="Row" />
+    </div>
+</div>
+
+<div class="actions">
+    <button type="button" aria-pressed="@Pressed(PokemonAnim.IDLE)" @onclick="Idle">대기</button>
+    <button type="button" aria-pressed="@Pressed(PokemonAnim.WALK)" @onclick="() => _action = PokemonAnim.WALK">걷기</button>
+    <button type="button" aria-pressed="@Pressed(PokemonAnim.HOP)" @onclick="() => _action = PokemonAnim.HOP">점프</button>
+</div>
+
+<p class="note">웹버전을 만들고 있습니다. <span lang="en">The web version is under construction.</span></p>
+
+@code {
+    private const double WALK_LIMIT = 100;
+    private const double WALK_SPEED = 60; // 초당 픽셀
+
+    private readonly CancellationTokenSource _cts = new();
+    private int _action = PokemonAnim.WALK;
+    private double _posX;
+    private int _flipX = 1; // 1이면 시트의 왼쪽 방향 그대로, -1이면 뒤집어서 오른쪽
+
+    private int Row => _action == PokemonAnim.IDLE ? PokemonAnim.ROW_FRONT : PokemonAnim.ROW_LEFT;
+
+    // Blazor는 bool 값을 그대로 쓰면 aria-pressed="true"로 출력하지 않습니다.
+    private string Pressed(int action) => _action == action ? "true" : "false";
+
+    protected override void OnInitialized() => _ = WalkLoopAsync();
+
+    private void Idle()
+    {
+        _action = PokemonAnim.IDLE;
+        _flipX = 1;
+    }
+
+    private async Task WalkLoopAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(33));
+        long last = Stopwatch.GetTimestamp();
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+            {
+                long now = Stopwatch.GetTimestamp();
+                double seconds = Math.Min(Stopwatch.GetElapsedTime(last, now).TotalSeconds, 0.1);
+                last = now;
+
+                if (_action != PokemonAnim.WALK) continue;
+
+                _posX -= _flipX * WALK_SPEED * seconds;
+                if (_posX >= WALK_LIMIT) { _posX = WALK_LIMIT; _flipX = 1; }
+                else if (_posX <= -WALK_LIMIT) { _posX = -WALK_LIMIT; _flipX = -1; }
+                StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

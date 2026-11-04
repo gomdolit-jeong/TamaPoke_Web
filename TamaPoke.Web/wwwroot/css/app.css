@@ -26,6 +26,53 @@ body {
     padding: 1.5rem 1rem;
 }
 
+.stage {
+    position: relative;
+    height: 18rem;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-radius: 0.5rem;
+    display: grid;
+    place-items: center;
+}
+
+.sprite {
+    overflow: hidden;
+}
+
+    .sprite img {
+        display: block;
+        max-width: none;
+        image-rendering: pixelated;
+        user-select: none;
+    }
+
+.actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+    .actions button {
+        min-height: 2.75rem;
+        padding: 0 1.25rem;
+        font: inherit;
+        cursor: pointer;
+    }
+
+        .actions button[aria-pressed="true"] {
+            font-weight: bold;
+            outline: 2px solid currentColor;
+        }
+
+.note {
+    margin-top: 1.5rem;
+    text-align: center;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
 .site-footer {
     padding: 1rem;
     text-align: center;
