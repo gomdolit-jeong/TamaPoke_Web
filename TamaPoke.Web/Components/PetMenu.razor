@@ -4,13 +4,13 @@
 
 <nav class="pet-menu" aria-label="@Loc.T("web.menu")">
     <h2 class="pet-menu-title">@Loc.T("web.menu")</h2>
-    <button type="button" class="menu-battle" disabled="@(!Pet.CanStartActivity)" @onclick="OnStartBattle">@Loc.T("web.menu.battle")</button>
-    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenGym">@Loc.T("web.menu.gym")</button>
-    <button type="button" disabled="@(!Pet.CanStartWalk)" @onclick="OnStartWalk">@Loc.T("web.menu.walk")</button>
-    <button type="button" @onclick="OnOpenDex">@Loc.T("web.menu.dex")</button>
-    <button type="button" disabled="@(!CanOpenProfile)" @onclick="OnOpenProfile">@Loc.T("web.menu.profile")</button>
-    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenParty">@Loc.T("web.menu.party")</button>
-    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenBag">@Loc.T("web.menu.bag")</button>
+    <button type="button" class="menu-battle" disabled="@(!Pet.CanStartActivity)" @onclick="OnStartBattle">@Label(Loc.T("web.menu.battle"))</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenGym">@Label(Loc.T("web.menu.gym"))</button>
+    <button type="button" disabled="@(!Pet.CanStartWalk)" @onclick="OnStartWalk">@Label(Loc.T("web.menu.walk"))</button>
+    <button type="button" @onclick="OnOpenDex">@Label(Loc.T("web.menu.dex"))</button>
+    <button type="button" disabled="@(!CanOpenProfile)" @onclick="OnOpenProfile">@Label(Loc.T("web.menu.profile"))</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenParty">@Label(Loc.T("web.menu.party"))</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenBag">@Label(Loc.T("web.menu.bag"))</button>
 
     @if (_confirmRelease)
     {
@@ -24,12 +24,12 @@
     }
     else
     {
-        <button type="button" disabled="@(!CanRelease)" @onclick="() => _confirmRelease = true">@Loc.T("web.menu.release")</button>
+        <button type="button" disabled="@(!CanRelease)" @onclick="() => _confirmRelease = true">@Label(Loc.T("web.menu.release"))</button>
     }
 
     <hr />
 
-    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenSettings">@Loc.T("web.menu.settings")</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="OnOpenSettings">@Label(Loc.T("web.menu.settings"))</button>
     @Cloud
 
     <button type="button" aria-pressed="@(Pet.IsMuted ? "true" : "false")" @onclick="OnToggleMute">
@@ -37,16 +37,19 @@
         <span>@Loc.T(Pet.IsMuted ? "web.sound.off" : "web.sound.on")</span>
     </button>
     <button type="button" lang="@(Loc.Language == Loc.Korean ? "en" : "ko")" @onclick="OnToggleLanguage">
-        @(Loc.Language == Loc.Korean ? "English" : "한국어")
+        @Label("🌐 " + (Loc.Language == Loc.Korean ? "English" : "한국어"))
     </button>
-    <label class="pet-stealth" title="@Loc.T("idle.btn.stealth")">
-        <span aria-hidden="true">🫥</span>
-        <input type="range" aria-label="@Loc.T("idle.btn.stealth")" min="@GameSettings.MinPageOpacity" max="@GameSettings.MaxPageOpacity" step="0.05"
-               @bind="Pet.Settings.PageOpacity" @bind:event="oninput" @bind:after="() => Pet.NeedsSave = true" />
-    </label>
 </nav>
 
 @code {
+    // "🏅 체육관"을 아이콘과 글자로 나눕니다. 좁은 화면에서는 아이콘 아래에 글자가 옵니다.
+    public static RenderFragment Label(string text) => __builder =>
+    {
+        int split = text.IndexOf(' ');
+        <span class="menu-icon" aria-hidden="true">@text[..Math.Max(split, 0)]</span>
+        <span class="menu-label">@text[(split + 1)..]</span>
+    };
+
     [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
     [Parameter] public RenderFragment? Cloud { get; set; }
     [Parameter] public EventCallback OnStartBattle { get; set; }

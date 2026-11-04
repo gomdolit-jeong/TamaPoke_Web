@@ -7,7 +7,7 @@
 <section class="pet-panel pet-panel-scroll" aria-label="@Loc.T("settings.title")">
     <header class="pet-panel-header">
         <h2>@Loc.T("settings.title")</h2>
-        <button type="button" @onclick="CloseAsync">@Loc.T("settings.save")</button>
+        <button type="button" class="pet-close" aria-label="@Loc.T("settings.save")" title="@Loc.T("settings.save")" @onclick="CloseAsync"></button>
     </header>
 
     <label class="setting-row">
@@ -60,6 +60,12 @@
         <p class="party-note is-warning" role="alert">@Loc.T("web.settings.importFailed")</p>
     }
 
+    <h3>@Loc.T("web.settings.defaults")</h3>
+    <p class="setting-hint">@Loc.T(_defaultsRestored ? "web.settings.defaults.done" : "web.settings.defaults.hint")</p>
+    <div class="pet-prompt">
+        <button type="button" @onclick="RestoreDefaults">@Loc.T("web.settings.defaults")</button>
+    </div>
+
     <a class="setting-link" href="@ManualUrl" target="_blank" rel="noopener">📖 @Loc.T("tray.manual")</a>
 
     <h3>@Loc.T("settings.reset")</h3>
@@ -90,6 +96,16 @@
     private bool _confirmReset;
     private bool _importError;
     private bool _notifyDenied;
+    private bool _defaultsRestored;
+
+    // 설정만 처음 값으로 되돌립니다. 포켓몬과 도감은 그대로입니다.
+    private void RestoreDefaults()
+    {
+        Pet.Settings = new GameSettings();
+        Pet.NeedsSave = true;
+        _notifyDenied = false;
+        _defaultsRestored = true;
+    }
 
     private string ManualUrl => Loc.Language == Loc.English
         ? "https://github.com/gomdolit-jeong/TamaPoke_PC/blob/main/MANUAL.md"

@@ -10,14 +10,12 @@ public sealed class GameSettings
 {
     public const double MinPetScale = 0.5;
     public const double MaxPetScale = 5.0;
-    public const double MinPageOpacity = 0.15, MaxPageOpacity = 1.0;
 
     public int FarewellAgeDays { get; set; } = 3;
     public List<int> SelectedGenerations { get; set; } = [1, 2, 3, 4, 5, 6, 7, 8, 9];
     public int RoamingPokemonCount { get; set; } = 1;
     public double RoamingPetScale { get; set; } = 2.0;
     public bool UseNotifications { get; set; }
-    public double PageOpacity { get; set; } = MaxPageOpacity; // 몰래 하기: 게임 화면 투명도
 }
 
 // 메가진화 폼 (wwwroot/data/mega_forms.json)

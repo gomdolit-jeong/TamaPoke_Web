@@ -6,7 +6,7 @@
 <section class="pet-panel pet-panel-scroll" aria-label="@Loc.T("idle.menu.profile")">
     <header class="pet-panel-header">
         <h2>@Dex.GetName(Pet.SpeciesId, Loc.Language)</h2>
-        <button type="button" @onclick="OnClose">@Loc.T("profile.close")</button>
+        <button type="button" class="pet-close" aria-label="@Loc.T("common.close")" title="@Loc.T("common.close")" @onclick="OnClose"></button>
     </header>
 
     @if (Pet.FormDescription.Length > 0)

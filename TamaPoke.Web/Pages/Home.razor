@@ -45,7 +45,7 @@ else if (ShowTitle)
 else
 {
     <div class="pet-layout">
-    <section class="pet-device" style="opacity:@(_pet.Settings.PageOpacity.ToString("F2"))">
+    <section class="pet-device">
         <header class="pet-header">
             <img class="pet-header-ball" src="ui/icon_ball.png" alt="" />
             <h1>@Name</h1>
@@ -211,12 +211,12 @@ else
         <Cloud>
             @if (CloudSave.IsSignedIn)
             {
-                <button type="button" @onclick="CloudSave.SaveNowAsync">☁️ @Loc.T("web.cloud.saveNow")</button>
-                <button type="button" @onclick="CloudSave.SignOutAsync">@Loc.T("web.cloud.signOut")</button>
+                <button type="button" @onclick="CloudSave.SaveNowAsync">@PetMenu.Label("☁️ " + Loc.T("web.cloud.saveNow"))</button>
+                <button type="button" @onclick="CloudSave.SignOutAsync">@PetMenu.Label("🚪 " + Loc.T("web.cloud.signOut"))</button>
             }
             else if (CloudSave.Status != CloudStatus.Unavailable)
             {
-                <button type="button" disabled="@(CloudSave.Status == CloudStatus.Loading)" @onclick="CloudSave.SignInAsync">☁️ @Loc.T("web.cloud.signIn")</button>
+                <button type="button" disabled="@(CloudSave.Status == CloudStatus.Loading)" @onclick="CloudSave.SignInAsync">@PetMenu.Label("☁️ " + Loc.T("web.cloud.signIn"))</button>
             }
             <p class="cloud-status" role="status">@CloudStatusText</p>
         </Cloud>
@@ -499,7 +499,7 @@ else
                 object rendered = (_pet.PosX, _pet.FlipX, _pet.CurrentAction, _pet.MoodKey, _pet.IsPetting, _pet.IsNight,
                     (_pet.Fullness, _pet.Joy, _pet.Energy, _pet.Hygiene, _pet.Poops, _pet.Level, _pet.SpeciesId),
                     (_pet.IsEvolvingFlash, _pet.HasEvolved, _pet.CanShowEvolvePrompt, _pet.CanShowFarewellPrompt, _pet.IsSleeping),
-                    (_pet.EatingFood, _pet.IsBathing, _pet.ShownGame, _pet.FoodBites, Math.Round(_pet.FoodOpacity, 1), _pet.IsSwapMode, _pet.EventMessage, _pet.Settings.PageOpacity));
+                    (_pet.EatingFood, _pet.IsBathing, _pet.ShownGame, _pet.FoodBites, Math.Round(_pet.FoodOpacity, 1), _pet.IsSwapMode, _pet.EventMessage));
                 if (_pet.ShownGame != MiniGame.None || _pet.IsBattleOpen || _pet.IsWalking || !rendered.Equals(_lastRendered))
                 {
                     _lastRendered = rendered;

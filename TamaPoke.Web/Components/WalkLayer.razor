@@ -11,7 +11,7 @@
 @* 산책: 둥근 들판을 돌려 볼 수 있는 2.5D 화면입니다.
    땅은 CSS 3D 평면이고, 포켓몬과 소품은 Project()로 같은 계산을 해서 화면 위치와 크기를 정합니다. *@
 <div class="walk-layer" tabindex="0" @ref="_layer" @onpointerdown="OnGroundPointerDown" @onpointermove="OnPointerMove" @onpointerup="OnPointerUp"
-     @onpointerleave="OnPointerUp" @onwheel="OnWheel" @onkeydown="OnKeyDown">
+     @onpointerleave="OnPointerUp" @onpointercancel="OnPointerUp" @onwheel="OnWheel" @onkeydown="OnKeyDown">
     <div class="walk-sky" aria-hidden="true" style="height:@(Px(_groundTop))">
         <div class="walk-band walk-band-clouds" style="@BandStyle(0.45)"></div>
         <div class="walk-band walk-band-mountains" style="@BandStyle(0.55)"></div>
@@ -63,7 +63,8 @@
         <button type="button" class="walk-camera" aria-label="@Loc.T("web.walk.zoomOut")" title="@Loc.T("web.walk.zoomOut")" @onclick="() => ChangeZoom(-ZOOM_STEP)">－</button>
         <button type="button" @onclick="OnEnd">🏠 @Loc.T("web.walk.end")</button>
     </div>
-    <p class="walk-hint">@Loc.T("web.walk.hint")</p>
+    <p class="walk-hint walk-hint-mouse">@Loc.T("web.walk.hint")</p>
+    <p class="walk-hint walk-hint-touch">@Loc.T("web.walk.hintTouch")</p>
     @if (Pet.EventMessage is { } message)
     {
         <p class="walk-toast" role="status">@message</p>
@@ -148,8 +149,9 @@
 
     private WalkPet? _dragging;
     private double _dragOffsetX, _dragOffsetY;
-    private bool _isTurning;
-    private double _turnLastX;
+    private long _dragPointerId;
+    private readonly Dictionary<long, (double X, double Y)> _touches = [];
+    private double _pinchDistance, _pinchAngle;
 
     private double SpriteScale => Pet.Settings.RoamingPetScale;
     private double WorldToPlane => _fieldRadius / WORLD_RADIUS;
@@ -598,16 +600,19 @@
         (pet.TargetX, pet.TargetY) = ClampToField(pet.X + Math.Cos(angle) * 120, pet.Y + Math.Sin(angle) * 120);
     }
 
-    // 땅을 끌면 화면이 돌고, 포켓몬을 끌면 포켓몬이 옮겨집니다.
+    // 땅을 끌면 화면이 돌고, 포켓몬을 끌면 포켓몬이 옮겨집니다. 두 손가락은 확대와 회전입니다.
     private void OnGroundPointerDown(PointerEventArgs e)
     {
-        _isTurning = true;
-        _turnLastX = e.ClientX;
+        _touches[e.PointerId] = (e.ClientX, e.ClientY);
+        ResetPinch();
     }
 
     private void OnPetPointerDown(PointerEventArgs e, WalkPet pet)
     {
+        if (_touches.Count > 0 || _dragging is not null) return; // 두 손가락 조작 중에는 잡지 않습니다.
+
         _dragging = pet;
+        _dragPointerId = e.PointerId;
         var (x, y) = Unproject(e.ClientX, e.ClientY);
         _dragOffsetX = pet.X - x;
         _dragOffsetY = pet.Y - y;
@@ -619,26 +624,53 @@
 
     private void OnPointerMove(PointerEventArgs e)
     {
-        if (_isTurning)
+        if (_dragging is not null && e.PointerId == _dragPointerId)
         {
-            _yaw += (e.ClientX - _turnLastX) * DRAG_ROTATE_PER_PX;
-            _targetYaw = _yaw;
-            _turnLastX = e.ClientX;
+            var (x, y) = Unproject(e.ClientX, e.ClientY);
+            (_dragging.X, _dragging.Y) = ClampToField(x + _dragOffsetX, y + _dragOffsetY);
             return;
         }
-        if (_dragging is null) return;
-        var (x, y) = Unproject(e.ClientX, e.ClientY);
-        (_dragging.X, _dragging.Y) = ClampToField(x + _dragOffsetX, y + _dragOffsetY);
+
+        if (!_touches.TryGetValue(e.PointerId, out var previous)) return;
+        _touches[e.PointerId] = (e.ClientX, e.ClientY);
+
+        if (_touches.Count >= 2)
+        {
+            var (distance, angle) = PinchShape();
+            if (_pinchDistance > 0)
+            {
+                _zoom = Math.Clamp(_zoom * distance / _pinchDistance, MIN_ZOOM, MAX_ZOOM);
+                _targetZoom = _zoom;
+                _yaw += Math.IEEERemainder(angle - _pinchAngle, Math.Tau);
+                _targetYaw = _yaw;
+            }
+            (_pinchDistance, _pinchAngle) = (distance, angle);
+            return;
+        }
+
+        _yaw += (e.ClientX - previous.X) * DRAG_ROTATE_PER_PX;
+        _targetYaw = _yaw;
     }
 
-    private void OnPointerUp()
+    private void OnPointerUp(PointerEventArgs e)
     {
-        _isTurning = false;
-        if (_dragging is null) return;
+        _touches.Remove(e.PointerId);
+        ResetPinch();
+
+        if (_dragging is null || e.PointerId != _dragPointerId) return;
         _dragging.Behavior = WalkBehavior.Walking;
         _dragging.Action = PokemonAnim.WALK;
         PickTarget(_dragging);
         _dragging = null;
+    }
+
+    private void ResetPinch() => (_pinchDistance, _pinchAngle) = _touches.Count >= 2 ? PinchShape() : (0, 0);
+
+    private (double Distance, double Angle) PinchShape()
+    {
+        var points = _touches.Values.Take(2).ToArray();
+        double dx = points[1].X - points[0].X, dy = points[1].Y - points[0].Y;
+        return (Math.Sqrt(dx * dx + dy * dy), Math.Atan2(dy, dx));
     }
 
     private void Rotate(double amount) => _targetYaw += amount;

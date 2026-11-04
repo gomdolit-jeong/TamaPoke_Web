@@ -6,7 +6,7 @@
 <section class="pet-panel" aria-label="@Loc.T("party.title")">
     <header class="pet-panel-header">
         <h2>@Loc.T("party.title")</h2>
-        <button type="button" @onclick="CloseAsync">@Loc.T("profile.close")</button>
+        <button type="button" class="pet-close" aria-label="@Loc.T("common.close")" title="@Loc.T("common.close")" @onclick="CloseAsync"></button>
     </header>
 
     <p class="party-note @(Pet.IsSwapMode ? "is-warning" : "")">

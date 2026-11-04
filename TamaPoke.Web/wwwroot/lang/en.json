@@ -87,8 +87,8 @@
   "idle.btn.bath": "Bath",
   "idle.btn.sound": "Sound",
   "idle.btn.stealth": "Sneak mode (transparency)",
-  "release.confirm.title": "Release to the wild",
-  "release.confirm.message": "Do you really want to release your Pokémon?\nThis cannot be undone.",
+  "release.confirm.title": "Say goodbye",
+  "release.confirm.message": "Send your Pokémon back to the wild?\nThis cannot be undone.",
   "settings.title": "Settings",
   "settings.language": "Language (언어):",
   "settings.tray": "Show tray notifications",
@@ -612,7 +612,7 @@
   "web.menu.profile": "📋 Profile",
   "web.menu.party": "📂 Party",
   "web.menu.bag": "🎒 Bag",
-  "web.menu.release": "🍃 Release",
+  "web.menu.release": "🍃 Say goodbye",
   "web.menu.battle": "⚔️ Battle",
   "web.cloud.signIn": "Google sign-in",
   "web.cloud.signOut": "Sign out",
@@ -651,5 +651,9 @@
   "web.settings.notify.hint": "Get a browser notification for hunger, wild Pokémon and more while this tab is hidden.",
   "web.settings.notifyDenied": "Notifications are blocked in your browser. Allow them in site settings.",
   "web.save.restored": "Your save was damaged, so the previous backup was restored.",
-  "web.save.corrupted": "Your save was damaged, so a new egg begins. The damaged save was kept aside."
+  "web.save.corrupted": "Your save was damaged, so a new egg begins. The damaged save was kept aside.",
+  "web.walk.hintTouch": "Drag to rotate · Pinch to zoom and turn",
+  "web.settings.defaults": "Restore defaults",
+  "web.settings.defaults.hint": "Only settings go back to their defaults. Your Pokémon and Dex stay.",
+  "web.settings.defaults.done": "Settings were restored to their defaults."
 }

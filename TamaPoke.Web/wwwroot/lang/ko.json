@@ -87,8 +87,8 @@
   "idle.btn.bath": "목욕",
   "idle.btn.sound": "소리 설정",
   "idle.btn.stealth": "몰래 하기 (투명도 조절)",
-  "release.confirm.title": "자연으로 놔주기",
-  "release.confirm.message": "정말로 포켓몬을 자연으로 놔주시겠습니까?\n이 결정은 되돌릴 수 없습니다.",
+  "release.confirm.title": "자연으로 배웅하기",
+  "release.confirm.message": "정말 이 친구를 자연으로 배웅할까요?\n다시 되돌릴 수 없어요.",
   "settings.title": "게임 설정",
   "settings.language": "언어 (Language):",
   "settings.tray": "시스템 트레이 알림 사용",
@@ -612,7 +612,7 @@
   "web.menu.profile": "📋 프로필",
   "web.menu.party": "📂 파티",
   "web.menu.bag": "🎒 가방",
-  "web.menu.release": "🍃 놔주기",
+  "web.menu.release": "🍃 배웅하기",
   "web.menu.battle": "⚔️ 배틀",
   "web.cloud.signIn": "구글 로그인",
   "web.cloud.signOut": "로그아웃",
@@ -651,5 +651,9 @@
   "web.settings.notify.hint": "탭을 안 보고 있을 때 배고픔, 야생 포켓몬 등을 브라우저 알림으로 알려 줘요.",
   "web.settings.notifyDenied": "브라우저에서 알림이 차단되어 있어요. 사이트 설정에서 허용해 주세요.",
   "web.save.restored": "세이브가 손상되어 직전 백업으로 복구했어요.",
-  "web.save.corrupted": "세이브가 손상되어 새 알로 시작해요. 손상된 세이브는 따로 보관했어요."
+  "web.save.corrupted": "세이브가 손상되어 새 알로 시작해요. 손상된 세이브는 따로 보관했어요.",
+  "web.walk.hintTouch": "끌어서 돌리기 · 두 손가락으로 확대·회전",
+  "web.settings.defaults": "기본값으로 되돌리기",
+  "web.settings.defaults.hint": "설정만 처음 값으로 돌아가요. 포켓몬과 도감은 그대로예요.",
+  "web.settings.defaults.done": "설정을 기본값으로 되돌렸어요."
 }
