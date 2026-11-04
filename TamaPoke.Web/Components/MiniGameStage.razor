@@ -1,0 +1,89 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Sprites
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+
+@* 게임판 좌표는 PC판과 같은 288x288입니다. *@
+<div class="game-arena" style="background-image:url('ui/@Background')"
+     @onpointermove="OnPointerMove" @onpointerdown="OnPointerDown">
+
+    @if (Pet.ShownGame != MiniGame.Memo)
+    {
+        <div class="game-actor" style="transform:translate(@(Pet.PosX.ToString("F1"))px,@(Pet.GamePosY.ToString("F1"))px)">
+            <AnimatedSprite SpritePath="@Pet.SpritePath" Action="Pet.CurrentAction" Row="Pet.CurrentRow" Flipped="Pet.FlipX < 0" Scale="2" Alt="" />
+        </div>
+    }
+
+    @switch (Pet.ShownGame)
+    {
+        case MiniGame.Ball:
+            <div class="game-score game-score-main">@Pet.GameScore</div>
+            <div class="game-hi" style="top:90px">HI: @Pet.GameHighScore</div>
+            <img class="game-item" src="ui/icon_ball.png" alt="" style="left:@(Pet.BallX.ToString("F1"))px;top:@(Pet.BallY.ToString("F1"))px" />
+            break;
+
+        case MiniGame.Catch:
+            <div class="game-score game-score-main">@Pet.CatchTimeLeft.ToString("F1")s</div>
+            <div class="game-score game-score-side">@Pet.CatchScore</div>
+            <div class="game-hi" style="top:85px">HI: @Pet.CatchHighScore</div>
+            <img class="game-item" src="ui/@Pet.FruitImage" alt="" style="left:@(Pet.FruitX.ToString("F1"))px;top:@(Pet.FruitY.ToString("F1"))px" />
+            break;
+
+        case MiniGame.Memo:
+            <div class="game-status game-status-light">@Loc.T(Pet.MemoStatusKey)</div>
+            <div class="game-score-line game-score-gold">SCORE: @Pet.MemoScore</div>
+            <div class="game-hi" style="top:55px">HI: @Pet.MemoHighScore</div>
+            <div class="memo-grid">
+                @for (int i = 0; i < 4; i++)
+                {
+                    int button = i;
+                    <button type="button" class="memo-button memo-button-@i @(Pet.MemoLit == i ? "is-lit" : "")"
+                            aria-label="@MemoLabels[i]" @onclick="() => Pet.SubmitMemoInput(button)"></button>
+                }
+            </div>
+            break;
+
+        case MiniGame.Clean:
+            <div class="game-status">@Loc.T(Pet.CleanStatusKey)</div>
+            <div class="game-score-line">SCORE: @Pet.CleanScore</div>
+            <div class="game-hi" style="top:55px">HI: @Pet.CleanHighScore</div>
+            @foreach (var dirt in Pet.DirtItems)
+            {
+                <button type="button" class="game-dirt" @key="dirt.Id" aria-label="@Loc.T("game.clean")"
+                        style="left:@(dirt.X.ToString("F1"))px;top:@(dirt.Y.ToString("F1"))px"
+                        @onpointerdown="() => Pet.TapDirt(dirt.Id)" @onpointerdown:stopPropagation="true" @onpointermove:stopPropagation="true">
+                    <img src="ui/germ.png" alt="" />
+                </button>
+            }
+            break;
+    }
+
+    @if (Pet.IsAnyMiniGameOpen)
+    {
+        <button type="button" class="game-quit" @onclick="() => Pet.QuitMiniGame()"
+                @onpointerdown:stopPropagation="true" @onpointermove:stopPropagation="true">@Loc.T("game.quit")</button>
+    }
+</div>
+
+@code {
+    private static readonly string[] MemoLabels = ["Red", "Blue", "Green", "Yellow"];
+
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+
+    private string Background => Pet.ShownGame switch
+    {
+        MiniGame.Ball => "bg_game_ball.png",
+        MiniGame.Catch => "bg_game_catch.png",
+        MiniGame.Memo => "bg_game_memo.png",
+        _ => "bg_game_clean.png",
+    };
+
+    private void OnPointerMove(PointerEventArgs e) => Pet.SetGamePointer(e.OffsetX, e.OffsetY);
+
+    // 터치에는 마우스 이동이 없으니 누른 곳으로도 따라갑니다. 공은 가까이 있을 때 튕깁니다.
+    private void OnPointerDown(PointerEventArgs e)
+    {
+        Pet.SetGamePointer(e.OffsetX, e.OffsetY);
+        Pet.TapBall();
+    }
+}

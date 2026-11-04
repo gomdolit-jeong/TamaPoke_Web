@@ -27,6 +27,12 @@ else
 
         <p class="pet-mood" role="status">@MoodText</p>
 
+        @if (_pet.ShownGame != MiniGame.None)
+        {
+            <MiniGameStage Pet="_pet" />
+        }
+        else
+        {
         <div class="pet-stage" style="background-image:url('@BackgroundUrl')">
             <button type="button" class="pet-actor" aria-label="@(Loc.T(_pet.IsEgg ? "web.tap.egg" : "web.tap.pet"))"
                     style="transform:translate(@(_pet.PosX.ToString("F1"))px,@(_pet.PosY.ToString("F0"))px)" @onclick="Tap">
@@ -35,15 +41,22 @@ else
 
             @if (_pet.EatingFood is int food)
             {
-                <img class="pet-fx pet-fx-food" src="ui/@FoodIcons[food]" alt="" />
+                <img class="pet-fx pet-fx-food" src="ui/@FoodIcons[food]" alt=""
+                     style="clip-path:inset(0 @(_pet.FoodBites * 100 / 3)% 0 0);opacity:@(_pet.FoodOpacity.ToString("F2"))" />
             }
             @if (_pet.IsBathing)
             {
-                <img class="pet-fx pet-fx-bubble" src="ui/fx_bubble.png" alt="" />
+                <img class="pet-fx pet-fx-bubble pet-fx-bubble-1" src="ui/fx_bubble.png" alt="" />
+                <img class="pet-fx pet-fx-bubble pet-fx-bubble-2" src="ui/fx_bubble.png" alt="" />
+                <img class="pet-fx pet-fx-bubble pet-fx-bubble-3" src="ui/fx_bubble.png" alt="" />
             }
             @if (_pet.IsPetting)
             {
-                <img class="pet-fx pet-fx-heart" src="ui/icon_heart.png" alt="" />
+                <img class="pet-fx pet-fx-heart" @key="_pet.PetSerial" src="ui/icon_heart.png" alt="" />
+            }
+            @if (_pet.IsSleeping)
+            {
+                <img class="pet-fx pet-fx-zzz" src="ui/fx_zzz.png" alt="" />
             }
             @if (_pet.IsEvolvingFlash)
             {
@@ -79,6 +92,19 @@ else
             @StatBar("stat.hygiene", _pet.Hygiene)
         </ul>
 
+        @if (_pet.IsPlayMenuOpen)
+        {
+            <div class="pet-food-menu">
+                @foreach (var game in Games)
+                {
+                    <button type="button" @onclick="() => _pet.StartMiniGame(game.Game)">
+                        <img src="ui/@game.Icon" alt="" />
+                        <span>@Loc.T(game.Label)</span>
+                    </button>
+                }
+            </div>
+        }
+
         @if (_pet.IsFeedMenuOpen)
         {
             <div class="pet-food-menu">
@@ -94,10 +120,10 @@ else
         }
 
         <div class="pet-actions">
-            <button type="button" disabled="@(!_pet.CanCare || _pet.IsSleeping)" aria-expanded="@(_pet.IsFeedMenuOpen ? "true" : "false")" @onclick="() => _pet.IsFeedMenuOpen = !_pet.IsFeedMenuOpen">
+            <button type="button" disabled="@(!_pet.CanCare || _pet.IsSleeping)" aria-expanded="@(_pet.IsFeedMenuOpen ? "true" : "false")" @onclick="ToggleFeedMenu">
                 <img src="ui/icon_feed.png" alt="" /><span>@Loc.T("web.btn.feed")</span>
             </button>
-            <button type="button" disabled title="@Loc.T("web.comingSoon")">
+            <button type="button" disabled="@(!_pet.CanStartActivity)" aria-expanded="@(_pet.IsPlayMenuOpen ? "true" : "false")" @onclick="TogglePlayMenu">
                 <img src="ui/icon_play.png" alt="" /><span>@Loc.T("web.btn.play")</span>
             </button>
             <button type="button" disabled="@(!_pet.CanCare)" @onclick="() => Act(p => p.ToggleSleep())">
@@ -125,12 +151,20 @@ else
                 <button type="button" class="pet-release" @onclick="() => _confirmRelease = true">@Loc.T("idle.menu.release")</button>
             }
         }
+        }
     </section>
 }
 
 @code {
     private static readonly string[] FoodIcons = ["icon_berry_red.png", "icon_berry_blue.png", "icon_berry_green.png", "icon_candy.png"];
     private static readonly string[] FoodKeys = ["food.red", "food.blue", "food.green", "food.candy"];
+    private static readonly (MiniGame Game, string Icon, string Label)[] Games =
+    [
+        (MiniGame.Ball, "icon_ball.png", "game.ball"),
+        (MiniGame.Catch, "icon_catch.png", "game.catch"),
+        (MiniGame.Memo, "icon_memo.png", "game.memo"),
+        (MiniGame.Clean, "icon_clean.png", "game.clean"),
+    ];
 
     // 이보다 오래 멈췄으면 탭이 뒤로 간 게 아니라 컴퓨터나 브라우저가 멈춘 것으로 보고 시간을 흘리지 않습니다.
     // 브라우저는 뒤에 있는 탭의 타이머를 최대 1분까지 늦춥니다.
@@ -173,6 +207,18 @@ else
 
     private void Tap() => _pet!.Tap();
 
+    private void ToggleFeedMenu()
+    {
+        _pet!.IsPlayMenuOpen = false;
+        _pet.IsFeedMenuOpen = !_pet.IsFeedMenuOpen;
+    }
+
+    private void TogglePlayMenu()
+    {
+        _pet!.IsFeedMenuOpen = false;
+        _pet.IsPlayMenuOpen = !_pet.IsPlayMenuOpen;
+    }
+
     private void Release()
     {
         _confirmRelease = false;
@@ -205,8 +251,9 @@ else
                 // 값이 바뀌었을 때만 다시 그립니다.
                 object rendered = (_pet.PosX, _pet.FlipX, _pet.CurrentAction, _pet.MoodKey, _pet.IsPetting, _pet.IsNight,
                     (_pet.Fullness, _pet.Joy, _pet.Energy, _pet.Hygiene, _pet.Poops, _pet.Level, _pet.SpeciesId),
-                    (_pet.IsEvolvingFlash, _pet.HasEvolved, _pet.CanShowEvolvePrompt, _pet.CanShowFarewellPrompt, _pet.IsSleeping));
-                if (!rendered.Equals(_lastRendered))
+                    (_pet.IsEvolvingFlash, _pet.HasEvolved, _pet.CanShowEvolvePrompt, _pet.CanShowFarewellPrompt, _pet.IsSleeping),
+                    (_pet.EatingFood, _pet.IsBathing, _pet.ShownGame, _pet.FoodBites, Math.Round(_pet.FoodOpacity, 1)));
+                if (_pet.ShownGame != MiniGame.None || !rendered.Equals(_lastRendered))
                 {
                     _lastRendered = rendered;
                     StateHasChanged();

@@ -5,7 +5,7 @@ namespace TamaPoke.Web.Game;
 
 // 돌보기와 시간 흐름. 수치와 규칙은 PC판 PokemonState.Care.cs / LifeCycle.cs와 같습니다.
 // PC판처럼 페이지가 열려 있는 동안만 시간이 흐릅니다. (닫혀 있던 시간을 따라잡지 않음)
-public sealed class PokemonState
+public sealed partial class PokemonState
 {
     private const int MAX_POOPS = 3;
     private const int POOP_CHANCE = 5;
@@ -35,6 +35,10 @@ public sealed class PokemonState
     // PC판 메인 루프 한 칸. 모션 길이는 PC판의 칸 수를 그대로 곱해서 정합니다.
     private const double LOOP_TICK_MS = 33;
     private const double MAX_MOTION_STEP_MS = 100;
+    private const double EAT_MS = 65 * LOOP_TICK_MS;
+    private const double FOOD_BITE_MS = 700;
+    private const double FOOD_END_MS = 2100;
+    private const double FOOD_FADE_MS = 300;
 
     private const double WALK_LIMIT = 100;
     private const double WALK_PIXELS_PER_SECOND = 68;
@@ -106,6 +110,12 @@ public sealed class PokemonState
     [JsonIgnore] public bool IsEvolvingFlash => IsEvolving && CeremonyElapsedMs is >= EVOLVE_FLASH_START_MS and < EVOLVE_FLASH_END_MS;
     [JsonIgnore] public bool HasEvolved => IsEvolving && CeremonyElapsedMs >= EVOLVE_FLASH_END_MS;
     [JsonIgnore] public double PosY => IsEvolvingFlash ? -EVOLVE_FLOAT_PIXELS : 0;
+    [JsonIgnore] public double GamePosY => _gamePosY;
+    // 열매를 세 번에 나눠 베어 먹고, 마지막에 흐려집니다. (PC판과 같은 0.7초 간격)
+    private double EatElapsedMs => EAT_MS - _tempActionMs;
+    [JsonIgnore] public int FoodBites => EatingFood is null ? 0 : Math.Clamp((int)(EatElapsedMs / FOOD_BITE_MS), 0, 3);
+    [JsonIgnore] public double FoodOpacity => EatingFood is null ? 0 : Math.Clamp((FOOD_END_MS - EatElapsedMs) / FOOD_FADE_MS, 0, 1);
+    [JsonIgnore] public int PetSerial { get; private set; }
 
     [JsonIgnore]
     public bool CanEvolveNow
@@ -130,6 +140,7 @@ public sealed class PokemonState
             if (Ceremony == CEREMONY_RUNAWAY) return PokemonAnim.WALK;
             if (Ceremony == CEREMONY_RELEASE) return PokemonAnim.HOP;
             if (Ceremony == CEREMONY_EVOLVE) return PokemonAnim.FLOAT;
+            if (IsAnyMiniGameOpen) return IsCleanHit ? PokemonAnim.HURT : PokemonAnim.IDLE;
             if (IsEgg) return PokemonAnim.IDLE;
             if (IsSleeping) return PokemonAnim.SLEEP;
 
@@ -158,6 +169,10 @@ public sealed class PokemonState
             if (Ceremony == CEREMONY_FAREWELL) return "mood.farewell";
             if (Ceremony == CEREMONY_RUNAWAY) return "mood.runaway";
             if (Ceremony == CEREMONY_RELEASE) return "mood.release";
+            if (ActiveGame == MiniGame.Ball) return "mood.game.ball";
+            if (ActiveGame == MiniGame.Catch) return "mood.game.catch";
+            if (ActiveGame == MiniGame.Memo) return "mood.game.memo";
+            if (ActiveGame == MiniGame.Clean) return "mood.game.clean";
             if (IsEgg) return "mood.egg";
             if (IsSleeping) return "mood.sleeping";
             if (CanRunawayNow) return "mood.lonely";
@@ -176,12 +191,18 @@ public sealed class PokemonState
     {
         UpdateMotion(Math.Min(elapsedMs, MAX_MOTION_STEP_MS));
 
-        // 연출 중에는 나이를 먹지 않습니다.
+        // 연출과 미니게임 중에는 나이를 먹지 않습니다.
         if (IsCeremony)
         {
             UpdateCeremony(elapsedMs);
             return;
         }
+        if (IsAnyMiniGameOpen)
+        {
+            UpdateMiniGame(Math.Min(elapsedMs, MAX_MOTION_STEP_MS));
+            return;
+        }
+        UpdateGameResult(elapsedMs);
 
         // 탭이 뒤로 가면 타이머가 느려지므로, 지난 시간만큼 틱을 채웁니다.
         _secondElapsedMs += elapsedMs;
@@ -398,7 +419,7 @@ public sealed class PokemonState
         NeglectTicks = 0;
         ResetPosition();
         EatingFood = foodType;
-        PlayTempAction(PokemonAnim.EAT, 65 * LOOP_TICK_MS);
+        PlayTempAction(PokemonAnim.EAT, EAT_MS);
         _nextAction = PokemonAnim.HOP;
         _nextActionMs = 30 * LOOP_TICK_MS;
         NeedsSave = true;
@@ -457,15 +478,16 @@ public sealed class PokemonState
             return;
         }
 
+        if (IsSleeping) return;
+
+        IsFeedMenuOpen = false;
+        IsPlayMenuOpen = false;
         Joy = Clamp100(Joy + 5);
         Bond = Clamp100(Bond + 1);
         _pettingMs = 1000;
-
-        if (!IsSleeping)
-        {
-            ResetPosition();
-            PlayTempAction(PokemonAnim.HOP, 30 * LOOP_TICK_MS);
-        }
+        PetSerial++;
+        ResetPosition();
+        PlayTempAction(PokemonAnim.HOP, 30 * LOOP_TICK_MS);
         NeedsSave = true;
     }
 

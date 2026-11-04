@@ -85,12 +85,246 @@ body {
 .pet-fx {
     position: absolute;
     left: 50%;
-    top: 20%;
+    top: 50%;
     width: 36px;
     height: 36px;
-    margin-left: -18px;
+    margin: -18px 0 0 -18px;
     image-rendering: pixelated;
     pointer-events: none;
+}
+
+.pet-fx-food {
+    transform: translate(60px, 15px);
+}
+
+.pet-fx-bubble {
+    animation: pet-bubble 1.5s linear infinite;
+}
+
+.pet-fx-bubble-1 {
+    width: 27px;
+    height: 27px;
+    --bubble-x: -30px;
+    --bubble-y: 15px;
+}
+
+.pet-fx-bubble-2 {
+    --bubble-x: 22px;
+    --bubble-y: 30px;
+}
+
+.pet-fx-bubble-3 {
+    width: 18px;
+    height: 18px;
+    --bubble-x: 4px;
+    --bubble-y: 38px;
+}
+
+@keyframes pet-bubble {
+    from {
+        transform: translate(var(--bubble-x), calc(var(--bubble-y) + 15px));
+        opacity: 1;
+    }
+
+    to {
+        transform: translate(var(--bubble-x), calc(var(--bubble-y) - 195px));
+        opacity: 0;
+    }
+}
+
+.pet-fx-heart {
+    animation: pet-heart 1s ease-out forwards;
+}
+
+@keyframes pet-heart {
+    from {
+        transform: translate(40px, 0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translate(70px, -100px);
+        opacity: 0;
+    }
+}
+
+.pet-fx-zzz {
+    width: 48px;
+    height: 48px;
+    transform: translate(30px, -82px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pet-fx-bubble,
+    .pet-fx-heart {
+        animation-duration: 0.01s;
+    }
+}
+
+.game-arena {
+    position: relative;
+    width: 288px;
+    height: 288px;
+    margin: 0 auto;
+    overflow: hidden;
+    border-radius: 50%;
+    background-size: 100% 100%;
+    image-rendering: pixelated;
+    touch-action: none;
+    user-select: none;
+    color: #222;
+}
+
+    .game-arena > * {
+        image-rendering: auto;
+    }
+
+.game-actor {
+    position: absolute;
+    inset: 15px 0 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+}
+
+.game-item {
+    position: absolute;
+    width: 27px;
+    height: 27px;
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+
+.game-score,
+.game-status,
+.game-score-line,
+.game-hi {
+    position: absolute;
+    pointer-events: none;
+}
+
+.game-score {
+    font-weight: bold;
+    color: #000a;
+    text-shadow: 0 0 6px white;
+}
+
+.game-score-main {
+    top: 35px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 36px;
+}
+
+.game-score-side {
+    top: 45px;
+    right: 40px;
+    font-size: 24px;
+}
+
+.game-status {
+    top: 25px;
+    left: 24px;
+    right: 24px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: bold;
+    color: #006064;
+}
+
+.game-status-light {
+    color: #fff;
+}
+
+.game-score-line {
+    top: 50px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 20px;
+    font-weight: bold;
+    color: #00838f;
+}
+
+.game-score-gold {
+    color: #ffca28;
+}
+
+.game-hi {
+    left: 40px;
+    padding: 1px 5px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #333;
+    background: #f6f3ea;
+}
+
+.game-dirt {
+    position: absolute;
+    width: 43px;
+    height: 43px;
+    margin: -8px 0 0 -8px;
+    padding: 8px;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+    .game-dirt img {
+        display: block;
+        width: 27px;
+        height: 27px;
+        image-rendering: pixelated;
+        pointer-events: none;
+    }
+
+.game-quit {
+    position: absolute;
+    left: 50%;
+    bottom: 6px;
+    min-height: 2.75rem;
+    padding: 0 0.75rem;
+    transform: translateX(-50%);
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.memo-grid {
+    position: absolute;
+    left: 64px;
+    top: 84px;
+    width: 160px;
+    height: 160px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.memo-button {
+    border: 3px solid #1a1a22;
+    cursor: pointer;
+}
+
+    .memo-button-0 { background: #5a1f23; }
+    .memo-button-1 { background: #1d3a5e; }
+    .memo-button-2 { background: #234a2a; }
+    .memo-button-3 { background: #6b5a1c; }
+    .memo-button-0.is-lit { background: #e53935; border-color: #fff; }
+    .memo-button-1.is-lit { background: #1e88e5; border-color: #fff; }
+    .memo-button-2.is-lit { background: #43a047; border-color: #fff; }
+    .memo-button-3.is-lit { background: #fdd835; border-color: #fff; }
+
+@media (max-width: 359px) {
+    .page {
+        padding-left: 0.25rem;
+        padding-right: 0.25rem;
+    }
+
+    .pet-device {
+        padding: 0.5rem;
+    }
 }
 
 .pet-flash {
@@ -162,8 +396,8 @@ body {
 
 .pet-poops {
     position: absolute;
-    left: 0.5rem;
-    bottom: 0.5rem;
+    right: 40px;
+    bottom: 100px;
     display: flex;
     gap: 0.25rem;
     pointer-events: none;
