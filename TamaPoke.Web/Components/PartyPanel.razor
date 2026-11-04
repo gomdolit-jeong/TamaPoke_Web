@@ -56,7 +56,7 @@
 
     private RenderFragment Card(int speciesId, string form, bool isShiny, int level, bool isLead, PartyMember? member) => __builder =>
     {
-        var info = Dex.Get(speciesId);
+        var (type1, type2) = PokemonForms.GetTypes(Dex, speciesId, form.Length > 0 ? $"p{speciesId:D4}_{form}.bin" : null);
         <li>
             <button type="button" class="party-card @(isLead ? "is-lead" : "") @(member is not null && member == _selected ? "is-selected" : "")"
                     disabled="@isLead" aria-pressed="@(member is not null && member == _selected ? "true" : "false")"
@@ -67,16 +67,13 @@
                 <span class="party-info">
                     <span class="party-name">@(isShiny ? "✨" : "")@Dex.GetName(speciesId, Loc.Language)</span>
                     <span class="party-level">Lv.@level @(isLead ? Loc.T("party.lead") : "")</span>
-                    @if (info is not null)
-                    {
-                        <span class="party-types">
-                            <span class="battle-type battle-type-@info.Type1.ToString().ToLowerInvariant()">@info.Type1</span>
-                            @if (info.Type2 != PokemonType.None)
-                            {
-                                <span class="battle-type battle-type-@info.Type2.ToString().ToLowerInvariant()">@info.Type2</span>
-                            }
-                        </span>
-                    }
+                    <span class="party-types">
+                        <span class="battle-type battle-type-@type1.ToString().ToLowerInvariant()">@type1</span>
+                        @if (type2 != PokemonType.None)
+                        {
+                            <span class="battle-type battle-type-@type2.ToString().ToLowerInvariant()">@type2</span>
+                        }
+                    </span>
                 </span>
             </button>
         </li>

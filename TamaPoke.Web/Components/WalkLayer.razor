@@ -84,6 +84,8 @@
     private const double MIN_PAN_RADIUS = 180; // 확대하지 않아도 이만큼은 화면을 옮길 수 있습니다.
     private const double WORLD_AREA_PER_GROVE = 42000, GROVE_SIZE = 150, PROP_EXTENT_STEP = 200;
     private const int MAX_GROVES = 150;
+    private const int TARGET_TRIES = 12;
+    private const double SCREEN_MARGIN = 40;
     private const double NEAR_CLIP = PERSPECTIVE * 0.9;
     private const double MIN_ZOOM = 1.0, MAX_ZOOM = 2.2, ZOOM_STEP = 0.15;
     private const double ROTATE_STEP = Math.PI / 6, KEY_ROTATE_STEP = Math.PI / 12, DRAG_ROTATE_PER_PX = 0.006;
@@ -112,7 +114,6 @@
         public int Row { get; set; }
         public WalkBehavior Behavior { get; set; } = WalkBehavior.Walking;
         public int RestTicks { get; set; }
-        public int ActionTicks { get; set; }
         public int InteractCooldown { get; set; }
         public string? Bubble { get; set; }
         public double BubbleMs { get; set; }
@@ -636,11 +637,20 @@
         pet.RestTicks = ticks;
     }
 
-    private static (double X, double Y) RandomFieldPoint()
+    // 들판 안에서 지금 화면에 보이는 곳을 고릅니다. (좁은 화면에서 화면 밖으로 나가지 않게)
+    private (double X, double Y) RandomFieldPoint()
     {
-        double angle = Random.Shared.NextDouble() * Math.Tau;
-        double radius = Math.Sqrt(Random.Shared.NextDouble()) * WALK_RADIUS;
-        return (Math.Cos(angle) * radius, Math.Sin(angle) * radius);
+        (double X, double Y) point = default;
+        for (int i = 0; i < TARGET_TRIES; i++)
+        {
+            double angle = Random.Shared.NextDouble() * Math.Tau;
+            double radius = Math.Sqrt(Random.Shared.NextDouble()) * WALK_RADIUS;
+            point = (Math.Cos(angle) * radius, Math.Sin(angle) * radius);
+
+            var (x, y, _, visible) = Project(point.X, point.Y);
+            if (visible && x > SCREEN_MARGIN && x < _width - SCREEN_MARGIN && y > _groundTop && y < _height - SCREEN_MARGIN) break;
+        }
+        return point;
     }
 
     private static (double X, double Y) ClampToField(double x, double y)
@@ -649,7 +659,7 @@
         return radius <= WALK_RADIUS ? (x, y) : (x / radius * WALK_RADIUS, y / radius * WALK_RADIUS);
     }
 
-    private static void PickTarget(WalkPet pet) => (pet.TargetX, pet.TargetY) = RandomFieldPoint();
+    private void PickTarget(WalkPet pet) => (pet.TargetX, pet.TargetY) = RandomFieldPoint();
 
     private static void PickEscapeTarget(WalkPet pet)
     {

@@ -4,6 +4,7 @@
 @inject Loc Loc
 @inject IJSRuntime JS
 @inject CloudSave CloudSave
+@implements IDisposable
 
 <section class="pet-panel pet-panel-scroll" aria-label="@Loc.T("settings.title")">
     <header class="pet-panel-header">
@@ -155,11 +156,13 @@
         Pet.NeedsSave = true;
     }
 
-    private async Task CloseAsync()
+    private Task CloseAsync() => OnClose.InvokeAsync();
+
+    // 닫기 버튼이든 다른 메뉴로 옮겨 가든 창이 닫힐 때 값 범위를 맞추고 저장합니다.
+    public void Dispose()
     {
         Pet.NormalizeSettings();
         Pet.NeedsSave = true;
-        await OnClose.InvokeAsync();
     }
 
     private async Task ExportAsync()

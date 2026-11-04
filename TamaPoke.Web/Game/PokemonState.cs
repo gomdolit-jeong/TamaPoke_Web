@@ -111,6 +111,7 @@ public sealed partial class PokemonState
     [JsonIgnore] public PokemonDex Dex { get; set; } = null!;
     [JsonIgnore] public Action<int[][]>? PlaySound { get; set; }
     [JsonIgnore] public bool IsProfileOpen { get; set; }
+    [JsonIgnore] public bool IsPanelOpen { get; set; } // 도감, 파티, 가방, 체육관, 설정 창을 보는 중
 
     [JsonIgnore] public bool IsEgg => SpeciesId < 0;
     [JsonIgnore] public bool IsCeremony => Ceremony != 0;
@@ -195,7 +196,7 @@ public sealed partial class PokemonState
             if (Ceremony == CEREMONY_FAREWELL) return "mood.farewell";
             if (Ceremony == CEREMONY_RUNAWAY) return "mood.runaway";
             if (Ceremony == CEREMONY_RELEASE) return "mood.release";
-            if (IsBattleOpen) return "mood.battle";
+            if (IsBattleOpen) return IsGymBattle ? "web.mood.gym" : "mood.battle";
             if (ActiveGame == MiniGame.Ball) return "mood.game.ball";
             if (ActiveGame == MiniGame.Catch) return "mood.game.catch";
             if (ActiveGame == MiniGame.Memo) return "mood.game.memo";
@@ -490,7 +491,7 @@ public sealed partial class PokemonState
         int roll = Random.Shared.Next(100);
         if (roll < 35)
         {
-            if (Random.Shared.Next(10000) < WILD_ENCOUNTER_PER_10000)
+            if (!IsPanelOpen && Random.Shared.Next(10000) < WILD_ENCOUNTER_PER_10000)
             {
                 StartWildBattle(autoEncounter: true);
                 return;

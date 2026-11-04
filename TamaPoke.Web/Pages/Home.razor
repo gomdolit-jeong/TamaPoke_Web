@@ -538,7 +538,8 @@ else
                 last = now;
                 if (elapsedMs > MAX_CATCH_UP_MS || ShowTitle || CloudSave.IsWaitingForChoice) continue;
 
-                _pet!.Update(elapsedMs);
+                _pet!.IsPanelOpen = _isDexOpen || _isPartyOpen || _isBagOpen || _isGymOpen || _isSettingsOpen;
+                _pet.Update(elapsedMs);
                 CloudSave.Tick(elapsedMs);
 
                 if (_pet.NeedsSave)
