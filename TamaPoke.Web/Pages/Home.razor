@@ -116,7 +116,7 @@ else
         <div class="pet-stage" style="background-image:url('@BackgroundUrl')">
             <button type="button" class="pet-actor" aria-label="@(Loc.T(_pet.IsEgg ? "web.tap.egg" : "web.tap.pet"))"
                     style="transform:translate(@(_pet.PosX.ToString("F1"))px,@(_pet.PosY.ToString("F0"))px)" @onclick="Tap">
-                <AnimatedSprite SpritePath="@_pet.SpritePath" FallbackPath="@(_pet.IsEgg ? null : $"{_pet.SpeciesId:D4}")" Action="_pet.CurrentAction" Row="_pet.CurrentRow" Flipped="_pet.FlipX < 0" Scale="@(_pet.IsEgg ? 3 : 2)" Alt="" />
+                <AnimatedSprite SpritePath="@_pet.SpritePath" FallbackPath="@(_pet.IsEgg ? null : $"{_pet.SpeciesId:D4}")" Action="_pet.CurrentAction" ContinuousState="true" Row="_pet.CurrentRow" Flipped="_pet.FlipX < 0" Scale="@(_pet.IsEgg ? 3 : 2)" Alt="" />
             </button>
 
             @if (_pet.EatingFood is int food)

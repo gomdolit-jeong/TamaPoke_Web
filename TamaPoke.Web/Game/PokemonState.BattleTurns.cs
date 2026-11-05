@@ -119,10 +119,10 @@ public sealed partial class PokemonState
                 double typeMult = BattleCalculator.TypeMultiplier(m.Type, myInfo);
                 double stabMult = BattleCalculator.StabMultiplier(m.Type, enemyInfo);
                 int enemyAtk = WildStat(m.Category == SkillCategory.Special ? enemyInfo?.BaseSpA : enemyInfo?.BaseAtk);
-                int expectedDamage = BattleCalculator.RawDamage(enemyAtk, m.Category == SkillCategory.Special ? CombatSpDef : CombatDef, typeMult, stabMult, BattleCalculator.BurnMultiplier(m.Category, EnemyAilment), crit: false, m.Power);
+                int DamageAt(int power) => BattleCalculator.RawDamage(enemyAtk, m.Category == SkillCategory.Special ? CombatSpDef : CombatDef, typeMult, stabMult, BattleCalculator.BurnMultiplier(m.Category, EnemyAilment), crit: false, power);
 
-                score = expectedDamage;
-                if (expectedDamage >= PlayerHp) score += 1000;
+                score = DamageAt(BattleCalculator.ExpectedPower(m));
+                if (DamageAt(BattleCalculator.SurePower(m)) >= PlayerHp) score += 1000;
 
                 int acc = m.Accuracy == 0 ? 100 : m.Accuracy;
                 score = score * acc / 100;
@@ -320,7 +320,7 @@ public sealed partial class PokemonState
 
                 BattleMessage = L.F("battle.damage.dealt", BattleCalculator.HitText(typeMultiplier, crit), damage);
 
-                _enemyTempActionTimer = 15; UpdateEnemyAnimation(6);
+                PlayHitMotion(targetIsEnemy: true);
 
                 await Task.Delay(hits > 1 ? MULTI_HIT_SHAKE_MS : HIT_SHAKE_MS);
                 IsEnemyTakingDamage = false;
@@ -553,7 +553,7 @@ public sealed partial class PokemonState
 
                 BattleMessage = L.F("battle.damage.taken", BattleCalculator.HitText(typeMultiplier, crit), PlayerBattleName, enemyDamage);
 
-                PlayBattleMotion(6, 15);
+                PlayHitMotion(targetIsEnemy: false);
 
                 await Task.Delay(hits > 1 ? MULTI_HIT_SHAKE_MS : HIT_SHAKE_MS);
                 IsPlayerTakingDamage = false;
@@ -803,19 +803,29 @@ public sealed partial class PokemonState
     private readonly HashSet<int> _playerUsedMoves = new(), _enemyUsedMoves = new();
     private readonly List<PokemonType> _playerLostTypes = new(), _enemyLostTypes = new();
 
-    // 잃은 타입을 뺀 배틀용 정보 (상성과 자속 계산에 쓰입니다)
-    private static PokemonInfo? WithoutTypes(PokemonInfo? info, List<PokemonType> lost)
+    // 폼 타입에서 잃은 타입을 뺀 배틀용 정보 (상성과 자속 계산에 쓰입니다)
+    private static PokemonInfo? WithBattleTypes(PokemonInfo? info, PokemonType type1, PokemonType type2, List<PokemonType> lost)
     {
-        if (info == null || lost.Count == 0) return info;
+        if (info == null) return null;
+        if (lost.Contains(type1)) type1 = PokemonType.None;
+        if (lost.Contains(type2)) type2 = PokemonType.None;
+        if (info.Type1 == type1 && info.Type2 == type2) return info;
         return new PokemonInfo
         {
             Id = info.Id, BaseHp = info.BaseHp, BaseAtk = info.BaseAtk, BaseDef = info.BaseDef, BaseSpeed = info.BaseSpeed, BaseSpA = info.BaseSpA, BaseSpD = info.BaseSpD,
-            Type1 = lost.Contains(info.Type1) ? PokemonType.None : info.Type1,
-            Type2 = lost.Contains(info.Type2) ? PokemonType.None : info.Type2,
+            Type1 = type1,
+            Type2 = type2,
         };
     }
 
-    private PokemonInfo? EnemyBattleInfo => WithoutTypes(Dex.Get(EnemySpeciesId), _enemyLostTypes);
+    private PokemonInfo? EnemyBattleInfo
+    {
+        get
+        {
+            var (type1, type2) = Dex.GetFormTypes(EnemySpeciesId, _enemyForm);
+            return WithBattleTypes(Dex.Get(EnemySpeciesId), type1, type2, _enemyLostTypes);
+        }
+    }
 
     private static bool HasType(PokemonInfo? info, PokemonType type) => info != null && type != PokemonType.None && (info.Type1 == type || info.Type2 == type);
 

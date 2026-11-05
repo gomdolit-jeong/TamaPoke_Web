@@ -111,7 +111,7 @@ public sealed partial class PokemonState
     [JsonIgnore] public string EnemyBasePath => $"{EnemySpeciesId:D4}";
     [JsonIgnore] public bool IsEnemyShiny { get; private set; }
     [JsonIgnore] private string EnemyBattleName => IsGymBattle ? EnemyName : L.F("battle.wildName", EnemyName);
-    [JsonIgnore] public int EnemyCurrentAction => _enemyTempActionTimer > 0 ? _enemyTempActionId : PokemonAnim.IDLE;
+    [JsonIgnore] public int EnemyCurrentAction => _enemyTempActionId == PokemonAnim.FAINT || _enemyTempActionTimer > 0 ? _enemyTempActionId : PokemonAnim.IDLE;
     [JsonIgnore] public int EnemyRow => BATTLE_ENEMY_ROW;
     [JsonIgnore] public bool IsMainMenuVisible => !IsCatchOffered && !IsBattleResolved && !IsAttackMenuOpen && !IsBattleInventoryOpen && IsPlayerTurn;
     [JsonIgnore] public bool IsAttackMenuVisible => !IsCatchOffered && !IsBattleResolved && IsAttackMenuOpen && !IsBattleInventoryOpen && IsPlayerTurn;
@@ -122,19 +122,50 @@ public sealed partial class PokemonState
     public bool KnowsSkill(int skillId) => skillId != 0 && Array.Exists(Skills, s => s == skillId);
 
     private string _enemyForm = "";
-    private PokemonInfo? MyBattleInfo => WithoutTypes(ActiveMegaForm?.ToPokemonInfo() ?? Dex.Get(SpeciesId), _playerLostTypes);
+    private PokemonInfo? MyBaseInfo => ActiveMegaForm?.ToPokemonInfo() ?? Dex.Get(SpeciesId); // 종족값은 폼이 달라도 그대로
+    private PokemonInfo? MyBattleInfo
+    {
+        get
+        {
+            if (ActiveMegaForm?.ToPokemonInfo() is { } mega) return WithBattleTypes(mega, mega.Type1, mega.Type2, _playerLostTypes);
+            var (type1, type2) = Dex.GetFormTypes(SpeciesId, SpriteForm);
+            return WithBattleTypes(Dex.Get(SpeciesId), type1, type2, _playerLostTypes);
+        }
+    }
     private int WildStat(int? baseStat) => BattleCalculator.Stat(baseStat ?? 50, BattleCalculator.WILD_GENE, EnemyLevel);
 
-    private int CombatMaxHp => BattleCalculator.MaxHp(MyBattleInfo?.BaseHp ?? 50, Genes.HpGene + TrDef / 4, Level);
-    private int CombatAtk => BattleCalculator.Stat(MyBattleInfo?.BaseAtk ?? 50, Genes.AtkGene + TrAtk / 4, Level);
-    private int CombatDef => BattleCalculator.Stat(MyBattleInfo?.BaseDef ?? 50, Genes.DefGene + TrDef / 4, Level);
-    private int CombatSpeed => BattleCalculator.Stat(MyBattleInfo?.BaseSpeed ?? 50, Genes.SpeGene + TrSpeed / 4, Level);
-    private int CombatSpAtk => BattleCalculator.Stat(MyBattleInfo?.BaseSpA ?? 50, Genes.AtkGene - 80, Level) + TrAtk;
-    private int CombatSpDef => BattleCalculator.Stat(MyBattleInfo?.BaseSpD ?? 50, Genes.DefGene - 80, Level) + TrDef / 2;
+    private int CombatMaxHp => BattleCalculator.MaxHp(MyBaseInfo?.BaseHp ?? 50, Genes.HpGene + TrDef / 4, Level);
+    private int CombatAtk => BattleCalculator.Stat(MyBaseInfo?.BaseAtk ?? 50, Genes.AtkGene + TrAtk / 4, Level);
+    private int CombatDef => BattleCalculator.Stat(MyBaseInfo?.BaseDef ?? 50, Genes.DefGene + TrDef / 4, Level);
+    private int CombatSpeed => BattleCalculator.Stat(MyBaseInfo?.BaseSpeed ?? 50, Genes.SpeGene + TrSpeed / 4, Level);
+    private int CombatSpAtk => BattleCalculator.Stat(MyBaseInfo?.BaseSpA ?? 50, Genes.AtkGene - 80, Level) + TrAtk;
+    private int CombatSpDef => BattleCalculator.Stat(MyBaseInfo?.BaseSpD ?? 50, Genes.DefGene - 80, Level) + TrDef / 2;
 
     private void PlayBattleMotion(int action, int loopTicks) => PlayTempAction(action, loopTicks * LOOP_TICK_MS);
 
     private void UpdateEnemyAnimation(int action) => _enemyTempActionId = action;
+
+    private const int HIT_MOTION_TICKS = 15;
+    private const int FAINT_HOLD_TICKS = 9999; // 내 포켓몬: 패배 후 배틀이 닫힐 때까지
+
+    // 맞은 쪽 모션: 쓰러졌으면 기절 모션을 재생하고 마지막 장면에서 멈춥니다.
+    private void PlayHitMotion(bool targetIsEnemy)
+    {
+        bool fainted = (targetIsEnemy ? EnemyHp : PlayerHp) <= 0;
+        int motion = fainted ? PokemonAnim.FAINT : PokemonAnim.HURT;
+
+        if (targetIsEnemy)
+        {
+            if (_enemyTempActionId == PokemonAnim.FAINT) return;
+            _enemyTempActionTimer = fainted ? 0 : HIT_MOTION_TICKS;
+            UpdateEnemyAnimation(motion);
+        }
+        else
+        {
+            if (_tempActionMs > 0 && _tempAction == PokemonAnim.FAINT) return;
+            PlayBattleMotion(motion, fainted ? FAINT_HOLD_TICKS : HIT_MOTION_TICKS);
+        }
+    }
 
     private void UpdateEnemyMotion(double ms)
     {
@@ -189,6 +220,7 @@ public sealed partial class PokemonState
 
         GenerateEnemySkills();
         _enemyTempActionTimer = 0;
+        UpdateEnemyAnimation(PokemonAnim.IDLE);
 
         IsBattleOpen = true;
         IsPlayerTurn = false;
@@ -224,6 +256,7 @@ public sealed partial class PokemonState
 
     public void CloseBattle()
     {
+        if (_tempAction == PokemonAnim.FAINT) PlayTempAction(PokemonAnim.IDLE, 0);
         ResetMegaForBattle();
         IsGymBattle = false;
         IsBattleOpen = false;
@@ -424,6 +457,8 @@ public sealed partial class PokemonState
     private async Task CheckBattleEndAsync()
     {
         IsPlayerTurn = false;
+        if (PlayerHp <= 0) PlayHitMotion(targetIsEnemy: false); // 지속 데미지나 반동으로 쓰러진 경우에도 기절 모션
+        if (EnemyHp <= 0) PlayHitMotion(targetIsEnemy: true);
 
         if (PlayerHp <= 0)
         {

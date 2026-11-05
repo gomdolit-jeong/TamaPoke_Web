@@ -213,11 +213,15 @@ public sealed class PokemonDex(HttpClient http)
             ? (evolution.EvolveLevel, evolution.NextSpeciesIds.Where(id => Get(id)?.HasSprite == true).ToArray())
             : null;
 
+    // 폼에 맞는 타입 (알로라의 모습 등)
+    public (PokemonType Type1, PokemonType Type2) GetFormTypes(int speciesId, string? form) =>
+        PokemonForms.GetTypes(this, speciesId, string.IsNullOrEmpty(form) ? null : $"p{speciesId:D4}_{form}.bin");
+
     // 타입별 배경. 알은 풀숲입니다. (PC판 GetBiomeFromType과 같음)
     public string GetBiomeName(int speciesId, string? form = null)
     {
         if (speciesId < 0) return "TALL GRASS";
-        return PokemonForms.GetTypes(this, speciesId, string.IsNullOrEmpty(form) ? null : $"p{speciesId:D4}_{form}.bin").Type1 switch
+        return GetFormTypes(speciesId, form).Type1 switch
         {
             PokemonType.Water => "BEACH",
             PokemonType.Normal or PokemonType.Flying or PokemonType.Electric => "PATH",

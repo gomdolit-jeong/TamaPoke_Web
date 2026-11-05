@@ -225,6 +225,7 @@ public sealed partial class PokemonState
 
         GenerateEnemySkills();
         _enemyTempActionTimer = 0;
+        UpdateEnemyAnimation(PokemonAnim.IDLE);
 
         IsBattleOpen = true;
         IsPlayerTurn = false;

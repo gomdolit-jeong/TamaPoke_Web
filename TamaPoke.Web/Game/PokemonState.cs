@@ -46,8 +46,9 @@ public sealed partial class PokemonState
 
     private static readonly HashSet<int> SideViewActions =
     [
-        PokemonAnim.WALK, PokemonAnim.SLEEP, PokemonAnim.EVENTSLEEP, PokemonAnim.HOP,
-        PokemonAnim.HURT, PokemonAnim.PAIN, PokemonAnim.CRINGE,
+        PokemonAnim.WALK, PokemonAnim.SLEEP, PokemonAnim.EVENTSLEEP, PokemonAnim.LAYING, PokemonAnim.ATTACK,
+        PokemonAnim.STRIKE, PokemonAnim.SHOOT, PokemonAnim.HOP, PokemonAnim.CHARGE, PokemonAnim.LEAPFORTH,
+        PokemonAnim.TUMBLE, PokemonAnim.HURT, PokemonAnim.PAIN, PokemonAnim.CRINGE, PokemonAnim.FAINT,
     ];
 
     // 메달 (비트 값은 PC판과 같음)
@@ -484,6 +485,8 @@ public sealed partial class PokemonState
         if (Bond > 1) Bond--;
     }
 
+    private bool CanAutoEncounter => !IsPanelOpen && !IsFeedMenuOpen && !IsPlayMenuOpen;
+
     private void ProcessIdleBehaviors()
     {
         if (IsSleeping || _tempActionMs > 0 || CurrentAction != PokemonAnim.IDLE) return;
@@ -491,7 +494,7 @@ public sealed partial class PokemonState
         int roll = Random.Shared.Next(100);
         if (roll < 35)
         {
-            if (!IsPanelOpen && Random.Shared.Next(10000) < WILD_ENCOUNTER_PER_10000)
+            if (CanAutoEncounter && Random.Shared.Next(10000) < WILD_ENCOUNTER_PER_10000)
             {
                 StartWildBattle(autoEncounter: true);
                 return;
@@ -557,7 +560,7 @@ public sealed partial class PokemonState
         ResetPosition();
         IsBathing = true;
         PlayTempAction(PokemonAnim.POSE, 60 * LOOP_TICK_MS);
-        _nextAction = PokemonAnim.SHAKE;
+        _nextAction = PokemonAnim.ROTATE; // 씻은 뒤 몸을 터는 느낌
         _nextActionMs = 30 * LOOP_TICK_MS;
         NeedsSave = true;
     }

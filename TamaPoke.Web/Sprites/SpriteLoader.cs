@@ -34,11 +34,11 @@ public sealed class SpriteLoader(HttpClient http)
     private readonly Dictionary<string, Task<Dictionary<int, AnimInfo>>> _animData = [];
     private readonly Dictionary<(string Path, string FileName), Task<byte[]>> _pngs = [];
 
-    // 요청한 모션이 없는 스프라이트는 IDLE → 첫 번째 유효 모션 순으로 대체합니다.
-    public async Task<SpriteStrip> GetStripAsync(string path, int action)
+    // 요청한 모션이 없는 스프라이트는 대체 모션 → IDLE → 첫 번째 유효 모션 순으로 대체합니다.
+    public async Task<SpriteStrip> GetStripAsync(string path, int action, bool continuous = false)
     {
         var anims = await GetAnimDataAsync(path);
-        if (!anims.TryGetValue(action, out var anim) && !anims.TryGetValue(PokemonAnim.IDLE, out anim))
+        if (!anims.TryGetValue(PokemonAnim.Resolve(anims.ContainsKey, action, continuous), out var anim))
             anim = anims.OrderBy(a => a.Key).First().Value;
 
         byte[] png = await GetPngAsync(path, anim.FileName);
