@@ -13,7 +13,7 @@ public sealed class GameSettings
 
     public int FarewellAgeDays { get; set; } = 3;
     public List<int> SelectedGenerations { get; set; } = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-    public int RoamingPokemonCount { get; set; } = 1;
+    public int RoamingPokemonCount { get; set; } = 6; // 파티 전부 (파티가 적으면 있는 만큼만 나옵니다)
     public double RoamingPetScale { get; set; } = 2.0;
     public bool UseNotifications { get; set; }
 }
