@@ -9,13 +9,15 @@
 <nav class="pet-menu @(_isMoreOpen ? "is-more-open" : "")" aria-label="@Loc.T("web.menu")">
     <h2 class="pet-menu-title">@Loc.T("web.menu")</h2>
     <button type="button" class="menu-primary menu-battle" disabled="@(!Pet.CanStartActivity)" @onclick="() => Run(OnStartBattle)">@Label(Loc.T("web.menu.battle"))</button>
+    <button type="button" class="menu-arena" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenArena)">@Label(Loc.T("web.menu.arena"))</button>
     <button type="button" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenGym)">@Label(Loc.T("web.menu.gym"))</button>
-    <button type="button" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenArena)">@Label(Loc.T("web.menu.arena"))</button>
-    <button type="button" class="menu-primary" disabled="@(!Pet.CanStartWalk)" @onclick="() => Run(OnStartWalk)">@Label(Loc.T("web.menu.walk"))</button>
-    <button type="button" class="menu-primary" @onclick="() => Run(OnOpenDex)">@Label(Loc.T("web.menu.dex"))</button>
     <button type="button" disabled="@(!CanOpenProfile)" @onclick="() => Run(OnOpenProfile)">@Label(Loc.T("web.menu.profile"))</button>
     <button type="button" class="menu-primary" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenParty)">@Label(Loc.T("web.menu.party"))</button>
     <button type="button" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenBag)">@Label(Loc.T("web.menu.bag"))</button>
+    <button type="button" class="menu-primary" @onclick="() => Run(OnOpenDex)">@Label(Loc.T("web.menu.dex"))</button>
+    <hr />
+    <button type="button" class="menu-primary" disabled="@(!Pet.CanStartWalk)" @onclick="() => Run(OnStartWalk)">@Label(Loc.T("web.menu.walk"))</button>
+    <hr />
     <button type="button" class="menu-more" aria-expanded="@(_isMoreOpen ? "true" : "false")" @onclick="() => _isMoreOpen = !_isMoreOpen">
         @Label(_isMoreOpen ? "✕ " + Loc.T("common.close") : Loc.T("web.menu.more"))
     </button>

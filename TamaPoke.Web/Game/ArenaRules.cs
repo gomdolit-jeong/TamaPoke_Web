@@ -20,6 +20,9 @@ public sealed record ArenaEntry
     public int Points { get; init; } = ArenaRules.START_POINTS;
     public int Wins { get; init; }
     public int Losses { get; init; }
+
+    // 로그인한 사람이 정한 닉네임 (영어 글자와 숫자). 정하지 않았으면 없습니다.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Nickname { get; init; }
 }
 
 public sealed class ArenaBoardData
@@ -58,23 +61,30 @@ public static class ArenaRules
     public static int WinPoints(int myPoints, int foePoints) => Math.Clamp(20 + (foePoints - myPoints) / 25, 5, 40);
     public static int LossPoints(int myPoints, int foePoints) => Math.Min(myPoints, Math.Clamp(10 + (myPoints - foePoints) / 25, 3, 25));
 
-    public static ArenaEntry Snapshot(PokemonState pet, string tag, ArenaEntry? record) => new()
+    // 기록은 그대로 두고 포켓몬과 닉네임을 지금 세이브에 맞춥니다. (닉네임은 세이브에 있어서 시즌이 바뀌어도 남습니다)
+    public static ArenaEntry Snapshot(PokemonState pet, string tag, ArenaEntry? record)
     {
-        Tag = tag,
-        SpeciesId = pet.SpeciesId,
-        Level = ArenaLevel(pet.Level),
-        Form = pet.SpriteForm,
-        Shiny = pet.IsShiny,
-        Female = pet.IsFemale,
-        Skills = [.. pet.Skills.Take(4)],
-        Genes = [pet.Genes.HpGene, pet.Genes.AtkGene, pet.Genes.DefGene, pet.Genes.SpeGene],
-        Training = [pet.TrAtk, pet.TrDef, pet.TrSpeed],
-        Points = record?.Points ?? START_POINTS,
-        Wins = record?.Wins ?? 0,
-        Losses = record?.Losses ?? 0,
-    };
+        string? nickname = ArenaNames.Check(pet.ArenaNickname) == NicknameProblem.None ? pet.ArenaNickname : record?.Nickname;
+        return new()
+        {
+            Tag = tag,
+            Nickname = nickname,
+            SpeciesId = pet.SpeciesId,
+            Level = ArenaLevel(pet.Level),
+            Form = pet.SpriteForm,
+            Shiny = pet.IsShiny,
+            Female = pet.IsFemale,
+            Skills = [.. pet.Skills.Take(4)],
+            Genes = [pet.Genes.HpGene, pet.Genes.AtkGene, pet.Genes.DefGene, pet.Genes.SpeGene],
+            Training = [pet.TrAtk, pet.TrDef, pet.TrSpeed],
+            Points = record?.Points ?? START_POINTS,
+            Wins = record?.Wins ?? 0,
+            Losses = record?.Losses ?? 0,
+        };
+    }
 
     public static int ArenaLevel(int level) => Math.Clamp(level, 1, MAX_LEVEL);
+
 
     // 레벨이 비슷한 상대 중에서 고르고, 없으면 레벨이 가장 가까운 쪽에서 고릅니다.
     public static ArenaEntry? PickRandomFoe(IReadOnlyList<ArenaEntry> foes, int myLevel, Random random)
@@ -90,7 +100,7 @@ public static class ArenaRules
     }
 
     public static bool SameSnapshot(ArenaEntry a, ArenaEntry b) =>
-        a.Level == b.Level && a.Tag == b.Tag && a.SpeciesId == b.SpeciesId && a.Form == b.Form && a.Shiny == b.Shiny && a.Female == b.Female &&
+        a.Nickname == b.Nickname && a.Level == b.Level && a.Tag == b.Tag && a.SpeciesId == b.SpeciesId && a.Form == b.Form && a.Shiny == b.Shiny && a.Female == b.Female &&
         a.Skills.SequenceEqual(b.Skills) && a.Genes.SequenceEqual(b.Genes) && a.Training.SequenceEqual(b.Training);
 
     // 다른 사람이 올린 값은 믿지 않고 게임 안의 범위로 맞춥니다. 쓸 수 없는 포켓몬이면 null입니다.
@@ -118,6 +128,7 @@ public static class ArenaRules
             Points = Math.Max(0, entry.Points),
             Wins = Math.Max(0, entry.Wins),
             Losses = Math.Max(0, entry.Losses),
+            Nickname = ArenaNames.Check(entry.Nickname) == NicknameProblem.None ? entry.Nickname : null,
         };
     }
 }

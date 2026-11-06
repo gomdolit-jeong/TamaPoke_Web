@@ -44,6 +44,14 @@ public sealed class ArenaService(CloudSave cloud, PokemonDex dex, SkillDex skill
         }
     }
 
+    // 닉네임을 바꿔 저장하고, 순위표 속 내 줄도 함께 바꿉니다. 저장하지 못하면 null입니다. (확인은 부르는 쪽에서)
+    public async Task<ArenaBoard?> ChangeNicknameAsync(ArenaBoard board, string nickname)
+    {
+        var me = board.Me with { Nickname = nickname };
+        if (!await SaveAsync(me, board.Season)) return null;
+        return board with { Me = me, Top = [.. board.Top.Select(e => e.Uid == me.Uid ? me : e)] };
+    }
+
     public async Task<bool> SaveAsync(ArenaEntry entry, string? season = null)
     {
         try

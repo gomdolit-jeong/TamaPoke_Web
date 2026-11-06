@@ -1676,17 +1676,20 @@ select {
         color: #8a8275;
     }
 
-.pet-menu .menu-battle {
+.pet-menu .menu-battle,
+.pet-menu .menu-arena {
     background: var(--tp-red);
     color: #fff;
     text-shadow: 1px 1px 0 rgb(0 0 0 / 35%);
 }
 
-    .pet-menu .menu-battle:hover:not(:disabled) {
+    .pet-menu .menu-battle:hover:not(:disabled),
+    .pet-menu .menu-arena:hover:not(:disabled) {
         background: #f0524e;
     }
 
-    .pet-menu .menu-battle:disabled {
+    .pet-menu .menu-battle:disabled,
+    .pet-menu .menu-arena:disabled {
         background: #f6f4ef;
         color: #8a8275;
         text-shadow: none;
@@ -2824,7 +2827,8 @@ nav.pet-menu button {
     text-shadow: none;
 }
 
-nav.pet-menu .menu-battle {
+nav.pet-menu .menu-battle,
+nav.pet-menu .menu-arena {
     text-shadow: 0 1px 1px rgb(0 0 0 / 30%);
 }
 
@@ -3049,3 +3053,74 @@ nav.pet-menu .menu-battle {
         opacity: 0.5;
         cursor: default;
     }
+
+/* 대전 창: 대전 / 랭킹 탭, 닉네임 */
+.arena-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+    margin: 0.25rem 0;
+}
+
+    .arena-tabs button {
+        padding: 0.375rem;
+        border: 2px solid var(--tp-ink);
+        border-radius: 0.375rem;
+        background: var(--tp-cream);
+        color: var(--tp-ink);
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+    }
+
+        .arena-tabs button.is-active {
+            background: var(--tp-red);
+            color: #fff;
+        }
+
+.arena-nick {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin: 0.375rem 0 0.125rem;
+    font-size: 12px;
+}
+
+    .arena-nick label {
+        flex: none;
+    }
+
+    .arena-nick input {
+        flex: 1;
+        min-width: 0;
+        padding: 0.25rem 0.375rem;
+        border: 2px solid var(--tp-cream-dark);
+        border-radius: 0.375rem;
+        background: #fff;
+        color: var(--tp-ink);
+        font: inherit;
+        font-size: 13px;
+    }
+
+        .arena-nick input:focus {
+            border-color: var(--tp-gold);
+            outline: none;
+        }
+
+.arena-tag {
+    color: var(--tp-ink-soft);
+    font-size: 10px;
+}
+
+.arena-score {
+    flex: none;
+    color: var(--tp-red);
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.arena-list-me {
+    margin-top: 0.375rem;
+    padding-top: 0.375rem;
+    border-top: 2px dashed var(--tp-cream-dark);
+}

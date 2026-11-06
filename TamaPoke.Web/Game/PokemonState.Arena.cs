@@ -10,6 +10,9 @@ public sealed partial class PokemonState
     private ArenaEntry? _arenaMe;
     private bool _arenaReported;
 
+    // 대전 닉네임 (영어 글자와 숫자). 세이브에 남겨서 시즌이 바뀌어도 그대로 씁니다.
+    public string? ArenaNickname { get; set; }
+
     [JsonIgnore] public ArenaEntry? ArenaFoe { get; private set; }
     [JsonIgnore] public bool IsArenaBattle => ArenaFoe is not null;
 
@@ -72,7 +75,7 @@ public sealed partial class PokemonState
 
         IsBattleOpen = true;
         IsPlayerTurn = false;
-        BattleMessage = L.F("web.arena.intro", L.F("web.arena.trainer", foe.Tag), EnemyName);
+        BattleMessage = L.F("web.arena.intro", ArenaNames.Display(foe), EnemyName);
 
         await Task.Delay(2000);
         if (!IsArenaBattle) return;

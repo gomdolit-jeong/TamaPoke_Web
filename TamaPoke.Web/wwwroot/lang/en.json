@@ -580,5 +580,17 @@
   "web.arena.lost": "You lost the battle...",
   "web.arena.won": "You won the battle!",
   "web.arena.points": "Points {0} → {1}",
-  "web.arena.saveFailed": "Couldn't save the battle result."
+  "web.arena.saveFailed": "Couldn't save the battle result.",
+  "web.arena.tab.battle": "⚔️ Battle",
+  "web.arena.tab.ranking": "🏅 Ranking",
+  "web.arena.record": "{0}W {1}L · {2}% wins",
+  "web.arena.nickname": "Nickname",
+  "web.arena.nickname.placeholder": "3–12 letters or numbers",
+  "web.arena.nickname.save": "Save",
+  "web.arena.nickname.saved": "Nickname saved.",
+  "web.arena.nickname.failed": "Couldn't save your nickname.",
+  "web.arena.nickname.hint": "Without a nickname, your tag (#AB12) is shown.",
+  "web.arena.nickname.length": "Use {0}–{1} characters for your nickname.",
+  "web.arena.nickname.characters": "Nicknames can only use English letters and numbers.",
+  "web.arena.nickname.blocked": "That nickname isn't allowed. Please choose another."
 }

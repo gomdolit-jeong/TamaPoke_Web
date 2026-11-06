@@ -580,5 +580,17 @@
   "web.arena.lost": "대전에서 졌다...",
   "web.arena.won": "대전에서 이겼다!",
   "web.arena.points": "점수 {0} → {1}점",
-  "web.arena.saveFailed": "대전 결과를 저장하지 못했어요."
+  "web.arena.saveFailed": "대전 결과를 저장하지 못했어요.",
+  "web.arena.tab.battle": "⚔️ 대전",
+  "web.arena.tab.ranking": "🏅 랭킹",
+  "web.arena.record": "{0}승 {1}패 · 승률 {2}%",
+  "web.arena.nickname": "닉네임",
+  "web.arena.nickname.placeholder": "영어와 숫자 3~12자",
+  "web.arena.nickname.save": "저장",
+  "web.arena.nickname.saved": "닉네임을 저장했어요.",
+  "web.arena.nickname.failed": "닉네임을 저장하지 못했어요.",
+  "web.arena.nickname.hint": "닉네임을 정하지 않으면 이름표(#AB12)로 보여요.",
+  "web.arena.nickname.length": "닉네임은 {0}~{1}자로 정해 주세요.",
+  "web.arena.nickname.characters": "닉네임은 영어 글자와 숫자만 쓸 수 있어요.",
+  "web.arena.nickname.blocked": "쓸 수 없는 말이 들어 있어요. 다른 닉네임을 정해 주세요."
 }
