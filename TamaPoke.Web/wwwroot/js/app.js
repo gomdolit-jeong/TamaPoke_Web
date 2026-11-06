@@ -34,6 +34,9 @@ window.tamaPoke = {
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
 
+    // 목록에서 원하는 줄(예: 랭킹의 내 순위)이 보이도록 스크롤합니다.
+    scrollToElement: (selector) => document.querySelector(selector)?.scrollIntoView({ block: "center", behavior: "smooth" }),
+
     prefersReducedMotion: () => matchMedia("(prefers-reduced-motion: reduce)").matches,
     setDocumentLanguage: (language) => { document.documentElement.lang = language; },
 

@@ -64,9 +64,16 @@ else
                 <h2>@Loc.T("web.cloud.import.title")</h2>
                 <p>@Loc.T("web.cloud.import.message")</p>
                 <div class="pet-prompt">
-                    <button type="button" class="pet-prompt-main" @onclick="CloudSave.ChooseGuestSaveAsync">@Loc.T("web.cloud.import.guest")<br />@Summary(_pet)</button>
+                    @if (CloudSave.CanUseGuestSave)
+                    {
+                        <button type="button" class="pet-prompt-main" @onclick="CloudSave.ChooseGuestSaveAsync">@Loc.T("web.cloud.import.guest")<br />@Summary(_pet)</button>
+                    }
                     <button type="button" class="pet-prompt-main" @onclick="CloudSave.ChooseNewEggAsync">@Loc.T("web.cloud.import.new")</button>
                 </div>
+                @if (!CloudSave.CanUseGuestSave)
+                {
+                    <p class="party-note is-warning">@Loc.T("web.cloud.import.otherAccount")</p>
+                }
             </section>
         }
         else if (CloudSave.Conflict is { } conflict)

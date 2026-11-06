@@ -52,11 +52,19 @@
     <p class="setting-hint">@Loc.T("web.settings.save.hint")</p>
     <div class="pet-prompt">
         <button type="button" @onclick="ExportAsync">@Loc.T("web.settings.export")</button>
-        <label class="setting-file">
-            @Loc.T("web.settings.import")
-            <InputFile accept=".json,application/json" OnChange="ImportAsync" />
-        </label>
+        @* 계정 세이브는 대전 기록과 이어지므로, 파일로 덮어쓰는 가져오기는 게스트일 때만 됩니다. *@
+        @if (!CloudSave.IsSignedIn)
+        {
+            <label class="setting-file">
+                @Loc.T("web.settings.import")
+                <InputFile accept=".json,application/json" OnChange="ImportAsync" />
+            </label>
+        }
     </div>
+    @if (CloudSave.IsSignedIn)
+    {
+        <p class="setting-hint">@Loc.T("web.settings.importSignedIn")</p>
+    }
     @if (_importError)
     {
         <p class="party-note is-warning" role="alert">@Loc.T("web.settings.importFailed")</p>
@@ -167,17 +175,18 @@
 
     private async Task ExportAsync()
     {
-        await JS.InvokeVoidAsync("tamaPoke.downloadText", $"tamapoke-save-{DateTime.Now:yyyyMMdd-HHmm}.json", SaveStore.Serialize(Pet));
+        await JS.InvokeVoidAsync("tamaPoke.downloadText", $"tamapoke-save-{DateTime.Now:yyyyMMdd-HHmm}.json", SaveStore.ExportFile(Pet, CloudSave.UserId ?? Pet.FileOwner ?? ""));
     }
 
     private async Task ImportAsync(InputFileChangeEventArgs e)
     {
         _importError = false;
+        if (CloudSave.IsSignedIn) return;
         try
         {
             using var reader = new StreamReader(e.File.OpenReadStream(MAX_IMPORT_BYTES));
-            string json = await reader.ReadToEndAsync();
-            if (SaveStore.Parse(json) is null)
+            string? json = SaveStore.ImportFile(await reader.ReadToEndAsync());
+            if (json is null)
             {
                 _importError = true;
                 return;

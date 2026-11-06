@@ -4,8 +4,11 @@
 @inject PokemonDex Dex
 @inject CloudSave CloudSave
 @inject ArenaService Arena
+@inject IJSRuntime JS
 
-<section class="pet-panel pet-panel-scroll" aria-label="@Loc.T("web.arena.title")">
+@* 순위표가 길어서 게임 화면 위에 크게 띄웁니다. 바깥을 누르면 닫힙니다. *@
+<div class="arena-backdrop" @onclick="OnClose"></div>
+<section class="pet-panel arena-panel" role="dialog" aria-label="@Loc.T("web.arena.title")">
     <header class="pet-panel-header">
         <h2>@Loc.T("web.arena.title")</h2>
         <button type="button" class="pet-close" aria-label="@Loc.T("common.close")" title="@Loc.T("common.close")" @onclick="OnClose"></button>
@@ -16,90 +19,106 @@
         <button type="button" role="tab" aria-selected="@(_showRanking ? "true" : "false")" class="@(_showRanking ? "is-active" : "")" @onclick="() => _showRanking = true">@Loc.T("web.arena.tab.ranking")</button>
     </div>
 
-    <p class="party-note">@SeasonText</p>
-
-    @if (Pet.IsEgg)
+    @if (_board is { } top && !Pet.IsEgg && (IsSignedIn || IsDebugBuild))
     {
-        <p class="arena-message">@Loc.T("web.arena.egg")</p>
-    }
-    else if (!CloudSave.IsSignedIn || !CloudSave.IsAccountReady)
-    {
-        <p class="arena-message">@Loc.T("web.arena.signIn")</p>
-        @if (IsDebugBuild && !_showRanking)
-        {
-            <button type="button" class="arena-random" @onclick="ChallengeTestFoe">@Loc.T("web.arena.test")</button>
-        }
-    }
-    else if (_isLoading)
-    {
-        <p class="arena-message" role="status">@Loc.T("web.arena.loading")</p>
-    }
-    else if (_board is null)
-    {
-        <p class="arena-message is-warning" role="alert">@Loc.T("web.arena.failed")</p>
-        <button type="button" class="arena-random" @onclick="LoadAsync">@Loc.T("web.arena.retry")</button>
-    }
-    else if (_showRanking)
-    {
-        var board = _board;
-        <ol class="arena-list">
-            @for (int i = 0; i < board.Top.Count; i++)
+        @* 탭을 바꿔도, 목록을 내려도 내 기록은 위에 남습니다. *@
+        <div class="arena-me">
+            <span>@string.Format(Loc.T("web.arena.me"), top.Me.Points, top.Me.Wins, top.Me.Losses)</span>
+            @if (_showRanking && top.MyRank is not null)
             {
-                @RankRow(board.Top[i], i + 1, board.Top[i].Uid == board.Me.Uid)
+                <button type="button" class="arena-jump" @onclick="JumpToMeAsync">@Loc.T("web.arena.jump")</button>
             }
-        </ol>
-        @if (board.MyRank is null)
+            <span class="arena-rank">@(top.MyRank is int rank ? string.Format(Loc.T("web.arena.rank"), rank) : Loc.T("web.arena.unranked"))</span>
+        </div>
+    }
+
+    <div class="arena-body">
+        <p class="party-note">@SeasonText</p>
+
+        @if (Pet.IsEgg)
         {
-            <ol class="arena-list arena-list-me">
-                @RankRow(board.Me, null, true)
+            <p class="arena-message">@Loc.T("web.arena.egg")</p>
+        }
+        else if (!IsSignedIn && !IsDebugBuild)
+        {
+            <p class="arena-message">@Loc.T("web.arena.signIn")</p>
+        }
+        else if (_isLoading)
+        {
+            <p class="arena-message" role="status">@Loc.T("web.arena.loading")</p>
+        }
+        else if (_board is null)
+        {
+            <p class="arena-message is-warning" role="alert">@Loc.T("web.arena.failed")</p>
+            <button type="button" class="arena-random" @onclick="LoadAsync">@Loc.T("web.arena.retry")</button>
+        }
+        else if (_showRanking)
+        {
+            var board = _board;
+            <ol class="arena-list">
+                @for (int i = 0; i < board.Top.Count; i++)
+                {
+                    @RankRow(board.Top[i], i + 1, board.Top[i].Uid == board.Me.Uid)
+                }
+            </ol>
+            @if (board.MyRank is null)
+            {
+                <ol class="arena-list arena-list-me">
+                    @RankRow(board.Me, null, true)
+                </ol>
+            }
+        }
+        else
+        {
+            var board = _board;
+            @if (!IsSignedIn)
+            {
+                <p class="arena-message is-warning">@Loc.T("web.arena.sample")</p>
+            }
+
+            @* 규칙과 닉네임은 접어 두고, 닉네임이 없을 때만 펼쳐 둡니다. *@
+            <details class="arena-info" open="@string.IsNullOrEmpty(board.Me.Nickname)">
+                <summary>@Loc.T("web.arena.info")</summary>
+                <p class="party-note">@Loc.T("web.arena.rules")</p>
+                <form class="arena-nick" @onsubmit="SaveNicknameAsync" @onsubmit:preventDefault>
+                    <label for="arena-nickname">@Loc.T("web.arena.nickname")</label>
+                    <input id="arena-nickname" type="text" inputmode="latin" autocomplete="off" spellcheck="false"
+                           maxlength="@ArenaNames.MAX_LENGTH" pattern="[A-Za-z0-9]*" placeholder="@Loc.T("web.arena.nickname.placeholder")"
+                           @bind="_nickname" @bind:event="oninput" disabled="@_isSavingNick" />
+                    <button type="submit" class="arena-fight" disabled="@(_isSavingNick || ArenaNames.Normalize(_nickname) == board.Me.Nickname)">@Loc.T("web.arena.nickname.save")</button>
+                </form>
+                @if (_nickMessage is not null)
+                {
+                    <p class="arena-message @(_nickMessageIsError ? "is-warning" : "")" role="status">@_nickMessage</p>
+                }
+                else if (string.IsNullOrEmpty(board.Me.Nickname))
+                {
+                    <p class="party-note">@Loc.T("web.arena.nickname.hint")</p>
+                }
+            </details>
+
+            <button type="button" class="arena-random" disabled="@(!CanChallenge || Opponents.Count == 0)" @onclick="ChallengeRandom">@Loc.T("web.arena.random")</button>
+
+            @if (Opponents.Count == 0)
+            {
+                <p class="arena-message">@Loc.T("web.arena.empty")</p>
+            }
+            <ol class="arena-list">
+                @foreach (var entry in NearbyOpponents)
+                {
+                    <li class="arena-row">
+                        @Sprite(entry)
+                        <span class="party-info">
+                            <span class="party-name">@ArenaNames.Display(entry)</span>
+                            <span class="party-level">@PokemonText(entry) · @string.Format(Loc.T("web.arena.score"), entry.Points)</span>
+                            <span class="arena-stakes">@string.Format(Loc.T("web.arena.stakes"), ArenaRules.WinPoints(board.Me, entry), ArenaRules.LossPoints(board.Me, entry))</span>
+                        </span>
+                        <button type="button" class="arena-fight" disabled="@(!CanChallenge)" @onclick="() => Challenge(entry)">@Loc.T("web.arena.fight")</button>
+                    </li>
+                }
             </ol>
         }
-    }
-    else
-    {
-        var board = _board;
-        <p class="party-note">@Loc.T("web.arena.rules")</p>
-        <div class="arena-me">
-            <span>@string.Format(Loc.T("web.arena.me"), board.Me.Points, board.Me.Wins, board.Me.Losses)</span>
-            <span class="arena-rank">@(board.MyRank is int rank ? string.Format(Loc.T("web.arena.rank"), rank) : Loc.T("web.arena.unranked"))</span>
-        </div>
-
-        <form class="arena-nick" @onsubmit="SaveNicknameAsync" @onsubmit:preventDefault>
-            <label for="arena-nickname">@Loc.T("web.arena.nickname")</label>
-            <input id="arena-nickname" type="text" inputmode="latin" autocomplete="off" spellcheck="false"
-                   maxlength="@ArenaNames.MAX_LENGTH" pattern="[A-Za-z0-9]*" placeholder="@Loc.T("web.arena.nickname.placeholder")"
-                   @bind="_nickname" @bind:event="oninput" disabled="@_isSavingNick" />
-            <button type="submit" class="arena-fight" disabled="@(_isSavingNick || ArenaNames.Normalize(_nickname) == board.Me.Nickname)">@Loc.T("web.arena.nickname.save")</button>
-        </form>
-        @if (_nickMessage is not null)
-        {
-            <p class="arena-message @(_nickMessageIsError ? "is-warning" : "")" role="status">@_nickMessage</p>
-        }
-        else if (string.IsNullOrEmpty(board.Me.Nickname))
-        {
-            <p class="party-note">@Loc.T("web.arena.nickname.hint")</p>
-        }
-
-        <button type="button" class="arena-random" disabled="@(!CanChallenge || Opponents.Count == 0)" @onclick="ChallengeRandom">@Loc.T("web.arena.random")</button>
-
-        @if (Opponents.Count == 0)
-        {
-            <p class="arena-message">@Loc.T("web.arena.empty")</p>
-        }
-        <ol class="arena-list">
-            @foreach (var entry in Opponents)
-            {
-                <li class="arena-row">
-                    @Sprite(entry)
-                    <span class="party-info">
-                        <span class="party-name">@ArenaNames.Display(entry)</span>
-                        <span class="party-level">@PokemonText(entry) · @string.Format(Loc.T("web.arena.score"), entry.Points)</span>
-                    </span>
-                    <button type="button" class="arena-fight" disabled="@(!CanChallenge)" @onclick="() => Challenge(entry)">@Loc.T("web.arena.fight")</button>
-                </li>
-            }
-        </ol>
-    }
+    </div>
 </section>
 
 @code {
@@ -115,8 +134,15 @@
     private string? _nickMessage;
     private bool _nickMessageIsError;
 
+    private const int NEARBY_COUNT = 20;
+
+    private bool IsSignedIn => CloudSave.IsSignedIn && CloudSave.IsAccountReady;
     private bool CanChallenge => Pet.CanStartActivity && !Pet.IsEgg;
     private List<ArenaEntry> Opponents => _board?.Top.Where(e => e.Uid != _board.Me.Uid).ToList() ?? [];
+
+    // 대전 탭에는 레벨이 가까운 상대만 보여 줍니다. 전체 순위는 랭킹 탭에서 봅니다.
+    private IEnumerable<ArenaEntry> NearbyOpponents =>
+        Opponents.OrderBy(e => Math.Abs(e.Level - ArenaRules.ArenaLevel(Pet.Level))).ThenByDescending(e => e.Points).Take(NEARBY_COUNT);
 
     private string SeasonText
     {
@@ -154,7 +180,13 @@
 
     private async Task LoadAsync()
     {
-        if (Pet.IsEgg || !CloudSave.IsSignedIn || !CloudSave.IsAccountReady) return;
+        if (Pet.IsEgg) return;
+        if (!IsSignedIn)
+        {
+            _board = SampleBoard();
+            _nickname = _board?.Me.Nickname;
+            return;
+        }
         _isLoading = true;
         StateHasChanged();
         _board = await Arena.LoadAsync(Pet);
@@ -164,7 +196,7 @@
 
     private async Task SaveNicknameAsync()
     {
-        if (_board is null || _isSavingNick) return;
+        if (_board is null || _isSavingNick || !IsSignedIn) return;
         string? nickname = ArenaNames.Normalize(_nickname);
         var problem = ArenaNames.Check(nickname);
         if (problem != NicknameProblem.None)
@@ -195,6 +227,8 @@
         _nickMessageIsError = isError;
     }
 
+    private async Task JumpToMeAsync() => await JS.InvokeVoidAsync("tamaPoke.scrollToElement", ".arena-row.is-me");
+
     private Task Challenge(ArenaEntry foe) => _board is { } board ? OnChallenge.InvokeAsync((foe, board.Me)) : Task.CompletedTask;
 
     private Task ChallengeRandom() =>
@@ -203,16 +237,45 @@
 #if DEBUG
     private static bool IsDebugBuild => true;
 
-    // 로컬 테스트: 로그인 없이 내 레벨과 같은 피카츄와 대전합니다. (결과는 저장하지 않음)
-    private Task ChallengeTestFoe()
+    private static readonly string[] SampleNames =
+    [
+        "AshKetchum", "MistyWater", "BrockRock", "PikaFan99", "RedBlue", "GoldSilver", "ShinyHunter", "DragonTamer",
+        "BugCatcher", "SleepyHead", "Volt", "Ember42", "AquaJet", "LeafStorm", "MoonLight", "StarDust", "NightOwl",
+        "Speedy", "TankMode", "Lucky7", "Gengar4Ever", "EeveeLover", "Kanto151", "JohtoKid", "HoennHero",
+    ];
+
+    // 로컬 테스트: 로그인 없이 가짜 트레이너 100명으로 대전/랭킹 화면을 미리 봅니다. (대전 결과는 저장하지 않음)
+    private ArenaBoard SampleBoard()
     {
-        var foe = new ArenaEntry { Uid = "test", Tag = "#TEST", Nickname = "TestTrainer", SpeciesId = 25, Level = ArenaRules.ArenaLevel(Pet.Level), Skills = [85, 98, 0, 0], Genes = [20, 20, 20, 20], Training = [50, 50, 50] };
-        var me = ArenaRules.Snapshot(Pet, "#ME", null) with { Uid = "me" };
-        return OnChallenge.InvokeAsync((foe, me));
+        var random = new Random(Pet.SpeciesId * 7919 + 17);
+        var entries = new List<ArenaEntry>();
+        for (int i = 0; i < ArenaService.TOP_COUNT - 1; i++)
+        {
+            int species = Dex.PickWildSpecies([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            int wins = random.Next(0, 40), losses = random.Next(0, 30);
+            entries.Add(new ArenaEntry
+            {
+                Uid = $"sample{i}",
+                Tag = $"#S{i:D3}",
+                Nickname = random.Next(5) == 0 ? null : SampleNames[random.Next(SampleNames.Length)] + (random.Next(3) == 0 ? random.Next(10, 99).ToString() : ""),
+                SpeciesId = species,
+                Level = random.Next(1, 101),
+                Shiny = random.Next(20) == 0,
+                Skills = [33, 0, 0, 0],
+                Genes = [random.Next(32), random.Next(32), random.Next(32), random.Next(32)],
+                Training = [random.Next(101), random.Next(101), random.Next(101)],
+                Points = Math.Max(0, ArenaRules.START_POINTS + (wins - losses) * 18 + random.Next(-40, 40)),
+                Wins = wins,
+                Losses = losses,
+            });
+        }
+        var me = ArenaRules.Snapshot(Pet, "#ME", null) with { Uid = "me", Nickname = Pet.ArenaNickname ?? "Me" };
+        var top = entries.Append(me).OrderByDescending(e => e.Points).ToList();
+        return new ArenaBoard("sample", me, top.FindIndex(e => e.Uid == "me") + 1, top);
     }
 #else
     private static bool IsDebugBuild => false;
 
-    private static Task ChallengeTestFoe() => Task.CompletedTask;
+    private static ArenaBoard? SampleBoard() => null;
 #endif
 }

@@ -10,6 +10,9 @@ public sealed partial class PokemonState
     private ArenaEntry? _arenaMe;
     private bool _arenaReported;
 
+    // 계정 세이브 파일을 게스트로 가져온 경우 그 계정. 이 세이브는 원래 계정 말고 다른 계정으로 옮길 수 없습니다.
+    public string? FileOwner { get; set; }
+
     // 대전 닉네임 (영어 글자와 숫자). 세이브에 남겨서 시즌이 바뀌어도 그대로 씁니다.
     public string? ArenaNickname { get; set; }
 
@@ -89,7 +92,7 @@ public sealed partial class PokemonState
         if (_arenaReported || ArenaFoe is not { } foe || _arenaMe is not { } me) return;
         _arenaReported = true;
 
-        int change = won ? ArenaRules.WinPoints(me.Points, foe.Points) : -ArenaRules.LossPoints(me.Points, foe.Points);
+        int change = won ? ArenaRules.WinPoints(me, foe) : -ArenaRules.LossPoints(me, foe);
         var result = me with
         {
             Points = Math.Max(0, me.Points + change),

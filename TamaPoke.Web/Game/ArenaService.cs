@@ -8,7 +8,7 @@ public sealed record ArenaBoard(string Season, ArenaEntry Me, int? MyRank, IRead
 // 대전 기록을 Firestore에서 읽고 씁니다. 내 문서만 쓸 수 있고, 점수 변화 폭은 Firestore 규칙이 다시 확인합니다.
 public sealed class ArenaService(CloudSave cloud, PokemonDex dex, SkillDex skills)
 {
-    private const int TOP_COUNT = 30;
+    public const int TOP_COUNT = 100;
 
     public static string CurrentSeason => ArenaRules.SeasonKey(DateTime.UtcNow);
 

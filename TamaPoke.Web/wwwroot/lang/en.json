@@ -529,7 +529,7 @@
   "web.settings.save.hint": "Export your save to a file or import one.",
   "web.settings.export": "Export",
   "web.settings.import": "Import",
-  "web.settings.importFailed": "That isn't a save file.",
+  "web.settings.importFailed": "This file can't be imported. Use an unmodified file exported from this game.",
   "web.otherTab": "The game was opened in another tab.\nThis tab paused so saves don't mix.",
   "web.otherTab.reload": "Continue here",
   "web.walk.rotateLeft": "Rotate left",
@@ -592,5 +592,11 @@
   "web.arena.nickname.hint": "Without a nickname, your tag (#AB12) is shown.",
   "web.arena.nickname.length": "Use {0}–{1} characters for your nickname.",
   "web.arena.nickname.characters": "Nicknames can only use English letters and numbers.",
-  "web.arena.nickname.blocked": "That nickname isn't allowed. Please choose another."
+  "web.arena.nickname.blocked": "That nickname isn't allowed. Please choose another.",
+  "web.arena.stakes": "Win +{0} / Lose -{1}",
+  "web.settings.importSignedIn": "Importing is unavailable while signed in (to protect arena records).",
+  "web.cloud.import.otherAccount": "This guest save came from another Google account's save file, so it can't be moved to this account (to protect arena records).",
+  "web.arena.sample": "Dev preview: 100 sample trainers. Battle results are not saved.",
+  "web.arena.jump": "Go to me ↓",
+  "web.arena.info": "Rules · My nickname"
 }

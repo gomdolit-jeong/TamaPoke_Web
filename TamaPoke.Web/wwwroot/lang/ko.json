@@ -529,7 +529,7 @@
   "web.settings.save.hint": "세이브를 파일로 내보내거나 가져옵니다.",
   "web.settings.export": "내보내기",
   "web.settings.import": "가져오기",
-  "web.settings.importFailed": "세이브 파일이 아니에요.",
+  "web.settings.importFailed": "가져올 수 없는 파일이에요. 이 게임에서 내보낸 파일을 고치지 않은 채로 넣어 주세요.",
   "web.otherTab": "다른 탭에서 게임을 열었어요.\n세이브가 섞이지 않게 이 탭은 멈췄어요.",
   "web.otherTab.reload": "이 탭에서 계속하기",
   "web.walk.rotateLeft": "왼쪽으로 돌리기",
@@ -592,5 +592,11 @@
   "web.arena.nickname.hint": "닉네임을 정하지 않으면 이름표(#AB12)로 보여요.",
   "web.arena.nickname.length": "닉네임은 {0}~{1}자로 정해 주세요.",
   "web.arena.nickname.characters": "닉네임은 영어 글자와 숫자만 쓸 수 있어요.",
-  "web.arena.nickname.blocked": "쓸 수 없는 말이 들어 있어요. 다른 닉네임을 정해 주세요."
+  "web.arena.nickname.blocked": "쓸 수 없는 말이 들어 있어요. 다른 닉네임을 정해 주세요.",
+  "web.arena.stakes": "이기면 +{0} / 지면 -{1}",
+  "web.settings.importSignedIn": "로그인 중에는 가져오기를 쓸 수 없어요. (대전 기록 보호)",
+  "web.cloud.import.otherAccount": "지금 게스트 세이브는 다른 구글 계정의 세이브 파일에서 가져온 거라 이 계정으로 옮길 수 없어요. (대전 기록 보호)",
+  "web.arena.sample": "개발용 미리보기: 가짜 트레이너 100명이에요. 대전 결과는 저장되지 않아요.",
+  "web.arena.jump": "내 순위로 ↓",
+  "web.arena.info": "규칙 · 내 닉네임"
 }

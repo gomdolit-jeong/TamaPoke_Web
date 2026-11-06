@@ -231,9 +231,12 @@ public sealed class CloudSave(IJSRuntime js, SaveStore store) : IDisposable
         await UploadAsync();
     }
 
+    // 다른 계정 세이브 파일에서 가져온 게스트 세이브는 그 계정이 아닌 곳으로 옮길 수 없습니다. (대전 기록 보호)
+    public bool CanUseGuestSave => _current?.Invoke().FileOwner is not { Length: > 0 } owner || owner == _userId;
+
     // 처음 로그인: 게스트 세이브를 계정 세이브로 가져옵니다. 게스트 세이브는 그대로 남습니다.
     public Task ChooseGuestSaveAsync() =>
-        IsGuestImportPending ? BeginAccountAsync(SaveStore.Serialize(_current!())) : Task.CompletedTask;
+        IsGuestImportPending && CanUseGuestSave ? BeginAccountAsync(SaveStore.Serialize(_current!())) : Task.CompletedTask;
 
     public Task ChooseNewEggAsync() =>
         IsGuestImportPending ? BeginAccountAsync(SaveStore.Serialize(new PokemonState())) : Task.CompletedTask;

@@ -57,9 +57,24 @@ public static class ArenaRules
     // 계정 정보를 드러내지 않는 짧은 이름표 (#AB12)
     public static string TagFor(string uid) => "#" + new string(uid.Where(char.IsLetterOrDigit).Take(4).ToArray()).ToUpperInvariant();
 
-    // 이기면 강한 상대일수록 많이 오르고, 지면 약한 상대에게 질수록 많이 내려갑니다.
-    public static int WinPoints(int myPoints, int foePoints) => Math.Clamp(20 + (foePoints - myPoints) / 25, 5, 40);
-    public static int LossPoints(int myPoints, int foePoints) => Math.Min(myPoints, Math.Clamp(10 + (myPoints - foePoints) / 25, 3, 25));
+    // 점수 변화: 점수와 레벨로 예상 승률을 내고, 예상을 뒤집을수록 크게 움직입니다. (체스 랭킹 Elo 방식)
+    // 레벨은 한 단계마다 점수 10점으로 칩니다. 한 레벨 차이도 점수에 1점씩 드러납니다.
+    // 예상 승률이 50%면 이기면 +20, 지면 -20이고, 레벨이 20 높은 상대면 +30 / -10입니다.
+    public const int POINTS_PER_LEVEL = 10;
+    public const int MAX_CHANGE = 40;
+    public const int MIN_CHANGE = 2;
+    private const double RATING_SCALE = 400;
+
+    public static double Strength(ArenaEntry entry) => entry.Points + entry.Level * POINTS_PER_LEVEL;
+
+    public static double WinChance(ArenaEntry me, ArenaEntry foe) => 1 / (1 + Math.Pow(10, (Strength(foe) - Strength(me)) / RATING_SCALE));
+
+    public static int WinPoints(ArenaEntry me, ArenaEntry foe) =>
+        Math.Clamp((int)Math.Round(MAX_CHANGE * (1 - WinChance(me, foe))), MIN_CHANGE, MAX_CHANGE);
+
+    // 0점 아래로는 내려가지 않습니다.
+    public static int LossPoints(ArenaEntry me, ArenaEntry foe) =>
+        Math.Min(me.Points, Math.Clamp((int)Math.Round(MAX_CHANGE * WinChance(me, foe)), MIN_CHANGE, MAX_CHANGE));
 
     // 기록은 그대로 두고 포켓몬과 닉네임을 지금 세이브에 맞춥니다. (닉네임은 세이브에 있어서 시즌이 바뀌어도 남습니다)
     public static ArenaEntry Snapshot(PokemonState pet, string tag, ArenaEntry? record)
