@@ -3148,7 +3148,7 @@ nav.pet-menu .menu-arena {
     flex-direction: column;
     gap: 0.375rem;
     box-sizing: border-box;
-    width: min(34rem, calc(100vw - 2rem));
+    width: min(28rem, calc(100vw - 2rem));
     height: min(30rem, calc(100vh - 3rem));
     padding: 0.5rem 0.75rem 0.75rem;
     border: 3px solid var(--tp-line);
@@ -3168,13 +3168,6 @@ nav.pet-menu .menu-arena {
     min-height: 0;
     overflow-y: auto;
     padding-right: 0.125rem;
-}
-
-/* 넓으면 두 줄로 보여 줍니다. */
-.arena-panel .arena-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-    gap: 0.375rem;
 }
 
 .arena-panel .arena-list-me {
@@ -3221,7 +3214,4 @@ nav.pet-menu .menu-arena {
         transform: translateX(-50%);
     }
 
-    .arena-panel .arena-list {
-        grid-template-columns: 1fr;
-    }
 }
