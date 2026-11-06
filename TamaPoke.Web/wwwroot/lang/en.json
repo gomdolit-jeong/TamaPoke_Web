@@ -598,5 +598,6 @@
   "web.cloud.import.otherAccount": "This guest save came from another Google account's save file, so it can't be moved to this account (to protect arena records).",
   "web.arena.sample": "Dev preview: 100 sample trainers. Battle results are not saved.",
   "web.arena.jump": "Go to me ↓",
-  "web.arena.info": "Rules · My nickname"
+  "web.arena.info": "Rules · My nickname",
+  "web.dex.wiki": "Open in the wiki"
 }

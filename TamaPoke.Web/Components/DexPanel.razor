@@ -33,18 +33,23 @@
         {
             bool unlocked = Pet.UnlockedPokemon.Contains(id);
             <li class="@(unlocked ? "" : "is-locked")" @key="id">
-                <span class="dex-thumb">
-                    @if (unlocked)
-                    {
-                        <AnimatedSprite SpritePath="@($"{id:D4}")" Paused="true" Scale="1" Alt="" />
-                    }
-                    else
-                    {
-                        <span aria-hidden="true">?</span>
-                    }
-                </span>
-                <span class="dex-number">#@id.ToString("D4")</span>
-                <span class="dex-name">@(unlocked ? Dex.GetName(id, Loc.Language) : "???")</span>
+                @if (unlocked)
+                {
+                    @* 만난 포켓몬은 누르면 새 탭에서 위키 문서를 엽니다. *@
+                    <a class="dex-link" href="@WikiUrl(id)" target="_blank" rel="noopener noreferrer" title="@Loc.T("web.dex.wiki")">
+                        <span class="dex-thumb">
+                            <AnimatedSprite SpritePath="@($"{id:D4}")" Paused="true" Scale="1" Alt="" />
+                        </span>
+                        <span class="dex-number">#@id.ToString("D4")</span>
+                        <span class="dex-name">@Dex.GetName(id, Loc.Language)</span>
+                    </a>
+                }
+                else
+                {
+                    <span class="dex-thumb"><span aria-hidden="true">?</span></span>
+                    <span class="dex-number">#@id.ToString("D4")</span>
+                    <span class="dex-name">???</span>
+                }
             </li>
         }
     </ul>
@@ -55,6 +60,15 @@
     [Parameter] public EventCallback OnClose { get; set; }
 
     private int _generation = 1;
+
+    // 한국어는 포켓몬 위키(Fandom), 영어는 Bulbapedia 문서입니다. 둘 다 "이름_(포켓몬)" 형식입니다.
+    private string WikiUrl(int id)
+    {
+        string name = Dex.GetName(id, Loc.Language).Replace(' ', '_');
+        return Loc.Language == Loc.English
+            ? $"https://bulbapedia.bulbagarden.net/wiki/{Uri.EscapeDataString(name)}_(Pok%C3%A9mon)"
+            : $"https://pokemon.fandom.com/ko/wiki/{Uri.EscapeDataString(name)}_(%ED%8F%AC%EC%BC%93%EB%AA%AC)";
+    }
     private bool _caughtOnly;
 
     private List<int> Entries

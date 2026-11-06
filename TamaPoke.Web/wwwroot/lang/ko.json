@@ -598,5 +598,6 @@
   "web.cloud.import.otherAccount": "지금 게스트 세이브는 다른 구글 계정의 세이브 파일에서 가져온 거라 이 계정으로 옮길 수 없어요. (대전 기록 보호)",
   "web.arena.sample": "개발용 미리보기: 가짜 트레이너 100명이에요. 대전 결과는 저장되지 않아요.",
   "web.arena.jump": "내 순위로 ↓",
-  "web.arena.info": "규칙 · 내 닉네임"
+  "web.arena.info": "규칙 · 내 닉네임",
+  "web.dex.wiki": "위키에서 자세히 보기"
 }
