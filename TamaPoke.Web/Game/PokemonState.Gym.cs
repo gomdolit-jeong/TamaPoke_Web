@@ -99,7 +99,7 @@ public sealed partial class PokemonState
     [JsonIgnore] public bool IsMegaChoiceOpen { get; private set; }
     [JsonIgnore] public List<MegaFormInfo> MegaChoices { get; private set; } = [];
     [JsonIgnore] public string PlayerBattleName => ActiveMegaForm is { } form ? Megas.DisplayName(form) : Name;
-    [JsonIgnore] public bool CanMegaEvolveNow => IsBattleOpen && !_megaUsedThisBattle && !IsMegaEvolving && ActiveMegaForm is null && GetUsableMegaForms(SpeciesId).Count > 0;
+    [JsonIgnore] public bool CanMegaEvolveNow => IsBattleOpen && !_megaUsedThisBattle && !IsMegaEvolving && !IsArenaBattle && ActiveMegaForm is null && GetUsableMegaForms(SpeciesId).Count > 0;
 
     private int _selectedGymIndex;
     private bool _isGymRematch;

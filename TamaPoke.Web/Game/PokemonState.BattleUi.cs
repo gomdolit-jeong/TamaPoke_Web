@@ -110,7 +110,7 @@ public sealed partial class PokemonState
     [JsonIgnore] public string EnemySpritePath => Dex.SpritePath(EnemySpeciesId, _enemyForm);
     [JsonIgnore] public string EnemyBasePath => $"{EnemySpeciesId:D4}";
     [JsonIgnore] public bool IsEnemyShiny { get; private set; }
-    [JsonIgnore] private string EnemyBattleName => IsGymBattle ? EnemyName : L.F("battle.wildName", EnemyName);
+    [JsonIgnore] private string EnemyBattleName => IsGymBattle || IsArenaBattle ? EnemyName : L.F("battle.wildName", EnemyName);
     [JsonIgnore] public int EnemyCurrentAction => _enemyTempActionId == PokemonAnim.FAINT || _enemyTempActionTimer > 0 ? _enemyTempActionId : PokemonAnim.IDLE;
     [JsonIgnore] public int EnemyRow => BATTLE_ENEMY_ROW;
     [JsonIgnore] public bool IsMainMenuVisible => !IsCatchOffered && !IsBattleResolved && !IsAttackMenuOpen && !IsBattleInventoryOpen && IsPlayerTurn;
@@ -134,12 +134,12 @@ public sealed partial class PokemonState
     }
     private int WildStat(int? baseStat) => BattleCalculator.Stat(baseStat ?? 50, BattleCalculator.WILD_GENE, EnemyLevel);
 
-    private int CombatMaxHp => BattleCalculator.MaxHp(MyBaseInfo?.BaseHp ?? 50, Genes.HpGene + TrDef / 4, Level);
-    private int CombatAtk => BattleCalculator.Stat(MyBaseInfo?.BaseAtk ?? 50, Genes.AtkGene + TrAtk / 4, Level);
-    private int CombatDef => BattleCalculator.Stat(MyBaseInfo?.BaseDef ?? 50, Genes.DefGene + TrDef / 4, Level);
-    private int CombatSpeed => BattleCalculator.Stat(MyBaseInfo?.BaseSpeed ?? 50, Genes.SpeGene + TrSpeed / 4, Level);
-    private int CombatSpAtk => BattleCalculator.Stat(MyBaseInfo?.BaseSpA ?? 50, Genes.AtkGene - 80, Level) + TrAtk;
-    private int CombatSpDef => BattleCalculator.Stat(MyBaseInfo?.BaseSpD ?? 50, Genes.DefGene - 80, Level) + TrDef / 2;
+    private int CombatMaxHp => BattleCalculator.MaxHp(MyBaseInfo?.BaseHp ?? 50, Genes.HpGene + TrDef / 4, BattleLevel);
+    private int CombatAtk => BattleCalculator.Stat(MyBaseInfo?.BaseAtk ?? 50, Genes.AtkGene + TrAtk / 4, BattleLevel);
+    private int CombatDef => BattleCalculator.Stat(MyBaseInfo?.BaseDef ?? 50, Genes.DefGene + TrDef / 4, BattleLevel);
+    private int CombatSpeed => BattleCalculator.Stat(MyBaseInfo?.BaseSpeed ?? 50, Genes.SpeGene + TrSpeed / 4, BattleLevel);
+    private int CombatSpAtk => BattleCalculator.Stat(MyBaseInfo?.BaseSpA ?? 50, Genes.AtkGene - 80, BattleLevel) + TrAtk;
+    private int CombatSpDef => BattleCalculator.Stat(MyBaseInfo?.BaseSpD ?? 50, Genes.DefGene - 80, BattleLevel) + TrDef / 2;
 
     private void PlayBattleMotion(int action, int loopTicks) => PlayTempAction(action, loopTicks * LOOP_TICK_MS);
 
@@ -247,6 +247,7 @@ public sealed partial class PokemonState
         IsSkillLearnMenuOpen = false;
         IsSkillReplaceMenuOpen = false;
         IsGymBattle = false;
+        ArenaFoe = null;
         ResetMegaForBattle();
         ResetPosition();
 
@@ -259,6 +260,7 @@ public sealed partial class PokemonState
         if (_tempAction == PokemonAnim.FAINT) PlayTempAction(PokemonAnim.IDLE, 0);
         ResetMegaForBattle();
         IsGymBattle = false;
+        ArenaFoe = null;
         IsBattleOpen = false;
         BattleMessage = "";
         BattleFx = null;
@@ -335,6 +337,12 @@ public sealed partial class PokemonState
     // 가방에서 아이템 쓰기. 체력이 가득 차 있으면 턴도 아이템도 쓰지 않습니다.
     public async Task UseBattleItemAsync(ItemDefinition item)
     {
+        if (IsArenaBattle)
+        {
+            BattleMessage = L.T("web.arena.noItems");
+            return;
+        }
+
         if (ItemCount(item.Id) <= 0)
         {
             BattleMessage = L.F("battle.notEnough", L.T($"item.{item.Id}.name"));
@@ -463,13 +471,14 @@ public sealed partial class PokemonState
         if (PlayerHp <= 0)
         {
             IsBattleResolved = true;
-            BattleMessage = L.T(IsGymBattle ? "battle.lost.gym" : "battle.lost.wild");
+            BattleMessage = L.T(IsArenaBattle ? "web.arena.lost" : IsGymBattle ? "battle.lost.gym" : "battle.lost.wild");
             Joy = Math.Max(0, Joy - 10);
             Energy = Math.Max(0, Energy - 20);
 
             IsDefeatedFadeOut = true;
             await Task.Delay(3000);
             IsDefeatedFadeOut = false;
+            await ShowArenaResultAsync(won: false);
             CloseBattle();
             IsPlayerTurn = true;
         }
@@ -484,6 +493,12 @@ public sealed partial class PokemonState
             {
                 await AnnounceGymWinAsync();
             }
+            else if (IsArenaBattle)
+            {
+                BattleMessage = L.T("web.arena.won");
+                await Task.Delay(2000);
+                await ShowArenaResultAsync(won: true);
+            }
             else
             {
                 BattleMessage = L.T("battle.won");
@@ -495,6 +510,13 @@ public sealed partial class PokemonState
 
     private void ProceedToCatchOrEnd()
     {
+        if (IsArenaBattle)
+        {
+            CloseBattle();
+            IsPlayerTurn = true;
+            return;
+        }
+
         if (IsGymBattle)
         {
             _ = ProcessGymBattleRewardsAsync();

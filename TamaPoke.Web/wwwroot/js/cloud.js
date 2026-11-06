@@ -72,3 +72,36 @@ export async function save(json, expected) {
         return next;
     });
 }
+
+// 대전: arena/{시즌}/players/{uid}. 로그인한 사람은 모두 읽을 수 있고, 쓰기는 본인 문서만 됩니다.
+function arenaPlayer(api, instance, season, uid) {
+    return api.doc(instance, "arena", season, "players", uid);
+}
+
+function arenaEntry(snapshot) {
+    const { updatedAt, ...value } = snapshot.data();
+    return { uid: snapshot.id, ...value };
+}
+
+// 내 기록과 점수 순위 상위 limit명을 JSON으로 돌려줍니다.
+export async function arenaLoad(season, limit) {
+    const { api, instance } = await db();
+    const players = api.collection(instance, "arena", season, "players");
+    const [top, me] = await Promise.all([
+        api.getDocs(api.query(players, api.orderBy("points", "desc"), api.limit(limit))),
+        api.getDoc(arenaPlayer(api, instance, season, auth.currentUser.uid)),
+    ]);
+    return JSON.stringify({ me: me.exists() ? arenaEntry(me) : null, top: top.docs.map(arenaEntry) });
+}
+
+// 성공하면 빈 문자열, 실패하면 오류 코드를 돌려줍니다.
+export async function arenaSave(season, json) {
+    try {
+        const { api, instance } = await db();
+        const { uid, ...value } = JSON.parse(json);
+        await api.setDoc(arenaPlayer(api, instance, season, auth.currentUser.uid), { ...value, updatedAt: api.serverTimestamp() });
+        return "";
+    } catch (error) {
+        return error.code || "unknown";
+    }
+}

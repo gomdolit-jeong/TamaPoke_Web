@@ -197,7 +197,7 @@ public sealed partial class PokemonState
             if (Ceremony == CEREMONY_FAREWELL) return "mood.farewell";
             if (Ceremony == CEREMONY_RUNAWAY) return "mood.runaway";
             if (Ceremony == CEREMONY_RELEASE) return "mood.release";
-            if (IsBattleOpen) return IsGymBattle ? "web.mood.gym" : "mood.battle";
+            if (IsBattleOpen) return IsArenaBattle ? "web.mood.arena" : IsGymBattle ? "web.mood.gym" : "mood.battle";
             if (ActiveGame == MiniGame.Ball) return "mood.game.ball";
             if (ActiveGame == MiniGame.Catch) return "mood.game.catch";
             if (ActiveGame == MiniGame.Memo) return "mood.game.memo";

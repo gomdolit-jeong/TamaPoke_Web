@@ -10,6 +10,7 @@
 @inject PokemonDex Dex
 @inject SoundPlayer Sound
 @inject CloudSave CloudSave
+@inject ArenaService Arena
 @inject NavigationManager Navigation
 @inject SkillDex Skills
 @inject MegaDex Megas
@@ -102,6 +103,10 @@ else
         else if (_isGymOpen)
         {
             <GymPanel Pet="_pet" OnClose="() => _isGymOpen = false" OnChallenge="StartGym" />
+        }
+        else if (_isArenaOpen)
+        {
+            <ArenaPanel Pet="_pet" OnClose="() => _isArenaOpen = false" OnChallenge="StartArena" />
         }
         else if (_isSettingsOpen)
         {
@@ -231,7 +236,7 @@ else
         }
     </section>
 
-    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnOpenParty="OpenParty" OnOpenGym="OpenGym" OnStartWalk="StartWalk" OnOpenSettings="OpenSettings" OnOpenBag="OpenBag" OnStartBattle="StartBattle" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync">
+    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnOpenParty="OpenParty" OnOpenGym="OpenGym" OnOpenArena="OpenArena" OnStartWalk="StartWalk" OnOpenSettings="OpenSettings" OnOpenBag="OpenBag" OnStartBattle="StartBattle" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync">
         <Cloud>
             @if (CloudSave.IsSignedIn)
             {
@@ -271,6 +276,7 @@ else
     private bool _isPartyOpen;
     private bool _isBagOpen;
     private bool _isGymOpen;
+    private bool _isArenaOpen;
     private bool _isOtherTabActive;
     private const double CeremonySpriteSize = 110;
     private DotNetObjectReference<Home>? _pageRef;
@@ -329,6 +335,7 @@ else
         pet.SkillBook = Skills;
         pet.Megas = Megas;
         pet.SendNotification = (title, body) => _ = JS.InvokeVoidAsync("tamaPoke.notify", title, body);
+        pet.ArenaResultReady = entry => _ = SaveArenaResultAsync(entry);
         ShowLoadNotice(pet);
         pet.RegisterCurrentInDex();
         if (!pet.IsEgg && pet.SkillCount == 0) pet.RelearnFromLevel();
@@ -468,6 +475,7 @@ else
         _isPartyOpen = false;
         _isBagOpen = false;
         _isGymOpen = false;
+        _isArenaOpen = false;
         _isSettingsOpen = false;
     }
 
@@ -476,6 +484,27 @@ else
         PlaySound(SoundEffects.Tap);
         CloseSidePanels();
         _isGymOpen = true;
+    }
+
+    private void OpenArena()
+    {
+        PlaySound(SoundEffects.Tap);
+        CloseSidePanels();
+        _isArenaOpen = true;
+    }
+
+    private void StartArena((ArenaEntry Foe, ArenaEntry Me) match)
+    {
+        PlaySound(SoundEffects.Play);
+        CloseSidePanels();
+        _pet!.StartArenaBattle(match.Foe, match.Me);
+    }
+
+    // 로컬 테스트 상대(uid가 test)와 한 대전은 저장하지 않습니다.
+    private async Task SaveArenaResultAsync(ArenaEntry entry)
+    {
+        if (entry.Uid is null or "me") return;
+        if (!await Arena.SaveAsync(entry)) _pet?.ShowEvent(Loc.T("web.arena.saveFailed"), 8000);
     }
 
     private void OpenSettings()
@@ -552,7 +581,7 @@ else
                 last = now;
                 if (elapsedMs > MAX_CATCH_UP_MS || ShowTitle || CloudSave.IsWaitingForChoice) continue;
 
-                _pet!.IsPanelOpen = _isDexOpen || _isPartyOpen || _isBagOpen || _isGymOpen || _isSettingsOpen;
+                _pet!.IsPanelOpen = _isDexOpen || _isPartyOpen || _isBagOpen || _isGymOpen || _isArenaOpen || _isSettingsOpen;
                 _pet.Update(elapsedMs);
                 CloudSave.Tick(elapsedMs);
 

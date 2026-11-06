@@ -13,6 +13,7 @@ Windows 데스크톱 펫 [TamaPoke_PC](https://github.com/gomdolit-jeong/TamaPok
 - **미니게임:** 공놀이, 받기, 기억력, 청소 게임이 있습니다.
 - **배틀과 포획:** 야생 포켓몬과 턴제 배틀을 하고, 잡아서 최대 6마리 파티를 꾸립니다.
 - **체육관 64곳:** 지방별 관장에게 도전해 배지를 모읍니다.
+- **트레이너 대전:** 구글로 로그인하면 다른 사람이 등록한 포켓몬과 각자 키운 레벨 그대로(최대 100) 싸우고, 주간 순위표에서 점수를 겨룹니다. 상대 포켓몬은 컴퓨터가 조종합니다.
 - **메가진화:** 배지 8개로 메가링을 얻고, 메가스톤 조각을 모아 전투에서 메가진화합니다.
 - **2.5D 산책:** 파티 포켓몬이 들판을 돌아다니고 풀숲에서 아이템을 찾아옵니다. 화면을 돌리고 확대하고 옮길 수 있습니다.
 - **이로치와 특수 폼:** 색이 다른 포켓몬과 지방 폼이 나옵니다.
@@ -29,7 +30,7 @@ Windows 데스크톱 펫 [TamaPoke_PC](https://github.com/gomdolit-jeong/TamaPok
 - [GitHub Pages](https://pages.github.com/)와 GitHub Actions 자동 배포
 - [Firebase](https://firebase.google.com/) Authentication, Cloud Firestore (구글 로그인 세이브)
 
-`cloud.js`의 Firebase `apiKey`는 웹 앱에 원래 공개되는 식별값입니다. 세이브는 Firestore 보안 규칙으로 보호하여 본인 계정의 문서만 읽고 쓸 수 있습니다.
+`cloud.js`의 Firebase `apiKey`는 웹 앱에 원래 공개되는 식별값입니다. 세이브는 Firestore 보안 규칙으로 보호하여 본인 계정의 문서만 읽고 쓸 수 있습니다. 대전 순위표는 로그인한 사람이 모두 읽을 수 있고, 쓰기는 본인 기록만 되며 점수 변화 폭도 규칙에서 확인합니다. 규칙 전체는 [`firestore.rules`](./firestore.rules)에 있고, Firebase 콘솔에 붙여 넣어 게시합니다.
 
 ## 개발
 

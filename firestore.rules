@@ -1,0 +1,65 @@
+rules_version = '2';
+
+// TamaPoke 웹판 Firestore 보안 규칙
+// Firebase 콘솔 > Firestore Database > 규칙에 그대로 붙여 넣고 게시합니다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 구글 계정 세이브: 본인 문서만 읽고 씁니다.
+    match /saves/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // 대전: 로그인한 사람은 순위표를 읽을 수 있고, 쓰기는 본인 문서만 됩니다.
+    // 레벨은 1~100, 점수는 처음 1000점에서 시작하고, 한 번에 이기면 +5~40, 지면 -0~25까지만 바뀝니다. (10초에 한 번)
+    match /arena/{season}/players/{uid} {
+      allow read: if request.auth != null;
+      allow create: if isOwner(uid) && validEntry()
+        && request.resource.data.points == 1000
+        && request.resource.data.wins == 0
+        && request.resource.data.losses == 0;
+      allow update: if isOwner(uid) && validEntry() && validChange();
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function inRange(value, low, high) {
+      return value is int && value >= low && value <= high;
+    }
+
+    function validEntry() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['tag', 'speciesId', 'level', 'form', 'shiny', 'female', 'skills', 'genes', 'training', 'points', 'wins', 'losses', 'updatedAt'])
+        && d.keys().hasAll(['tag', 'speciesId', 'level', 'form', 'shiny', 'female', 'skills', 'genes', 'training', 'points', 'wins', 'losses', 'updatedAt'])
+        && d.tag is string && d.tag.size() <= 12
+        && inRange(d.speciesId, 1, 1025)
+        && inRange(d.level, 1, 100)
+        && d.form is string && d.form.size() <= 40
+        && d.shiny is bool && d.female is bool
+        && d.skills is list && d.skills.size() == 4
+        && inRange(d.skills[0], 0, 2000) && inRange(d.skills[1], 0, 2000) && inRange(d.skills[2], 0, 2000) && inRange(d.skills[3], 0, 2000)
+        && d.genes is list && d.genes.size() == 4
+        && inRange(d.genes[0], 0, 31) && inRange(d.genes[1], 0, 31) && inRange(d.genes[2], 0, 31) && inRange(d.genes[3], 0, 31)
+        && d.training is list && d.training.size() == 3
+        && inRange(d.training[0], 0, 100) && inRange(d.training[1], 0, 100) && inRange(d.training[2], 0, 100)
+        && inRange(d.points, 0, 1000000)
+        && inRange(d.wins, 0, 1000000) && inRange(d.losses, 0, 1000000)
+        && d.updatedAt == request.time;
+    }
+
+    // 대표 포켓몬만 바꾸면 기록은 그대로, 대전 결과는 한 판씩만 반영됩니다.
+    function validChange() {
+      let d = request.resource.data;
+      let o = resource.data;
+      let points = d.points - o.points;
+      let wins = d.wins - o.wins;
+      let losses = d.losses - o.losses;
+      return (points == 0 && wins == 0 && losses == 0)
+        || (request.time > o.updatedAt + duration.value(10, 's')
+            && ((wins == 1 && losses == 0 && points >= 5 && points <= 40)
+                || (wins == 0 && losses == 1 && points <= 0 && points >= -25)));
+    }
+  }
+}

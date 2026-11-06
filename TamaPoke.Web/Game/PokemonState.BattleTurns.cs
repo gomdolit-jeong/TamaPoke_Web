@@ -118,7 +118,7 @@ public sealed partial class PokemonState
             {
                 double typeMult = BattleCalculator.TypeMultiplier(m.Type, myInfo);
                 double stabMult = BattleCalculator.StabMultiplier(m.Type, enemyInfo);
-                int enemyAtk = WildStat(m.Category == SkillCategory.Special ? enemyInfo?.BaseSpA : enemyInfo?.BaseAtk);
+                int enemyAtk = EnemyAttackStat(enemyInfo, m.Category == SkillCategory.Special);
                 int DamageAt(int power) => BattleCalculator.RawDamage(enemyAtk, m.Category == SkillCategory.Special ? CombatSpDef : CombatDef, typeMult, stabMult, BattleCalculator.BurnMultiplier(m.Category, EnemyAilment), crit: false, power);
 
                 score = DamageAt(BattleCalculator.ExpectedPower(m));
@@ -127,7 +127,7 @@ public sealed partial class PokemonState
                 int acc = m.Accuracy == 0 ? 100 : m.Accuracy;
                 score = score * acc / 100;
 
-                if (IsGymBattle)
+                if (IsGymBattle || IsArenaBattle)
                 {
                     if (typeMult == 0) score = -9999;
                     else if (typeMult >= 2.0) score += 200;
@@ -135,7 +135,7 @@ public sealed partial class PokemonState
                 }
             }
 
-            if (!IsGymBattle) score += rand.Next(0, 10);
+            if (!IsGymBattle && !IsArenaBattle) score += rand.Next(0, 10);
             if (score > bestScore) { bestScore = score; bestSkill = m; }
         }
         return bestSkill;
@@ -169,6 +169,12 @@ public sealed partial class PokemonState
             return;
         }
         IsPlayerTurn = false; Random rand = new Random();
+
+        if (playerAction == BattleAction.Run && IsArenaBattle)
+        {
+            await ForfeitArenaAsync();
+            return;
+        }
 
         if (playerAction == BattleAction.Run)
         {
@@ -300,7 +306,7 @@ public sealed partial class PokemonState
             {
                 bool crit = BattleCalculator.RollCrit(playerSkill, rand);
                 double myCombatAtk = (special ? CombatSpAtk : CombatAtk) * AttackStage(_playerStages, special ? BattleStat.SpAttack : BattleStat.Attack, crit);
-                double enemyCombatDef = WildStat(special ? enemyInfo?.BaseSpD : enemyInfo?.BaseDef);
+                double enemyCombatDef = EnemyDefenseStat(enemyInfo, special);
                 if (IsGymBattle) enemyCombatDef *= BattleCalculator.GYM_BONUS;
                 enemyCombatDef *= DefenseStage(_enemyStages, special ? BattleStat.SpDefense : BattleStat.Defense, crit);
 
@@ -534,7 +540,7 @@ public sealed partial class PokemonState
             while (landed < hits && PlayerHp > 0)
             {
                 bool crit = BattleCalculator.RollCrit(enemySkill, rand);
-                double enemyCombatAtk = WildStat(special ? enemyInfo?.BaseSpA : enemyInfo?.BaseAtk);
+                double enemyCombatAtk = EnemyAttackStat(enemyInfo, special);
                 if (IsGymBattle) enemyCombatAtk *= BattleCalculator.GYM_BONUS;
                 enemyCombatAtk *= AttackStage(_enemyStages, special ? BattleStat.SpAttack : BattleStat.Attack, crit);
                 double myCombatDef = (special ? CombatSpDef : CombatDef) * DefenseStage(_playerStages, special ? BattleStat.SpDefense : BattleStat.Defense, crit);
@@ -981,7 +987,7 @@ public sealed partial class PokemonState
     {
         get
         {
-            double speed = WildStat(Dex.Get(EnemySpeciesId)?.BaseSpeed);
+            double speed = EnemySpeedStat();
             if (IsGymBattle) speed *= BattleCalculator.GYM_BONUS;
             return speed * Stage(_enemyStages, BattleStat.Speed) * (EnemyAilment == SkillAilment.Paralysis ? 0.5 : 1.0);
         }

@@ -33,6 +33,7 @@ public sealed class CloudSave(IJSRuntime js, SaveStore store) : IDisposable
     public bool IsGuestImportPending { get; private set; }
     public string? SignInError { get; private set; }
     public bool IsSignedIn => _userId is not null;
+    public string? UserId => _userId;
 
     // 계정 세이브를 불러와서 플레이할 수 있는 상태
     public bool IsAccountReady => _isReady;
@@ -303,6 +304,13 @@ public sealed class CloudSave(IJSRuntime js, SaveStore store) : IDisposable
         {
             _isUploading = false;
         }
+    }
+
+    // 대전처럼 같은 Firebase 연결을 쓰는 기능용
+    public async Task<T> CallAsync<T>(string function, params object?[] args)
+    {
+        if (_module is null || !IsSignedIn) throw new InvalidOperationException("로그인하지 않았습니다.");
+        return await _module.InvokeAsync<T>(function, args);
     }
 
     private void SetStatus(CloudStatus status)

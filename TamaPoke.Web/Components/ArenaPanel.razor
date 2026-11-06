@@ -1,0 +1,126 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+@inject PokemonDex Dex
+@inject CloudSave CloudSave
+@inject ArenaService Arena
+
+<section class="pet-panel pet-panel-scroll" aria-label="@Loc.T("web.arena.title")">
+    <header class="pet-panel-header">
+        <h2>@Loc.T("web.arena.title")</h2>
+        <button type="button" class="pet-close" aria-label="@Loc.T("common.close")" title="@Loc.T("common.close")" @onclick="OnClose"></button>
+    </header>
+
+    <p class="party-note">@SeasonText</p>
+    <p class="party-note">@Loc.T("web.arena.rules")</p>
+
+    @if (Pet.IsEgg)
+    {
+        <p class="arena-message">@Loc.T("web.arena.egg")</p>
+    }
+    else if (!CloudSave.IsSignedIn || !CloudSave.IsAccountReady)
+    {
+        <p class="arena-message">@Loc.T("web.arena.signIn")</p>
+        @if (IsDebugBuild)
+        {
+            <button type="button" class="arena-random" @onclick="ChallengeTestFoe">@Loc.T("web.arena.test")</button>
+        }
+    }
+    else if (_isLoading)
+    {
+        <p class="arena-message" role="status">@Loc.T("web.arena.loading")</p>
+    }
+    else if (_board is null)
+    {
+        <p class="arena-message is-warning" role="alert">@Loc.T("web.arena.failed")</p>
+        <button type="button" class="arena-random" @onclick="LoadAsync">@Loc.T("web.arena.retry")</button>
+    }
+    else
+    {
+        var board = _board;
+        <div class="arena-me">
+            <span>@string.Format(Loc.T("web.arena.me"), board.Me.Points, board.Me.Wins, board.Me.Losses)</span>
+            <span class="arena-rank">@(board.MyRank is int rank ? string.Format(Loc.T("web.arena.rank"), rank) : Loc.T("web.arena.unranked"))</span>
+        </div>
+        <button type="button" class="arena-random" disabled="@(!CanChallenge || Opponents.Count == 0)" @onclick="ChallengeRandom">@Loc.T("web.arena.random")</button>
+
+        @if (Opponents.Count == 0)
+        {
+            <p class="arena-message">@Loc.T("web.arena.empty")</p>
+        }
+        <ol class="arena-list">
+            @for (int i = 0; i < board.Top.Count; i++)
+            {
+                var entry = board.Top[i];
+                bool isMe = entry.Uid == board.Me.Uid;
+                <li class="arena-row @(isMe ? "is-me" : "")">
+                    <span class="arena-place">@(i + 1)</span>
+                    <span class="party-sprite">
+                        <AnimatedSprite SpritePath="@Dex.SpritePath(entry.SpeciesId, entry.Form)" FallbackPath="@($"{entry.SpeciesId:D4}")" Paused="true" Scale="1" Alt="" />
+                    </span>
+                    <span class="party-info">
+                        <span class="party-name">@(isMe ? Loc.T("web.arena.you") : string.Format(Loc.T("web.arena.trainer"), entry.Tag))</span>
+                        <span class="party-level">@((entry.Shiny ? "✨" : "") + Dex.GetName(entry.SpeciesId, Loc.Language)) Lv.@entry.Level · @string.Format(Loc.T("web.arena.score"), entry.Points)</span>
+                    </span>
+                    @if (!isMe)
+                    {
+                        <button type="button" class="arena-fight" disabled="@(!CanChallenge)" @onclick="() => Challenge(entry)">@Loc.T("web.arena.fight")</button>
+                    }
+                </li>
+            }
+        </ol>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<(ArenaEntry Foe, ArenaEntry Me)> OnChallenge { get; set; }
+
+    private ArenaBoard? _board;
+    private bool _isLoading;
+
+    private bool CanChallenge => Pet.CanStartActivity && !Pet.IsEgg;
+    private List<ArenaEntry> Opponents => _board?.Top.Where(e => e.Uid != _board.Me.Uid).ToList() ?? [];
+
+    private string SeasonText
+    {
+        get
+        {
+            var (start, end) = ArenaRules.SeasonRange(DateTime.UtcNow);
+            return string.Format(Loc.T("web.arena.season"), start.ToString("M/d"), end.ToString("M/d"));
+        }
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (Pet.IsEgg || !CloudSave.IsSignedIn || !CloudSave.IsAccountReady) return;
+        _isLoading = true;
+        StateHasChanged();
+        _board = await Arena.LoadAsync(Pet);
+        _isLoading = false;
+    }
+
+    private Task Challenge(ArenaEntry foe) => _board is { } board ? OnChallenge.InvokeAsync((foe, board.Me)) : Task.CompletedTask;
+
+    private Task ChallengeRandom() =>
+        ArenaRules.PickRandomFoe(Opponents, ArenaRules.ArenaLevel(Pet.Level), Random.Shared) is { } foe ? Challenge(foe) : Task.CompletedTask;
+
+#if DEBUG
+    private static bool IsDebugBuild => true;
+
+    // 로컬 테스트: 로그인 없이 내 레벨과 같은 피카츄와 대전합니다. (결과는 저장하지 않음)
+    private Task ChallengeTestFoe()
+    {
+        var foe = new ArenaEntry { Uid = "test", Tag = "#TEST", SpeciesId = 25, Level = ArenaRules.ArenaLevel(Pet.Level), Skills = [85, 98, 0, 0], Genes = [20, 20, 20, 20], Training = [50, 50, 50] };
+        var me = ArenaRules.Snapshot(Pet, "#ME", null) with { Uid = "me" };
+        return OnChallenge.InvokeAsync((foe, me));
+    }
+#else
+    private static bool IsDebugBuild => false;
+
+    private static Task ChallengeTestFoe() => Task.CompletedTask;
+#endif
+}

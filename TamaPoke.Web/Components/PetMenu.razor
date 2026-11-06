@@ -10,6 +10,7 @@
     <h2 class="pet-menu-title">@Loc.T("web.menu")</h2>
     <button type="button" class="menu-primary menu-battle" disabled="@(!Pet.CanStartActivity)" @onclick="() => Run(OnStartBattle)">@Label(Loc.T("web.menu.battle"))</button>
     <button type="button" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenGym)">@Label(Loc.T("web.menu.gym"))</button>
+    <button type="button" disabled="@(!CanOpenPanels)" @onclick="() => Run(OnOpenArena)">@Label(Loc.T("web.menu.arena"))</button>
     <button type="button" class="menu-primary" disabled="@(!Pet.CanStartWalk)" @onclick="() => Run(OnStartWalk)">@Label(Loc.T("web.menu.walk"))</button>
     <button type="button" class="menu-primary" @onclick="() => Run(OnOpenDex)">@Label(Loc.T("web.menu.dex"))</button>
     <button type="button" disabled="@(!CanOpenProfile)" @onclick="() => Run(OnOpenProfile)">@Label(Loc.T("web.menu.profile"))</button>
@@ -64,6 +65,7 @@
     [Parameter] public EventCallback OnOpenProfile { get; set; }
     [Parameter] public EventCallback OnOpenParty { get; set; }
     [Parameter] public EventCallback OnOpenGym { get; set; }
+    [Parameter] public EventCallback OnOpenArena { get; set; }
     [Parameter] public EventCallback OnStartWalk { get; set; }
     [Parameter] public EventCallback OnOpenSettings { get; set; }
     [Parameter] public EventCallback OnOpenBag { get; set; }

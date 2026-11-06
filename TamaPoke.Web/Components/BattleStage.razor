@@ -43,7 +43,7 @@
         }
 
         <div class="battle-panel battle-panel-player">
-            <div class="battle-panel-name"><span>@Pet.PlayerBattleName</span><span>Lv.@Pet.Level</span></div>
+            <div class="battle-panel-name"><span>@Pet.PlayerBattleName</span><span>Lv.@Pet.PlayerBattleLevel</span></div>
             <div class="battle-panel-hp">
                 @AilmentBadge(Pet.PlayerAilment)
                 <progress class="@HpClass(Pet.PlayerHp, Pet.PlayerMaxHp)" max="@Pet.PlayerMaxHp" value="@Pet.PlayerHp"></progress>
