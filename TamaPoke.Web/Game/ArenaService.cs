@@ -29,8 +29,11 @@ public sealed class ArenaService(CloudSave cloud, PokemonDex dex, SkillDex skill
                 if (!await SaveAsync(me, season)) return null;
             }
 
-            var top = data.Top.Select(e => ArenaRules.Sanitize(e, dex, skills)).OfType<ArenaEntry>()
-                .Select(e => e.Uid == uid ? me : e).ToList();
+            // 순위표는 내 기록을 저장하기 전에 읽었으므로, 처음 등록했을 때도 내 자리가 보이도록 직접 넣습니다.
+            var others = data.Top.Select(e => ArenaRules.Sanitize(e, dex, skills)).OfType<ArenaEntry>()
+                .Where(e => e.Uid != uid).ToList();
+            var top = others.Count < TOP_COUNT || me.Points >= others[^1].Points ? [.. others, me] : others;
+            top = [.. top.OrderByDescending(e => e.Points).Take(TOP_COUNT)];
             int index = top.FindIndex(e => e.Uid == uid);
             return new ArenaBoard(season, me, index >= 0 ? index + 1 : null, top);
         }
