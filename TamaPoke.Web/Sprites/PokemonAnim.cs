@@ -41,10 +41,11 @@ public static class PokemonAnim
     public const int ROW_FRONT = 0;
     public const int ROW_LEFT = 6;
 
-    // 모션이 없는 스프라이트용 대체 모션. 0~12번은 대부분 있지만 13번 이후는 약 20%의 스프라이트에만 있습니다. (PC판과 같음)
+    // 모션이 없는 스프라이트용 대체 모션. 0~12번은 대부분 있지만 13번 이후는 약 20%의 스프라이트에만 있습니다.
+    // PC판과 같지만, 먹기는 대체하지 않고 대기로 둡니다. (PC판은 연속 공격으로 바꾸는데, 밥 먹는 동안 빠르게 연타해서 어지럽습니다)
     private static readonly Dictionary<int, int> Fallbacks = new()
     {
-        [EAT] = DOUBLE, [POSE] = HOP, [NOD] = HOP, [WAKE] = HOP, [DEEPBREATH] = CHARGE,
+        [POSE] = HOP, [NOD] = HOP, [WAKE] = HOP, [DEEPBREATH] = CHARGE,
         [PAIN] = HURT, [CRINGE] = HURT, [SINK] = HURT, [TRIP] = HURT, [LOSTBALANCE] = HURT,
         [TUMBLEBACK] = HURT, [HITGROUND] = HURT, [FAINT] = HURT,
         [EVENTSLEEP] = SLEEP, [LAYING] = SLEEP,

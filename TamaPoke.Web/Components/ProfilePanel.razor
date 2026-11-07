@@ -45,12 +45,32 @@
     </dl>
 
     <h3>@Loc.T("profile.moves")</h3>
+    @* 기술을 누르면 아래에 위력, 명중, 효과를 펼쳐 보여 줍니다. 한 번 더 누르면 접힙니다. *@
     <ul class="profile-moves">
         @foreach (var skill in Pet.CurrentSkills)
         {
-            <li>
-                <span>@skill.Name</span>
-                <span class="battle-type battle-type-@skill.Type.ToString().ToLowerInvariant()">@skill.Type</span>
+            bool open = _openSkillId == skill.Id;
+            <li class="@(open ? "is-open" : "")">
+                <button type="button" class="profile-move" aria-expanded="@(open ? "true" : "false")" @onclick="() => ToggleSkill(skill.Id)">
+                    <span>@(open ? "▾" : "▸") @skill.Name</span>
+                    <span class="battle-type battle-type-@skill.Type.ToString().ToLowerInvariant()">@skill.Type</span>
+                </button>
+                @if (open)
+                {
+                    <div class="skill-detail">
+                        <dl>
+                            <dt>@Loc.T("web.skill.category")</dt><dd>@SkillText.Category(skill)</dd>
+                            <dt>@Loc.T("web.skill.power")</dt><dd>@SkillText.Power(skill)</dd>
+                            <dt>@Loc.T("web.skill.accuracy")</dt><dd>@SkillText.Accuracy(skill)</dd>
+                        </dl>
+                        <ul>
+                            @foreach (string line in SkillText.Effects(skill))
+                            {
+                                <li>@line</li>
+                            }
+                        </ul>
+                    </div>
+                }
             </li>
         }
     </ul>
@@ -88,6 +108,10 @@
 
     [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+
+    private int? _openSkillId;
+
+    private void ToggleSkill(int id) => _openSkillId = _openSkillId == id ? null : id;
 
     private string EvolveProgress
     {

@@ -2,6 +2,7 @@
 @using TamaPoke.Web.Sprites
 @using TamaPoke.Web.Utils
 @inject Loc Loc
+@inject IJSRuntime JS
 
 @* 게임판 좌표는 PC판과 같은 288x288입니다. *@
 <div class="game-arena" style="background-image:url('ui/@Background')"
@@ -78,12 +79,21 @@
         _ => "bg_game_clean.png",
     };
 
-    private void OnPointerMove(PointerEventArgs e) => Pet.SetGamePointer(e.OffsetX, e.OffsetY);
+    // 설정의 화면 크기(CSS zoom)만큼 마우스 위치가 커져서 오므로, 게임판 좌표로 되돌립니다.
+    private double _zoom = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        double zoom = await JS.InvokeAsync<double>("tamaPoke.layoutZoom");
+        _zoom = zoom > 0 ? zoom : 1;
+    }
+
+    private void OnPointerMove(PointerEventArgs e) => Pet.SetGamePointer(e.OffsetX / _zoom, e.OffsetY / _zoom);
 
     // 터치에는 마우스 이동이 없으니 누른 곳으로도 따라갑니다. 공은 가까이 있을 때 튕깁니다.
     private void OnPointerDown(PointerEventArgs e)
     {
-        Pet.SetGamePointer(e.OffsetX, e.OffsetY);
+        Pet.SetGamePointer(e.OffsetX / _zoom, e.OffsetY / _zoom);
         Pet.TapBall();
     }
 }

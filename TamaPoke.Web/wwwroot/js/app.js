@@ -71,6 +71,36 @@ window.tamaPoke = {
     },
 };
 
+// 화면 크기(PC): 기기마다 다르게 쓰도록 세이브가 아니라 이 브라우저에 저장합니다. 화면이 뜨기 전에 바로 적용합니다.
+const UI_SCALE_KEY = "tamapoke.uiScale";
+
+window.tamaPoke.getUiScale = () => {
+    try {
+        const scale = parseFloat(localStorage.getItem(UI_SCALE_KEY));
+        return scale >= 0.5 && scale <= 2 ? scale : 1;
+    } catch {
+        return 1;
+    }
+};
+
+window.tamaPoke.setUiScale = (scale) => {
+    document.documentElement.style.setProperty("--tp-ui-scale", String(scale));
+    try {
+        if (scale === 1) localStorage.removeItem(UI_SCALE_KEY);
+        else localStorage.setItem(UI_SCALE_KEY, String(scale));
+    } catch {
+        // 저장이 막혀 있어도 이번 화면에는 적용됩니다.
+    }
+};
+
+// 지금 실제로 적용된 배율 (휴대폰 화면에서는 적용하지 않으므로 1). 미니게임 마우스 위치를 맞출 때 씁니다.
+window.tamaPoke.layoutZoom = () => {
+    const layout = document.querySelector(".pet-layout");
+    return (layout && parseFloat(getComputedStyle(layout).zoom)) || 1;
+};
+
+document.documentElement.style.setProperty("--tp-ui-scale", String(window.tamaPoke.getUiScale()));
+
 // 산책 화면에서는 오른쪽 버튼을 화면 옮기기에 쓰므로 브라우저 메뉴를 막습니다. (휴대폰 길게 누르기도 포함)
 document.addEventListener("contextmenu", (e) => {
     if (e.target instanceof Element && e.target.closest(".walk-layer")) e.preventDefault();

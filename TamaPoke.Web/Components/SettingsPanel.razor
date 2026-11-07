@@ -30,6 +30,18 @@
     </label>
     <p class="setting-hint">@Loc.T("settings.scale.hint")</p>
 
+    @* PC에서만 보이고 적용됩니다. 휴대폰은 화면에 맞춰 자동으로 배치됩니다. *@
+    <label class="setting-row setting-desktop-only">
+        <span>@Loc.T("web.settings.uiScale")</span>
+        <select value="@_uiScale.ToString(System.Globalization.CultureInfo.InvariantCulture)" @onchange="ChangeUiScaleAsync">
+            @foreach (double scale in UiScales)
+            {
+                <option value="@scale.ToString(System.Globalization.CultureInfo.InvariantCulture)">@($"{scale * 100:0}%")</option>
+            }
+        </select>
+    </label>
+    <p class="setting-hint setting-desktop-only">@Loc.T("web.settings.uiScale.hint")</p>
+
     <label class="setting-row">
         <span>@Loc.T("web.settings.notify")</span>
         <input type="checkbox" checked="@Pet.Settings.UseNotifications" @onchange="ToggleNotifications" />
@@ -126,6 +138,22 @@
 
     private static Task LoadTestSaveAsync() => Task.CompletedTask;
 #endif
+    private static readonly double[] UiScales = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5];
+    private double _uiScale = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        double current = await JS.InvokeAsync<double>("tamaPoke.getUiScale");
+        _uiScale = UiScales.OrderBy(s => Math.Abs(s - current)).First();
+    }
+
+    private async Task ChangeUiScaleAsync(ChangeEventArgs e)
+    {
+        if (!double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double scale)) return;
+        _uiScale = scale;
+        await JS.InvokeVoidAsync("tamaPoke.setUiScale", scale);
+    }
+
     private bool _notifyDenied;
     private bool _defaultsRestored;
 
