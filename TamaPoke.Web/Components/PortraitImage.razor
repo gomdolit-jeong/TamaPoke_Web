@@ -1,0 +1,42 @@
+@using TamaPoke.Web.Sprites
+
+@* 초상화가 없는 포켓몬·폼·표정이 있으므로, 못 받으면 차례로 대신합니다.
+   폼의 표정 → 폼의 기본 얼굴 → 기본 모습의 표정 → 기본 모습의 기본 얼굴 → 몬스터볼 *@
+<img class="portrait" src="@CurrentUrl" alt="@Alt" draggable="false" loading="lazy"
+     style="width:@(Size)px;height:@(Size)px" @onerror="TryNext" />
+
+@code {
+    [Parameter, EditorRequired] public required string SpritePath { get; set; }
+
+    // 폼 스프라이트에 초상화가 없을 때 쓸 기본 모습 경로 (예: 0025)
+    [Parameter] public string? FallbackPath { get; set; }
+    [Parameter] public string Emotion { get; set; } = PortraitEmotion.Normal;
+    [Parameter] public int Size { get; set; } = 40;
+    [Parameter] public string Alt { get; set; } = "";
+
+    private List<string> _candidates = [];
+    private int _index;
+    private (string, string?, string) _key;
+
+    private string CurrentUrl => _index < _candidates.Count ? _candidates[_index] : "ui/icon_ball.png";
+
+    protected override void OnParametersSet()
+    {
+        var key = (SpritePath, FallbackPath, Emotion);
+        if (key == _key) return;
+        _key = key;
+        _index = 0;
+
+        var paths = new List<string> { SpritePath };
+        if (!string.IsNullOrEmpty(FallbackPath) && FallbackPath != SpritePath) paths.Add(FallbackPath);
+        _candidates = paths
+            .SelectMany(p => new[] { PortraitEmotion.Url(p, Emotion), PortraitEmotion.Url(p, PortraitEmotion.Normal) })
+            .Distinct()
+            .ToList();
+    }
+
+    private void TryNext()
+    {
+        if (_index < _candidates.Count) _index++;
+    }
+}

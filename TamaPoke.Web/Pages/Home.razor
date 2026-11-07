@@ -56,7 +56,14 @@ else
             }
         </header>
 
-        <p class="pet-mood" role="status">@MoodText</p>
+        @* 말풍선 옆에 지금 기분에 맞는 표정의 얼굴을 보여 줍니다. (알일 때는 말풍선만) *@
+        <div class="pet-talk">
+            @if (!_pet.IsEgg)
+            {
+                <PortraitImage SpritePath="@_pet.SpritePath" FallbackPath="@($"{_pet.SpeciesId:D4}")" Emotion="@PortraitEmotion.For(_pet)" Size="40" />
+            }
+            <p class="pet-mood" role="status">@MoodText</p>
+        </div>
 
         @if (CloudSave.IsGuestImportPending)
         {

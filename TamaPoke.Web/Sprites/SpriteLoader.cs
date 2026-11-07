@@ -24,7 +24,8 @@ public sealed class SpriteStrip
 // jsDelivr는 저장소가 50 MB를 넘어서 일부 파일을 403으로 거부하므로 쓰지 않습니다.
 public sealed class SpriteLoader(HttpClient http)
 {
-    private const string BaseUrl = "https://raw.githubusercontent.com/PMDCollab/SpriteCollab/53074f14d6947daf17af7e21db709497169a0e76/sprite";
+    public const string RepoUrl = "https://raw.githubusercontent.com/PMDCollab/SpriteCollab/53074f14d6947daf17af7e21db709497169a0e76";
+    private const string BaseUrl = RepoUrl + "/sprite";
 
     // 처음 보여주기 전에 미리 받아 두는 자주 쓰는 모션
     private static readonly int[] CommonActions = [PokemonAnim.IDLE, PokemonAnim.WALK, PokemonAnim.EAT, PokemonAnim.HOP, PokemonAnim.SLEEP];

@@ -1,5 +1,6 @@
 @using TamaPoke.Web.Game
 @using TamaPoke.Web.Utils
+@using TamaPoke.Web.Sprites
 @inject Loc Loc
 @inject PokemonDex Dex
 
@@ -15,6 +16,8 @@
     }
 
     <h3>@Loc.T("web.profile.info")</h3>
+    <div class="profile-hero">
+    <PortraitImage SpritePath="@Pet.SpritePath" FallbackPath="@($"{Pet.SpeciesId:D4}")" Emotion="@PortraitEmotion.For(Pet)" Size="80" />
     <dl class="pet-facts">
         <dt>@Loc.T("web.profile.gender")</dt>
         <dd>@(Pet.IsGenderless ? "-" : Pet.IsFemale ? "♀" : "♂")</dd>
@@ -25,6 +28,7 @@
         <dt>@Loc.T("profile.favoriteBerry")</dt>
         <dd>@(Pet.BerryKnown ? Loc.T(BerryKeys[Pet.FavoriteBerry]) : "???")</dd>
     </dl>
+    </div>
 
     <h3><img class="pet-title-icon" src="ui/icon_sword.png" alt="" />@Loc.T("profile.stats")</h3>
     @if (Pet.Dex.Get(Pet.SpeciesId) is { } info)

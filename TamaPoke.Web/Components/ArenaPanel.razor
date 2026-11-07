@@ -156,7 +156,7 @@
     private string PokemonText(ArenaEntry entry) => $"{(entry.Shiny ? "✨" : "")}{Dex.GetName(entry.SpeciesId, Loc.Language)} Lv.{entry.Level}";
 
     private RenderFragment Sprite(ArenaEntry entry) =>
-        @<span class="party-sprite"><AnimatedSprite SpritePath="@Dex.SpritePath(entry.SpeciesId, entry.Form)" FallbackPath="@($"{entry.SpeciesId:D4}")" Paused="true" Scale="1" Alt="" /></span>;
+        @<span class="party-sprite"><PortraitImage SpritePath="@Dex.SpritePath(entry.SpeciesId, entry.Form)" FallbackPath="@($"{entry.SpeciesId:D4}")" /></span>;
 
     // 순위표 한 줄: 순위(1~3위는 메달), 포켓몬, 닉네임, 점수, 전적
     private RenderFragment RankRow(ArenaEntry entry, int? place, bool isMe)
