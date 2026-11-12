@@ -120,16 +120,11 @@ public static class SurvivalRules
     public const int MIN_ENERGY = 20;
     public const int DEFAULT_SKILL_ID = 33; // 기술이 하나도 없으면 몸통박치기
 
-    // 진화는 도감의 진화 레벨을 따르되, 조금 일찍 합니다. (돌, 교환 등 레벨이 아닌 진화는 도감처럼 Lv.36으로 셈)
-    // 예: 파이리 Lv.11 → 리자드 Lv.25, 딥상어동 Lv.17 → 한바이트 Lv.34, 잉어킹 Lv.14
-    // 진화하면 체력이 크게 늘어서, 도감 레벨 그대로면 초반을 버티기 어렵습니다.
+    // 진화는 원작(도감)의 진화 레벨 그대로 합니다. (돌, 교환 등 레벨이 아닌 진화는 도감처럼 Lv.36으로 셈)
+    // 예: 파이리 Lv.16 → 리자드 Lv.36, 딥상어동 Lv.24 → 한바이트 Lv.48, 잉어킹 Lv.20
     public const int MAX_EVOLUTIONS = 2;
-    public const double EVOLVE_LEVEL_SCALE = 0.7;
-    public const int MIN_EVOLVE_LEVEL = 8;
-    public const int MAX_EVOLVE_LEVEL = 40;
 
-    public static int EvolveLevel(int dexLevel) =>
-        Math.Clamp((int)Math.Round(dexLevel * EVOLVE_LEVEL_SCALE), MIN_EVOLVE_LEVEL, MAX_EVOLVE_LEVEL);
+    public static int EvolveLevel(int dexLevel) => Math.Max(1, dexLevel);
 
     // 정기 보스: 이 시간(초)마다 전설 포켓몬이 하나씩 나옵니다. 뒤에 나올수록 단단합니다.
     public static readonly int[] BossTimes = [120, 240, 360, 480];
