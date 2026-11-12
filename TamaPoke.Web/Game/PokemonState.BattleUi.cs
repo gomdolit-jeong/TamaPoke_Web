@@ -138,7 +138,9 @@ public sealed partial class PokemonState
             return WithBattleTypes(Dex.Get(SpeciesId), type1, type2, _playerLostTypes);
         }
     }
-    private int WildStat(int? baseStat) => BattleCalculator.Stat(baseStat ?? 50, BattleCalculator.WILD_GENE, EnemyLevel);
+    // 야생은 유전자 15, 관장은 유전자 31 (체력과 같은 값. 관장 보정 ×1.1은 쓰는 쪽에서 곱합니다)
+    private int WildStat(int? baseStat) =>
+        BattleCalculator.Stat(baseStat ?? 50, IsGymBattle ? BattleCalculator.GYM_GENE : BattleCalculator.WILD_GENE, EnemyLevel);
 
     private int CombatMaxHp => BattleCalculator.MaxHp(MyBaseInfo?.BaseHp ?? 50, Genes.HpGene + TrDef / 4, BattleLevel);
     private int CombatAtk => BattleCalculator.Stat(MyBaseInfo?.BaseAtk ?? 50, Genes.AtkGene + TrAtk / 4, BattleLevel);
