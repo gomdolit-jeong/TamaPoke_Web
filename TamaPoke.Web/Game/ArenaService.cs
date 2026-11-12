@@ -44,6 +44,22 @@ public sealed class ArenaService(CloudSave cloud, PokemonDex dex, SkillDex skill
         }
     }
 
+    // 시작 화면용: 로그인하지 않아도 이번 시즌 상위 count명을 읽습니다. 실패하면 null입니다.
+    public async Task<List<ArenaEntry>?> LoadTopAsync(int count)
+    {
+        try
+        {
+            string raw = await cloud.CallPublicAsync<string>("arenaTop", CurrentSeason, count);
+            var data = JsonSerializer.Deserialize(raw, ArenaJsonContext.Default.ArenaBoardData) ?? new ArenaBoardData();
+            return [.. data.Top.Select(e => ArenaRules.Sanitize(e, dex, skills)).OfType<ArenaEntry>().OrderByDescending(e => e.Points)];
+        }
+        catch (Exception ex) when (ex is JSException or JsonException or InvalidOperationException)
+        {
+            Console.WriteLine($"대전 순위 읽기 실패: {ex.Message}");
+            return null;
+        }
+    }
+
     // 닉네임을 바꿔 저장하고, 순위표 속 내 줄도 함께 바꿉니다. 저장하지 못하면 null입니다. (확인은 부르는 쪽에서)
     public async Task<ArenaBoard?> ChangeNicknameAsync(ArenaBoard board, string nickname)
     {

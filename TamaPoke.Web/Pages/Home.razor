@@ -41,10 +41,14 @@ else if (ShowTitle)
 {
     <TitleScreen CanSignIn="CloudSave.Status != CloudStatus.Unavailable"
                  IsSignInReady="CloudSave.Status is not (CloudStatus.Loading or CloudStatus.Syncing)"
+                 IsSignedIn="IsSignedInOnTitle"
                  HasSave="!_pet.HasNoProgress"
+                 ContinueText="@(IsSignedInOnTitle && !CloudSave.IsWaitingForChoice ? Summary(_pet) : null)"
                  Note="@TitleNote"
-                 OnSignIn="CloudSave.SignInAsync"
+                 OnSignIn="SignInFromTitleAsync"
                  OnGuest="StartAsGuest"
+                 OnContinue="ContinueFromTitle"
+                 OnSignOut="CloudSave.SignOutAsync"
                  OnToggleLanguage="ToggleLanguageAsync" />
 }
 else
@@ -305,8 +309,13 @@ else
     private DotNetObjectReference<Home>? _pageRef;
     private bool _isSettingsOpen;
 
-    // 로그인하지 않았고 게스트도 고르지 않았으면 시작 화면을 보여줍니다. (이때는 시간이 흐르지 않습니다)
-    private bool ShowTitle => CloudSave.IsSyncing || (!_isGuest && !CloudSave.IsAccountReady && !CloudSave.IsWaitingForChoice);
+    // 처음에는 로그인되어 있어도 시작 화면을 보여주고, "이어하기"를 눌러야 들어갑니다.
+    // 로그인하지 않았고 게스트도 고르지 않았을 때도 시작 화면입니다. (시작 화면에서는 시간이 흐르지 않습니다)
+    private bool _entered;
+    private bool ShowTitle => CloudSave.IsSyncing || !_entered || (!_isGuest && !CloudSave.IsAccountReady && !CloudSave.IsWaitingForChoice);
+
+    // 시작 화면에서 로그인된 계정으로 이어할 수 있는지 (불러오는 중이면 아직 아님)
+    private bool IsSignedInOnTitle => CloudSave.IsSignedIn && !CloudSave.IsSyncing && (CloudSave.IsAccountReady || CloudSave.IsWaitingForChoice);
 
     private string TitleNote => CloudSave.SignInError is not null
         ? Loc.T("web.cloud.signInFailed")
@@ -449,7 +458,21 @@ else
     private void StartAsGuest()
     {
         _isGuest = true;
+        _entered = true;
         PlaySound(SoundEffects.Play);
+    }
+
+    private void ContinueFromTitle()
+    {
+        _entered = true;
+        PlaySound(SoundEffects.Play);
+    }
+
+    // 시작 화면에서 로그인하면, 계정을 다 불러온 뒤 바로 들어갑니다.
+    private async Task SignInFromTitleAsync()
+    {
+        _entered = true;
+        await CloudSave.SignInAsync();
     }
 
     private void PlaySound(int[][] notes)

@@ -8,7 +8,8 @@
 @inject PokemonDex Dex
 @inject IJSRuntime JS
 
-@* 로그인 전 시작 화면: 포켓몬들이 풀밭을 뛰어다닙니다. *@
+@* 시작 화면: 포켓몬들이 풀밭을 뛰어다니고, 오른쪽(좁은 화면에서는 아래)에 게임별 순위표가 있습니다. *@
+<div class="title-layout">
 <section class="title-screen">
     <div class="title-stage">
         @foreach (var runner in _runners)
@@ -27,17 +28,35 @@
 
     <div class="title-actions">
         <p class="title-tagline">@Loc.T("web.title.tagline")</p>
-        @if (CanSignIn)
+        @if (IsSignedIn)
         {
-            <button type="button" class="title-login" disabled="@(!IsSignInReady)" @onclick="OnSignIn"><img class="google-icon" src="ui/icon_google.svg" alt="" />@Loc.T("web.cloud.signIn")</button>
+            @* 이미 로그인되어 있으면 바로 들어가지 않고 이어하기 버튼을 보여줍니다. *@
+            <button type="button" class="title-login" @onclick="OnContinue">
+                @Loc.T("web.title.continue")
+                @if (ContinueText is not null)
+                {
+                    <small class="title-continue-pet">@ContinueText</small>
+                }
+            </button>
+            <p class="title-note" role="status">@Loc.T("web.title.signedIn")</p>
+            <button type="button" class="title-signout" @onclick="OnSignOut">@Loc.T("web.cloud.signOut")</button>
         }
-        <button type="button" class="title-guest" @onclick="OnGuest">@Loc.T(HasSave ? "web.guest.continue" : "web.guest.start")</button>
-        <p class="title-note" role="status">@Note</p>
+        else
+        {
+            @if (CanSignIn)
+            {
+                <button type="button" class="title-login" disabled="@(!IsSignInReady)" @onclick="OnSignIn"><img class="google-icon" src="ui/icon_google.svg" alt="" />@Loc.T("web.cloud.signIn")</button>
+            }
+            <button type="button" class="title-guest" @onclick="OnGuest">@Loc.T(HasSave ? "web.guest.continue" : "web.guest.start")</button>
+            <p class="title-note" role="status">@Note</p>
+        }
         <button type="button" class="title-lang" lang="@(Loc.Language == Loc.Korean ? "en" : "ko")" @onclick="OnToggleLanguage">
             @(Loc.Language == Loc.Korean ? "English" : "한국어")
         </button>
     </div>
 </section>
+<TitleRanks />
+</div>
 
 @code {
     private const int RUNNER_COUNT = 6;
@@ -49,7 +68,11 @@
 
     [Parameter] public bool CanSignIn { get; set; }
     [Parameter] public bool IsSignInReady { get; set; }
+    [Parameter] public bool IsSignedIn { get; set; }
     [Parameter] public bool HasSave { get; set; }
+    [Parameter] public string? ContinueText { get; set; }
+    [Parameter] public EventCallback OnContinue { get; set; }
+    [Parameter] public EventCallback OnSignOut { get; set; }
     [Parameter] public string? Note { get; set; }
     [Parameter] public EventCallback OnSignIn { get; set; }
     [Parameter] public EventCallback OnGuest { get; set; }

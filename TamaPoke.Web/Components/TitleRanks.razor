@@ -1,0 +1,142 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@implements IDisposable
+@inject Loc Loc
+@inject PokemonDex Dex
+@inject CloudSave CloudSave
+@inject ArenaService Arena
+@inject SurvivalService Survival
+
+@* 시작 화면 오른쪽: 게임별 이번 주 순위 상위 몇 명 (로그인하지 않아도 보입니다) *@
+<aside class="title-ranks" aria-label="@Loc.T("web.title.ranks")">
+    <section class="title-rank">
+        <h2>@Loc.T("web.menu.arena") <small>@Loc.T("web.title.thisWeek")</small></h2>
+        @if (Problem is { } arenaProblem)
+        {
+            <p class="title-rank-note">@arenaProblem</p>
+        }
+        else if (_arena is null)
+        {
+            <p class="title-rank-note">@Loc.T("web.title.ranksFailed")</p>
+        }
+        else if (_arena.Count == 0)
+        {
+            <p class="title-rank-note">@Loc.T("web.title.ranksEmpty")</p>
+        }
+        else
+        {
+            <ol class="title-rank-list">
+                @for (int i = 0; i < _arena.Count; i++)
+                {
+                    var entry = _arena[i];
+                    @Row(i + 1, entry.SpeciesId, entry.Form, entry.Shiny, ArenaNames.Display(entry), string.Format(Loc.T("web.arena.score"), entry.Points), null)
+                }
+            </ol>
+        }
+    </section>
+
+    <section class="title-rank">
+        <h2>@Loc.T("web.menu.survival") <small>@Loc.T("web.title.thisWeek")</small></h2>
+        @if (Problem is { } survivalProblem)
+        {
+            <p class="title-rank-note">@survivalProblem</p>
+        }
+        else if (_survival is null)
+        {
+            <p class="title-rank-note">@Loc.T("web.title.ranksFailed")</p>
+        }
+        else if (_survival.Count == 0)
+        {
+            <p class="title-rank-note">@Loc.T("web.title.ranksEmpty")</p>
+        }
+        else
+        {
+            <ol class="title-rank-list">
+                @for (int i = 0; i < _survival.Count; i++)
+                {
+                    var entry = _survival[i];
+                    @Row(i + 1, entry.SpeciesId, entry.Form, entry.Shiny, SurvivalRules.Display(entry),
+                        (entry.TimeSec > SurvivalRules.RUN_SECONDS ? "♾ " : "") + SurvivalRules.Clock(entry.TimeSec), $"KO {entry.Kills}")
+                }
+            </ol>
+        }
+    </section>
+</aside>
+
+@code {
+    private const int SHOW_COUNT = 5;
+    private const int WAIT_STEP_MS = 200;
+    private const int WAIT_LIMIT_MS = 15_000; // 클라우드 연결을 이만큼 기다려도 안 되면 포기합니다.
+
+    private readonly CancellationTokenSource _cts = new();
+    private bool _isLoading = true;
+    private bool _isUnavailable;
+    private List<ArenaEntry>? _arena;
+    private List<SurvivalEntry>? _survival;
+
+    // 불러오는 중이거나 클라우드를 쓸 수 없으면 두 순위표에 같은 안내를 보여줍니다.
+    private string? Problem => _isUnavailable ? Loc.T("web.cloud.unavailable") : _isLoading ? Loc.T("web.loading") : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // 클라우드 모듈을 다 불러올 때까지 기다립니다. (시작 화면은 앱이 켜지자마자 나옵니다)
+            for (int waited = 0; !CloudSave.IsModuleReady; waited += WAIT_STEP_MS)
+            {
+                if (CloudSave.Status == CloudStatus.Unavailable || waited >= WAIT_LIMIT_MS)
+                {
+                    _isUnavailable = true;
+                    _isLoading = false;
+                    return;
+                }
+                await Task.Delay(WAIT_STEP_MS, _cts.Token);
+            }
+            var arena = Arena.LoadTopAsync(SHOW_COUNT);
+            var survival = Survival.LoadTopAsync(SHOW_COUNT);
+            _arena = (await arena)?.Take(SHOW_COUNT).ToList();
+            _survival = (await survival)?.Take(SHOW_COUNT).ToList();
+#if DEBUG
+            // 로컬 테스트(디버그 빌드): 순위표를 못 읽으면 가짜 트레이너로 모양을 미리 봅니다.
+            _arena ??= SampleArena();
+            _survival ??= Survival.SampleBoard()?.Top.Take(SHOW_COUNT).ToList();
+#endif
+            _isLoading = false;
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    // 순위표 한 줄: 순위(1~3위는 메달), 포켓몬, 트레이너 이름, 기록
+    private RenderFragment Row(int place, int speciesId, string form, bool shiny, string name, string score, string? detail)
+    {
+        string placeText = place switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => place.ToString() };
+        string pokemon = (shiny ? "✨" : "") + Dex.GetName(speciesId, Loc.Language);
+        return @<li class="title-rank-row">
+            <span class="arena-place">@placeText</span>
+            <span class="party-sprite title-rank-sprite"><PortraitImage SpritePath="@Dex.SpritePath(speciesId, form)" FallbackPath="@($"{speciesId:D4}")" Size="30" /></span>
+            <span class="title-rank-info">
+                <span class="title-rank-name">@name</span>
+                <span class="title-rank-pokemon">@pokemon</span>
+            </span>
+            <span class="title-rank-score">@score@if (detail is not null) {<small>@detail</small>}</span>
+        </li>;
+    }
+
+#if DEBUG
+    private List<ArenaEntry> SampleArena()
+    {
+        string[] names = ["AshKetchum", "MistyWater", "PikaFan99", "DragonTamer", "Volt"];
+        return [.. names.Select((name, i) => new ArenaEntry
+        {
+            Tag = $"#S{i:D3}", Nickname = name, SpeciesId = Dex.PickWildSpecies([1, 2, 3, 4, 5, 6, 7, 8, 9]),
+            Level = 60 - i * 7, Points = 1480 - i * 90, Shiny = i == 1,
+        })];
+    }
+#endif
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

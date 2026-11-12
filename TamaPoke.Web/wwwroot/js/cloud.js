@@ -94,6 +94,22 @@ export async function arenaLoad(season, limit) {
     return JSON.stringify({ me: me.exists() ? arenaEntry(me) : null, top: top.docs.map(arenaEntry) });
 }
 
+// 시작 화면용: 로그인하지 않아도 순위 상위 limit명만 읽습니다. (Firestore 규칙에서 순위표 읽기는 모두에게 열려 있음)
+export async function arenaTop(season, limit) {
+    return rankingTop("arena", "points", season, limit);
+}
+
+export async function survivalTop(season, limit) {
+    return rankingTop("survival", "score", season, limit);
+}
+
+async function rankingTop(name, field, season, limit) {
+    const { api, instance } = await db();
+    const players = api.collection(instance, name, season, "players");
+    const top = await api.getDocs(api.query(players, api.orderBy(field, "desc"), api.limit(limit)));
+    return JSON.stringify({ top: top.docs.map(arenaEntry) });
+}
+
 // 성공하면 빈 문자열, 실패하면 오류 코드를 돌려줍니다.
 export async function arenaSave(season, json) {
     try {
@@ -106,7 +122,7 @@ export async function arenaSave(season, json) {
     }
 }
 
-// 서바이벌 주간 랭킹: survival/{시즌}/players/{uid}. 읽기는 로그인한 사람 모두, 쓰기는 본인 문서만 됩니다.
+// 서바이벌 주간 랭킹: survival/{시즌}/players/{uid}. 읽기는 모두, 쓰기는 본인 문서만 됩니다.
 function survivalPlayer(api, instance, season, uid) {
     return api.doc(instance, "survival", season, "players", uid);
 }

@@ -298,6 +298,22 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
         }
     }
 
+    // 시작 화면용: 로그인하지 않아도 이번 주 상위 count명을 읽습니다. 실패하면 null입니다.
+    public async Task<List<SurvivalEntry>?> LoadTopAsync(int count)
+    {
+        try
+        {
+            string raw = await cloud.CallPublicAsync<string>("survivalTop", CurrentSeason, count);
+            var data = JsonSerializer.Deserialize(raw, SurvivalJsonContext.Default.SurvivalBoardData) ?? new SurvivalBoardData();
+            return [.. data.Top.Select(e => SurvivalRules.Sanitize(e, dex)).OfType<SurvivalEntry>().OrderByDescending(e => e.Score)];
+        }
+        catch (Exception ex) when (ex is JSException or JsonException or InvalidOperationException)
+        {
+            Console.WriteLine($"서바이벌 순위 읽기 실패: {ex.Message}");
+            return null;
+        }
+    }
+
     // 게임 화면 오른쪽 위 "다음 순위" 표시용: 이번 주 순위표 (로그인 안 했으면 디버그 빌드에서만 가짜 순위표)
     public async Task<List<SurvivalRival>> LoadRivalsAsync()
     {
