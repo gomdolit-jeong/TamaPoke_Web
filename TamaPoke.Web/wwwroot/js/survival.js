@@ -28,6 +28,17 @@ const OPENING_RATE = 3;   // 처음 30초쯤은 초당 이만큼은 나옵니다
 const FREEZE_SECONDS = 4;
 const ITEM_ICONS = { magnet: "🧲", ice: "❄️", bomb: "💥" };
 const MAX_CANDIES = 60; // 바닥의 사탕이 이만큼 차면, 그 뒤 사탕은 모두 큰 사탕 하나에 모입니다.
+// 큰 사탕은 모인 양에 따라 3단계로 커지고 색이 바뀝니다. (from: 이 값부터 그 단계)
+const BIG_CANDY_STAGES = [
+    { from: 0, size: 18, tint: null, glow: "255 215 90" },          // 1단계: 원래 색, 금빛 고리
+    { from: 100, size: 23, tint: "#4aa8ff", glow: "110 180 255" },  // 2단계: 파랑
+    { from: 400, size: 28, tint: "#ffd23c", glow: "255 240 150" },  // 3단계: 금색, 반짝임
+];
+function bigCandyStage(value) {
+    let stage = 0;
+    while (stage + 1 < BIG_CANDY_STAGES.length && value >= BIG_CANDY_STAGES[stage + 1].from) stage++;
+    return stage;
+}
 const MAX_NUMBERS = 40;
 const WEAPON_MAX = 5;
 const PASSIVE_MAX = 5;
@@ -946,8 +957,13 @@ class Game {
     dropGem(x, y, kind, value) {
         if (kind === "candy" && this.gems.filter(g => g.kind === "candy" && !g.big).length >= MAX_CANDIES) {
             // 사탕이 너무 많으면 큰 사탕 하나에 모읍니다. (주우면 모인 사탕을 한꺼번에 얻습니다)
-            if (this.bigCandy && !this.bigCandy.taken) this.bigCandy.value += value;
-            else this.gems.push(this.bigCandy = { x, y, kind, value, pulled: false, big: true });
+            const big = this.bigCandy;
+            if (big && !big.taken) {
+                const before = bigCandyStage(big.value);
+                big.value += value;
+                if (bigCandyStage(big.value) > before) big.grownAt = this.time; // 한 단계 커질 때 톡 튀어 오릅니다.
+            }
+            else this.gems.push(this.bigCandy = { x, y, kind, value, pulled: false, big: true, grownAt: this.time });
             return;
         }
         this.gems.push({ x, y, kind, value, pulled: false });
@@ -1063,6 +1079,23 @@ class Game {
     }
 
     // 회색 효과 시트에 기술 타입 색을 곱한 그림 (효과·타입마다 한 번만 만듭니다)
+    // 사탕 그림의 밝기는 그대로 두고 색만 바꾼 사본 (큰 사탕 단계별 색)
+    candyTint(base, color) {
+        const key = `candy|${color}`;
+        if (this.novaTints[key]) return this.novaTints[key];
+        const canvas = document.createElement("canvas");
+        canvas.width = base.width;
+        canvas.height = base.height;
+        const g = canvas.getContext("2d");
+        g.drawImage(base, 0, 0);
+        g.globalCompositeOperation = "color";
+        g.fillStyle = color;
+        g.fillRect(0, 0, canvas.width, canvas.height);
+        g.globalCompositeOperation = "destination-in";
+        g.drawImage(base, 0, 0);
+        return (this.novaTints[key] = canvas);
+    }
+
     tinted(name, type, color) {
         const base = this.images[`pfx/${name}.png`];
         if (!type || !base) return base;
@@ -1335,13 +1368,26 @@ class Game {
                 ctx.fillText(ITEM_ICONS[g.kind], g.x, g.y + bob);
             }
             else if (candy && g.big) {
-                // 큰 사탕: 빛나는 고리와 함께 크게
-                const pulse = 1 + Math.sin(this.time * 5) * 0.12;
-                ctx.fillStyle = "rgb(255 215 90 / 35%)";
+                // 큰 사탕: 모인 양에 따라 단계별로 커지고 색이 바뀝니다.
+                const index = bigCandyStage(g.value), stage = BIG_CANDY_STAGES[index];
+                const pop = 1 + 0.5 * Math.max(0, 1 - (this.time - (g.grownAt ?? -9)) / 0.35);
+                const size = stage.size * pop, pulse = 1 + Math.sin(this.time * 5) * 0.12;
+                ctx.fillStyle = `rgb(${stage.glow} / 35%)`;
                 ctx.beginPath();
-                ctx.arc(g.x, g.y + bob, 12 * pulse, 0, Math.PI * 2);
+                ctx.arc(g.x, g.y + bob, size * 0.68 * pulse, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.drawImage(candy, g.x - 9, g.y - 9 + bob, 18, 18);
+                const image = stage.tint ? this.candyTint(candy, stage.tint) : candy;
+                ctx.drawImage(image, g.x - size / 2, g.y - size / 2 + bob, size, size);
+                if (index === BIG_CANDY_STAGES.length - 1) {
+                    // 마지막 단계: 둘레를 도는 반짝임
+                    ctx.fillStyle = "#ffffff";
+                    for (let i = 0; i < 3; i++) {
+                        const angle = this.time * 2.5 + i * Math.PI * 2 / 3, twinkle = Math.sin(this.time * 9 + i * 2) > 0 ? 2 : 1;
+                        const sx = Math.round(g.x + Math.cos(angle) * size * 0.62), sy = Math.round(g.y + bob + Math.sin(angle) * size * 0.62);
+                        ctx.fillRect(sx - twinkle, sy, twinkle * 2, 1);
+                        ctx.fillRect(sx, sy - twinkle, 1, twinkle * 2);
+                    }
+                }
             }
             else if (candy) {
                 const size = g.value >= 10 ? 13 : g.value >= 3 ? 10 : g.value >= 2 ? 8 : 7;
