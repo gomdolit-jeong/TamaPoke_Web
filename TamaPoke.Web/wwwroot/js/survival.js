@@ -62,6 +62,8 @@ const OWNED_WEAPON_MAX = 4;
 const EVOLVE_PAIR = { bolt: "haste", spray: "might", slash: "armor", nova: "vital", orbit: "swift", chain: "magnet", aura: "armor" };
 // 레벨업 카드를 다룰 수 있는 횟수 (한 판): 다시 뽑기, 건너뛰기, 지우기 (뱀서라이크의 Reroll/Skip/Banish)
 const REROLLS = 2, SKIPS = 2, BANISHES = 2;
+// 기술·강화를 다 올린 뒤의 레벨업 회복량 (최대 체력 대비). 후반 생존에 크게 걸려 있어서 줄이면 난이도를 다시 맞춰야 합니다. (봇: 0이면 저주 3 클리어 60% → 24%)
+const HEAL_ON_LEVEL = 0.35;
 const PLAYER_RADIUS = 7;
 const INVULN_SECONDS = 0.8;
 const EVOLVE_SECONDS = 2.6;      // 진화 장면 길이 (그동안 게임이 멈춥니다)
@@ -1296,13 +1298,31 @@ class Game {
             options.push(pick);
             pool.splice(pool.indexOf(pick), 1);
         }
-        if (options.length === 0) options.push({ id: "heal", kind: "heal", level: 0 });
+        if (options.length === 0) {
+            // 고를 카드가 없으면(기술·강화를 다 올림) 창을 띄우지 않고 바로 회복합니다. (예전엔 마지막 2~3분에 회복 카드 창이 20번쯤 떠서 게임이 끊겼음)
+            // 다시 뽑기·지우기 중(이미 고르는 창이 떠 있음)에만 회복 카드 한 장을 보여 창을 닫을 수 있게 합니다.
+            if (!this.awaitingChoice) {
+                this.autoHeal();
+                return;
+            }
+            options.push({ id: "heal", kind: "heal", level: 0 });
+        }
 
         if (!this.awaitingChoice) this.sound([[784, 60], [988, 60], [1319, 120]]);
         this.awaitingChoice = true;
         this.keys.clear();
         this.stick = null;
         this.sendChoice(options.map(({ weight, ...o }) => o));
+    }
+
+    // 강화가 다 끝난 뒤의 레벨업: 최대 체력의 HEAL_ON_LEVEL만큼 회복하고 머리 위에 초록 숫자만 띄웁니다.
+    autoHeal() {
+        const p = this.player;
+        const gain = Math.min(p.maxHp - p.hp, p.maxHp * HEAL_ON_LEVEL);
+        p.hp += gain;
+        this.pendingLevels = Math.max(0, this.pendingLevels - 1);
+        if (gain >= 1) this.addNumber(p.x, p.y - 22, `+${Math.round(gain)}`, "#5fe06b");
+        this.sound([[988, 40], [1319, 70]]);
     }
 
     // 고르는 화면을 C#에 띄웁니다. 진화 고르기에는 다시 뽑기·건너뛰기·지우기를 쓰지 않습니다.
@@ -1352,7 +1372,7 @@ class Game {
             return;
         }
         if (id === "heal") {
-            this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.35);
+            this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * HEAL_ON_LEVEL);
         } else if (id.startsWith("w")) {
             const w = this.weapons[Number(id.slice(1))];
             if (w && w.level < WEAPON_MAX) w.level++;
