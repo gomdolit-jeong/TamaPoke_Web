@@ -10,6 +10,7 @@ const SWARM_SIZE = 36;
 const FLYBY_AT = [90, 210, 330, 450]; // 무리가 화면을 가로질러 지나가는 때 (초)
 const FLYBY_SIZE = 22, FLYBY_SPEED = 115;
 const OPENING_SIZE = 12; // 시작하자마자 화면 안에 나와 있는 약한 무리
+const OPENING_MIN_DISTANCE = 160; // 시작 무리는 적어도 이만큼 떨어져 있습니다.
 const OPENING_RATE = 3;   // 처음 30초쯤은 초당 이만큼은 나옵니다.
 const FREEZE_SECONDS = 4;
 const ITEM_ICONS = { magnet: "🧲", ice: "❄️", bomb: "💥" };
@@ -20,6 +21,8 @@ const PASSIVE_MAX = 5;
 const OWNED_WEAPON_MAX = 4;
 const PLAYER_RADIUS = 7;
 const INVULN_SECONDS = 0.8;
+const EVOLVE_SECONDS = 2.6;      // 진화 장면 길이 (그동안 게임이 멈춥니다)
+const EVOLVE_PUSH_RADIUS = 90;   // 진화가 끝날 때 이 안의 적을 밀어냅니다.
 const PICKUP_RADIUS = 38;
 const CELL = 32;
 const DECOR_CHUNK = 160;
@@ -373,10 +376,30 @@ class Game {
         this.dotnet.invokeMethodAsync("OnLevelUp", JSON.stringify(options));
     }
 
+    // 진화 장면 시작: 게임이 멈추고, 포켓몬이 빛나며 원래 모습과 진화한 모습이 점점 빠르게 번갈아 보입니다.
     evolve(index) {
         const next = this.forms[index];
         if (!next) return;
+        this.evolving = { from: this.form, to: next, t: 0 };
+        this.keys.clear();
+        this.stick = null;
+        this.sound([[392, 140], [440, 140], [494, 140], [523, 140], [587, 140], [659, 140], [740, 140], [784, 140], [880, 200]]);
+    }
+
+    finishEvolve() {
+        const next = this.evolving.to;
+        this.evolving = null;
         const p = this.player;
+        p.invuln = Math.max(p.invuln, 1.2);
+        // 진화의 빛이 가까운 적을 밀어냅니다.
+        for (const e of this.enemies) {
+            if (e.dying || e.rank === "boss") continue;
+            const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
+            if (d > EVOLVE_PUSH_RADIUS) continue;
+            const k = 260 * (1 - d / EVOLVE_PUSH_RADIUS) / e.size;
+            e.kbx += dx / d * k;
+            e.kby += dy / d * k;
+        }
         const ratio = p.hp / p.maxHp;
         this.form = next;
         p.maxHp = next.maxHp * (1 + 0.15 * this.passives.vital);
@@ -396,6 +419,14 @@ class Game {
             this.player.deadTimer -= dt;
             if (this.player.deadTimer <= 0) this.sendResult(false);
             this.updateEffects(dt);
+            return;
+        }
+
+        if (this.evolving) {
+            this.evolving.t += dt;
+            this.player.animMs += dt * 1000;
+            this.updateEffects(dt);
+            if (this.evolving.t >= EVOLVE_SECONDS) this.finishEvolve();
             return;
         }
 
@@ -547,13 +578,16 @@ class Game {
     // 시작 무리: 원조 장르처럼 시작하자마자 화면 가장자리 안쪽에 가장 약한 포켓몬들이 둘러서 있습니다.
     spawnOpening() {
         const p = this.player;
-        const radius = Math.min(this.halfW, this.halfH);
+        // 화면 모양(가로로 긴 화면이면 가로로 긴 타원)을 따라 화면 가장자리 근처에 둡니다. 가까워도 OPENING_MIN_DISTANCE보다는 멀리.
         for (let i = 0; i < OPENING_SIZE; i++) {
             const e = this.spawnEnemy(0, "normal");
-            const angle = Math.random() * Math.PI * 2;
-            const distance = radius * (0.65 + Math.random() * 0.35);
-            e.x = p.x + Math.cos(angle) * distance;
-            e.y = p.y + Math.sin(angle) * distance;
+            const angle = (i + Math.random() * 0.8) / OPENING_SIZE * Math.PI * 2;
+            const edge = 0.9 + Math.random() * 0.2;
+            let dx = Math.cos(angle) * this.halfW * edge, dy = Math.sin(angle) * this.halfH * edge;
+            const d = Math.hypot(dx, dy) || 1;
+            if (d < OPENING_MIN_DISTANCE) { dx *= OPENING_MIN_DISTANCE / d; dy *= OPENING_MIN_DISTANCE / d; }
+            e.x = p.x + dx;
+            e.y = p.y + dy;
         }
     }
 
@@ -1168,7 +1202,82 @@ class Game {
         this.drawEffects();
         this.drawPfx();
         this.drawNumbers();
+        this.drawEvolution(left, top, width, height);
         this.drawHud();
+    }
+
+    // 진화 장면: 화면이 어두워지고, 빛줄기 속에서 하얀 실루엣이 원래 모습 ↔ 진화한 모습으로 점점 빠르게 바뀝니다.
+    drawEvolution(left, top, width, height) {
+        const ev = this.evolving;
+        if (!ev) return;
+        const ctx = this.ctx, p = this.player;
+        const t = Math.min(1, ev.t / EVOLVE_SECONDS);
+
+        ctx.fillStyle = `rgb(10 12 30 / ${Math.round(Math.min(1, ev.t / 0.35) * 62)}%)`;
+        ctx.fillRect(left, top, width, height);
+
+        // 빛줄기와 빛무리
+        const glow = 26 + 34 * t;
+        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glow);
+        gradient.addColorStop(0, "rgb(255 210 110 / 40%)");
+        gradient.addColorStop(1, "rgb(255 210 110 / 0%)");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, glow, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(ev.t * 0.8);
+        ctx.fillStyle = `rgb(255 235 160 / ${Math.round(8 + 18 * t)}%)`;
+        const rays = 10, reach = 60 + 140 * t;
+        for (let i = 0; i < rays; i++) {
+            const a = i / rays * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(a - 0.09) * reach, Math.sin(a - 0.09) * reach);
+            ctx.lineTo(Math.cos(a + 0.09) * reach, Math.sin(a + 0.09) * reach);
+            ctx.fill();
+        }
+        ctx.restore();
+
+        // 원래 모습 ↔ 진화한 모습 (처음엔 느리게, 끝으로 갈수록 빠르게)
+        const flips = Math.floor(18 * t * t);
+        const form = t > 0.88 || flips % 2 === 1 ? ev.to : ev.from;
+        const sprite = form.idleH.sprite ?? form.walkH.sprite;
+        if (sprite) this.drawSilhouette(sprite, p.x, p.y, p.row, p.animMs);
+
+        // 반짝이는 빛 알갱이가 안으로 모입니다.
+        ctx.fillStyle = "#fffbe0";
+        for (let i = 0; i < 14; i++) {
+            const a = i * 2.39996 + ev.t * 1.5;
+            const r = (1 - ((ev.t * 0.9 + i * 0.137) % 1)) * 70;
+            ctx.fillRect(Math.round(p.x + Math.cos(a) * r) - 1, Math.round(p.y + Math.sin(a) * r * 0.8) - 1, 2, 2);
+        }
+
+        // 끝날 때 하얗게 번쩍
+        if (t > 0.9) {
+            ctx.fillStyle = `rgb(255 255 255 / ${Math.round((t - 0.9) / 0.1 * 90)}%)`;
+            ctx.fillRect(left, top, width, height);
+        }
+    }
+
+    // 스프라이트 한 장면을 하얀 실루엣으로 그립니다.
+    drawSilhouette(sprite, x, y, row, ms) {
+        const frame = frameAt(sprite, ms);
+        const r = sprite.rows > row ? row : 0;
+        const canvas = this.silhouetteCanvas ??= document.createElement("canvas");
+        if (canvas.width !== sprite.fw || canvas.height !== sprite.fh) {
+            canvas.width = sprite.fw;
+            canvas.height = sprite.fh;
+        }
+        const c = canvas.getContext("2d");
+        c.globalCompositeOperation = "source-over";
+        c.clearRect(0, 0, sprite.fw, sprite.fh);
+        c.drawImage(sprite.image, frame * sprite.fw, r * sprite.fh, sprite.fw, sprite.fh, 0, 0, sprite.fw, sprite.fh);
+        c.globalCompositeOperation = "source-atop";
+        c.fillStyle = "#ffffff";
+        c.fillRect(0, 0, sprite.fw, sprite.fh);
+        this.ctx.drawImage(canvas, Math.round(x - sprite.fw / 2), Math.round(y - sprite.fh / 2));
     }
 
     drawDecor(left, top, width, height) {
@@ -1230,6 +1339,7 @@ class Game {
         const ctx = this.ctx;
         const p = this.player;
         this.drawShadow(p.x, p.y + 7, 18);
+        if (this.evolving) return; // 진화 장면에서는 drawEvolution이 실루엣으로 그립니다.
         const sprite = (p.moving || !this.form.idleH.sprite) ? this.form.walkH.sprite : this.form.idleH.sprite;
         if (p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.45;
         if (p.dead) ctx.globalAlpha = Math.max(0, p.deadTimer / 1.2);
