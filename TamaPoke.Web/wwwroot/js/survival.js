@@ -3,6 +3,19 @@
 // 레벨업 고르기·일시정지·결과 화면은 C#이 그 위에 보여 줍니다.
 
 const RUN_SECONDS = 600;
+
+// 난이도 (m = 지난 시간(분), t = 지난 시간(초))
+const TUNE = {
+    // 세대별 스타팅 포켓몬 9마리와 잉어킹을 봇으로 돌려 맞춘 값: 잘 풀린 판은 체력 절반쯤까지 밀리며 10분, 안 풀린 판은 4~8분.
+    spawnBase: 1.8, spawnPerSec: 1 / 40, spawnPerMin2: 0.18, spawnMax: 34, // 초당 나오는 적: min(spawnMax, spawnBase + t × spawnPerSec + m² × spawnPerMin2)
+    hpLinear: 0.45, hpSquare: 0.27,                      // 적 체력 배수: 1 + m × hpLinear + m² × hpSquare
+    damageBase: 1.5, damagePerMin: 0.42,                 // 적 공격 배수: damageBase + m × damagePerMin
+    speedBase: 1.15, speedPerMin: 0.07,                  // 적 속도 배수: speedBase + m × speedPerMin
+    expBase: 4, expLinear: 2.5, expPow: 1.4,             // 레벨업에 필요한 사탕: expBase + Lv × expLinear + Lv^expPow
+    expLateFrom: 15, expLate: 0.25,                      //   + (Lv - expLateFrom)² × expLate (후반 레벨업만 느리게)
+    startLevel: 2,                                       // 처음부터 쓰는 기술의 레벨
+    rushFrom: 240, rushChance: 0.32, rushSpeed: 1.8, rushHp: 0.6, // 돌격형 적: rushFrom초부터 rushChance 확률로 (빠르고 약함)
+};
 const ELITE_EVERY = 45;
 const MAX_ENEMIES = 320;
 const SWARM_AT = [150, 300, 420, 540]; // 사방에서 둘러싸는 습격 (초)
@@ -14,7 +27,7 @@ const OPENING_MIN_DISTANCE = 160; // 시작 무리는 적어도 이만큼 떨어
 const OPENING_RATE = 3;   // 처음 30초쯤은 초당 이만큼은 나옵니다.
 const FREEZE_SECONDS = 4;
 const ITEM_ICONS = { magnet: "🧲", ice: "❄️", bomb: "💥" };
-const MAX_GEMS = 350;
+const MAX_CANDIES = 60; // 바닥의 사탕이 이만큼 차면, 그 뒤 사탕은 모두 큰 사탕 하나에 모입니다.
 const MAX_NUMBERS = 40;
 const WEAPON_MAX = 5;
 const PASSIVE_MAX = 5;
@@ -28,7 +41,7 @@ const CELL = 32;
 const DECOR_CHUNK = 160;
 
 // 기술 종류별 기본 재사용 시간(ms)
-const COOLDOWN = { bolt: 1100, spray: 1300, slash: 950, nova: 2000, orbit: 0, chain: 1500, aura: 0 };
+const COOLDOWN = { bolt: 1100, spray: 1300, slash: 950, nova: 2400, orbit: 0, chain: 1500, aura: 0 };
 
 // pixelfx(MIT, https://github.com/patch-gg/pixelfx)로 미리 그려 둔 효과 시트 (wwwroot/pfx).
 // fw x fh 프레임이 가로로 이어져 있고, (ox, oy)가 효과의 기준점입니다.
@@ -206,7 +219,7 @@ class Game {
             x: 0, y: 0, hp: this.form.maxHp, maxHp: this.form.maxHp, row: 0, moving: false, animMs: 0,
             invuln: 0, faceX: 0, faceY: 1, dead: false,
         };
-        this.weapons = s.weapons.map((w, index) => ({ ...w, index, level: index === 0 ? 1 : 0, cd: 400 + index * 150, angle: 0, tick: 0, dealt: 0, ko: 0 }));
+        this.weapons = s.weapons.map((w, index) => ({ ...w, index, level: index === 0 ? TUNE.startLevel : 0, cd: 400 + index * 150, angle: 0, tick: 0, dealt: 0, ko: 0 }));
         // 대폭발 아이템의 기록 (기술처럼 데미지를 주지만 기술 기록과 따로 셉니다)
         this.bombSource = { ...this.weapons[0], index: -1, kind: "bomb", slow: false, dealt: 0, ko: 0 };
         this.passives = Object.fromEntries(PASSIVES.map(p => [p, 0]));
@@ -410,7 +423,10 @@ class Game {
         this.checkEvolve();
     }
 
-    needFor(level) { return Math.floor(4 + level * 2.5 + Math.pow(level, 1.4)); }
+    needFor(level) {
+        const late = Math.max(0, level - TUNE.expLateFrom);
+        return Math.floor(TUNE.expBase + level * TUNE.expLinear + Math.pow(level, TUNE.expPow) + late * late * TUNE.expLate);
+    }
 
     // --- 진행 ---
 
@@ -479,7 +495,8 @@ class Game {
 
     spawn(dt) {
         const t = this.time;
-        this.spawnAcc += dt * Math.min(16, Math.max(OPENING_RATE, 1.8 + t / 26));
+        const m = t / 60;
+        this.spawnAcc += dt * Math.min(TUNE.spawnMax, Math.max(OPENING_RATE, TUNE.spawnBase + t * TUNE.spawnPerSec + m * m * TUNE.spawnPerMin2));
         while (this.spawnAcc >= 1) {
             this.spawnAcc -= 1;
             if (this.enemies.length < MAX_ENEMIES) this.spawnEnemy(this.pickTier(), "normal");
@@ -599,15 +616,17 @@ class Game {
         const bossIndex = tier < 0 ? -1 - tier : 0;
         const def = tier < 0 ? this.bosses[bossIndex] : this.roster[tier];
         const minutes = this.time / 60;
-        const growth = 1 + minutes * 0.45 + minutes * minutes * 0.05;
+        const growth = 1 + minutes * TUNE.hpLinear + minutes * minutes * TUNE.hpSquare;
+        const rush = rank === "normal" && this.time >= TUNE.rushFrom && Math.random() < TUNE.rushChance;
         const rankHp = rank === "boss" ? 25 + 15 * bossIndex : rank === "elite" ? 12 : 1;
         const [x, y] = this.spawnPoint();
         const enemy = {
             def, rank, tier, x, y,
-            hp: def.hp * growth * rankHp,
-            maxHp: def.hp * growth * rankHp,
-            speed: def.speed * (1.15 + minutes * 0.07) * (rank === "boss" ? 0.85 : rank === "elite" ? 0.9 : 1),
-            damage: def.damage * (1.5 + minutes * 0.16) * (rank === "boss" ? 2 : rank === "elite" ? 1.5 : 1),
+            hp: def.hp * growth * rankHp * (rush ? TUNE.rushHp : 1),
+            maxHp: def.hp * growth * rankHp * (rush ? TUNE.rushHp : 1),
+            speed: def.speed * (TUNE.speedBase + minutes * TUNE.speedPerMin) * (rank === "boss" ? 0.85 : rank === "elite" ? 0.9 : 1) * (rush ? TUNE.rushSpeed : 1),
+            damage: def.damage * (TUNE.damageBase + minutes * TUNE.damagePerMin) * (rank === "boss" ? 2 : rank === "elite" ? 1.5 : 1),
+            rush,
             size: rank === "boss" ? 2.2 : rank === "elite" ? 1.5 : 1,
             animMs: Math.random() * 1000,
             row: 0, hitMs: 0, slow: 0, kbx: 0, kby: 0, hitBy: {},
@@ -787,7 +806,8 @@ class Game {
         for (let i = 0; i < count; i++) {
             const angle = aim + (i / (count - 1) - 0.5) * spread + (Math.random() - 0.5) * 0.1;
             const speed = 170 + Math.random() * 40;
-            this.shots.push({ w, x: this.player.x, y: this.player.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0.42 + w.level * 0.04, pierce: 0, radius: 5, hit: new Set(), size: 12, hidden: true });
+            // 불꽃·물줄기는 앞의 적을 뚫고 지나갑니다. (Lv.3부터 2마리)
+            this.shots.push({ w, x: this.player.x, y: this.player.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0.42 + w.level * 0.04, pierce: w.level >= 3 ? 2 : 1, radius: 5, hit: new Set(), size: 12, hidden: true });
         }
         const reach = 190 * (0.42 + w.level * 0.04);
         // 포켓몬 몸과 겹치지 않게, 쏘는 방향으로 몸 바깥(16px 앞)에서 시작합니다.
@@ -816,8 +836,9 @@ class Game {
     }
 
     fireNova(w) {
-        const radius = 58 + 12 * w.level;
-        this.near(this.player.x, this.player.y, radius, (e) => this.damage(e, this.weaponDamage(w, e) * (1 + 0.3 * w.extra), w, 160));
+        // 화면 전체를 쓸지 않도록 범위와 데미지를 조금 낮게 둡니다. (Lv.5 반경 98)
+        const radius = 53 + 9 * w.level;
+        this.near(this.player.x, this.player.y, radius, (e) => this.damage(e, this.weaponDamage(w, e) * 0.8 * (1 + 0.3 * w.extra), w, 160));
         this.effects.push({ type: "nova", w, x: this.player.x, y: this.player.y, radius, life: 0.3, max: 0.3 });
         this.addPfx("nova", "nova", this.player.x, this.player.y + 7, { scale: radius / 70, speed: 2, tint: w.type, color: w.color, follow: true });
     }
@@ -843,19 +864,20 @@ class Game {
     }
 
     updateOrbit(w, dt) {
-        const count = 1 + Math.ceil(w.level / 2) + w.extra;
-        const radius = 34 + 3 * w.level;
-        w.angle += dt * (2.6 + 0.15 * w.level);
+        const count = 2 + Math.floor(w.level / 2) + w.extra;
+        // 회전 기술이 여러 개면 서로 다른 거리와 방향에서 돕니다.
+        const radius = 36 + 6 * w.level + (w.index % 2) * 12;
+        w.angle += dt * (2.6 + 0.15 * w.level) * (w.index % 2 ? -1 : 1);
         w.orbs = [];
         for (let i = 0; i < count; i++) {
-            const angle = w.angle + i * Math.PI * 2 / count;
+            const angle = w.angle + w.index * 0.9 + i * Math.PI * 2 / count;
             const x = this.player.x + Math.cos(angle) * radius, y = this.player.y + Math.sin(angle) * radius;
             w.orbs.push([x, y]);
-            this.near(x, y, 7, (e) => {
+            this.near(x, y, 10, (e) => {
                 const until = e.hitBy[w.index] ?? 0;
                 if (this.time < until) return;
-                e.hitBy[w.index] = this.time + 0.5;
-                this.damage(e, this.weaponDamage(w, e) * 0.8, w, 90, x, y);
+                e.hitBy[w.index] = this.time + 0.4;
+                this.damage(e, this.weaponDamage(w, e), w, 90, x, y);
             });
         }
     }
@@ -922,11 +944,10 @@ class Game {
     }
 
     dropGem(x, y, kind, value) {
-        if (kind === "candy" && this.gems.length >= MAX_GEMS) {
-            // 너무 많으면 가장 가까운 사탕에 합칩니다.
-            let best = this.gems[0];
-            for (const g of this.gems) if (g.kind === "candy" && Math.abs(g.x - x) + Math.abs(g.y - y) < Math.abs(best.x - x) + Math.abs(best.y - y)) best = g;
-            best.value += value;
+        if (kind === "candy" && this.gems.filter(g => g.kind === "candy" && !g.big).length >= MAX_CANDIES) {
+            // 사탕이 너무 많으면 큰 사탕 하나에 모읍니다. (주우면 모인 사탕을 한꺼번에 얻습니다)
+            if (this.bigCandy && !this.bigCandy.taken) this.bigCandy.value += value;
+            else this.gems.push(this.bigCandy = { x, y, kind, value, pulled: false, big: true });
             return;
         }
         this.gems.push({ x, y, kind, value, pulled: false });
@@ -1313,6 +1334,15 @@ class Game {
                 ctx.fillStyle = "#ffffff";
                 ctx.fillText(ITEM_ICONS[g.kind], g.x, g.y + bob);
             }
+            else if (candy && g.big) {
+                // 큰 사탕: 빛나는 고리와 함께 크게
+                const pulse = 1 + Math.sin(this.time * 5) * 0.12;
+                ctx.fillStyle = "rgb(255 215 90 / 35%)";
+                ctx.beginPath();
+                ctx.arc(g.x, g.y + bob, 12 * pulse, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.drawImage(candy, g.x - 9, g.y - 9 + bob, 18, 18);
+            }
             else if (candy) {
                 const size = g.value >= 10 ? 13 : g.value >= 3 ? 10 : g.value >= 2 ? 8 : 7;
                 ctx.drawImage(candy, g.x - size / 2, g.y - size / 2 + bob, size, size);
@@ -1357,8 +1387,8 @@ class Game {
     drawEnemy(e) {
         const ctx = this.ctx;
         const sprite = e.def.holder.sprite;
-        if (e.rank !== "normal" && !e.dying) {
-            ctx.fillStyle = e.rank === "boss" ? "rgb(255 60 60 / 22%)" : "rgb(255 200 60 / 22%)";
+        if ((e.rank !== "normal" || e.rush) && !e.dying) {
+            ctx.fillStyle = e.rank === "boss" ? "rgb(255 60 60 / 22%)" : e.rush ? "rgb(255 120 30 / 30%)" : "rgb(255 200 60 / 22%)";
             ctx.beginPath();
             ctx.ellipse(e.x, e.y + 7 * e.size, 13 * e.size, 5 * e.size, 0, 0, Math.PI * 2);
             ctx.fill();
