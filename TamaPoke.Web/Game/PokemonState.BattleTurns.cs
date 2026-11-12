@@ -119,7 +119,7 @@ public sealed partial class PokemonState
                 double typeMult = BattleCalculator.TypeMultiplier(m.Type, myInfo);
                 double stabMult = BattleCalculator.StabMultiplier(m.Type, enemyInfo);
                 int enemyAtk = EnemyAttackStat(enemyInfo, m.Category == SkillCategory.Special);
-                int DamageAt(int power) => BattleCalculator.RawDamage(enemyAtk, m.Category == SkillCategory.Special ? CombatSpDef : CombatDef, typeMult, stabMult, BattleCalculator.BurnMultiplier(m.Category, EnemyAilment), crit: false, power);
+                int DamageAt(int power) => BattleCalculator.RawDamage(EnemyLevel, enemyAtk, m.Category == SkillCategory.Special ? CombatSpDef : CombatDef, typeMult, stabMult, BattleCalculator.BurnMultiplier(m.Category, EnemyAilment), crit: false, power);
 
                 score = DamageAt(BattleCalculator.ExpectedPower(m));
                 if (DamageAt(BattleCalculator.SurePower(m)) >= PlayerHp) score += 1000;
@@ -310,7 +310,7 @@ public sealed partial class PokemonState
                 if (IsGymBattle) enemyCombatDef *= BattleCalculator.GYM_BONUS;
                 enemyCombatDef *= DefenseStage(_enemyStages, special ? BattleStat.SpDefense : BattleStat.Defense, crit);
 
-                int damage = BattleCalculator.RawDamage((int)myCombatAtk, (int)enemyCombatDef, typeMultiplier, stabMultiplier, BattleCalculator.BurnMultiplier(playerSkill.Category, PlayerAilment), crit, PowerOf(playerSkill, userIsPlayer: true));
+                int damage = BattleCalculator.RawDamage(BattleLevel, (int)myCombatAtk, (int)enemyCombatDef, typeMultiplier, stabMultiplier, BattleCalculator.BurnMultiplier(playerSkill.Category, PlayerAilment), crit, PowerOf(playerSkill, userIsPlayer: true));
                 if (counter) damage *= 2;
                 damage = Math.Max(1, damage);
 
@@ -546,7 +546,7 @@ public sealed partial class PokemonState
                 enemyCombatAtk *= AttackStage(_enemyStages, special ? BattleStat.SpAttack : BattleStat.Attack, crit);
                 double myCombatDef = (special ? CombatSpDef : CombatDef) * DefenseStage(_playerStages, special ? BattleStat.SpDefense : BattleStat.Defense, crit);
 
-                int enemyDamage = Math.Max(1, BattleCalculator.RawDamage((int)enemyCombatAtk, (int)myCombatDef, typeMultiplier, stabMultiplier, BattleCalculator.BurnMultiplier(enemySkill.Category, EnemyAilment), crit, PowerOf(enemySkill, userIsPlayer: false)));
+                int enemyDamage = Math.Max(1, BattleCalculator.RawDamage(EnemyLevel, (int)enemyCombatAtk, (int)myCombatDef, typeMultiplier, stabMultiplier, BattleCalculator.BurnMultiplier(enemySkill.Category, EnemyAilment), crit, PowerOf(enemySkill, userIsPlayer: false)));
 
                 // 공격 모션 → 이펙트 → 체력 감소 순서 (연속 공격은 타격마다)
                 _enemyTempActionId = attackAnim; _enemyTempActionTimer = 15; UpdateEnemyAnimation(attackAnim);

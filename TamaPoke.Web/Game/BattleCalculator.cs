@@ -59,9 +59,13 @@ namespace TamaPoke.Web.Game
         // 반드시 들어가는 위력: 연속 공격은 최소 횟수만큼, 구르기는 첫 타격만 (AI의 "쓰러뜨릴 수 있나" 판단용)
         public static int SurePower(SkillInfo skill) => skill.Power * Math.Max(1, skill.MinHits);
 
-        // 데미지: max(2, 공격 - 방어/2) × 상성 × 자속 × 화상 × 급소 × 위력/50  (최소 1 보정은 호출하는 쪽에서)
-        public static int RawDamage(int attack, int defense, double typeMultiplier, double stabMultiplier, double burnMultiplier, bool crit, int power) =>
-            (int)(Math.Max(2, attack - (defense / 2)) * typeMultiplier * stabMultiplier * burnMultiplier * (crit ? CRIT_BONUS : 1.0) * (power / 50.0));
+        // 데미지 (원작 공식): ((레벨×2/5 + 2) × 위력 × 공격/방어 / 50 + 2) × 상성 × 자속 × 화상 × 급소  (최소 1 보정은 호출하는 쪽에서)
+        // 공격과 방어의 비율로 계산해서, 레벨이 올라 능력치가 커져도 한 번에 깎이는 체력 비율이 비슷하게 유지됩니다.
+        public static int RawDamage(int level, int attack, int defense, double typeMultiplier, double stabMultiplier, double burnMultiplier, bool crit, int power)
+        {
+            double baseDamage = (level * 2 / 5 + 2) * power * Math.Max(1, attack) / (double)Math.Max(1, defense) / 50 + 2;
+            return (int)(baseDamage * typeMultiplier * stabMultiplier * burnMultiplier * (crit ? CRIT_BONUS : 1.0));
+        }
 
         // 급소와 상성 안내 문구 (메시지 앞에 붙임, 줄바꿈 포함)
         public static string HitText(double typeMultiplier, bool crit)
