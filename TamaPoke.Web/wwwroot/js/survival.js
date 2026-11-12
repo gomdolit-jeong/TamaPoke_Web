@@ -1124,6 +1124,7 @@ class Game {
         this.stick = null;
         this.dotnet.invokeMethodAsync("OnGameOver", JSON.stringify({
             timeSec: Math.floor(this.time), kills: this.kills, level: this.level, cleared, finalSpeciesId: this.form.speciesId,
+            weaponSkills: this.weapons.map(w => w.skillId),
             weaponLevels: this.weapons.map(w => w.level),
             weaponDamage: this.weapons.map(w => Math.round(w.dealt)),
             weaponKills: this.weapons.map(w => w.ko),

@@ -68,60 +68,81 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
             weapons, hp, attack, defense, speed, StagesOf(speciesId));
     }
 
-    // 기술 4개 고르기 (대표 기술 우선)
-    // 1) 진화 계열 전체(갈래 포함)가 실전(Pokémon Showdown 랜덤 배틀)에서 자주 쓰는 기술을 많이 쓰는 순서대로 4개.
-    //    공격 모양이 겹쳐도 그대로 씁니다. 변화 기술은 모두 오라가 되므로 1개까지만, 가장 자주 쓰는 기술의 1/4 미만으로 나온 기술은 뺍니다.
-    // 2) 모자라면 Lv.50까지 레벨업으로 배우는 기술로 채웁니다. (위력 + 내 타입 30, 공격 모양이 다른 기술 먼저)
-    // 처음부터 쓰는 기술(맨 앞)은 오라가 아닌 내 타입 공격 기술 중 가장 앞의 것입니다.
-    private const int FAMOUS_MIN_SHARE = 4;
+    // 기술 4개 고르기 (판마다 무작위)
+    // 후보: 진화 계열 전체(갈래 포함)가 Lv.50까지 레벨업으로 배우는 기술 + 실전(Pokémon Showdown 랜덤 배틀)에서 쓰는 대표 기술.
+    // 무게: 위력이 셀수록, 내 타입일수록, 대표 기술일수록(가장 많이 쓰는 기술은 5배) 잘 뽑힙니다.
+    //       이미 뽑은 기술과 공격 모양이 같으면 1/4로 줄어 되도록 겹치지 않게 하고, 변화 기술(오라)은 1개까지입니다.
+    // 처음부터 쓰는 기술(맨 앞)은 오라가 아닌 내 타입 공격 기술 중에서 뽑습니다.
+    // 뽑은 기술은 게임을 시작할 때까지 기억해서, 고르는 화면에 보인 기술이 그대로 게임에 나옵니다.
+    private const int FAMOUS_MIN_SHARE = 8;     // 가장 많이 쓰는 기술의 1/8 미만으로 나온 기술은 대표 기술로 치지 않습니다.
+    private const double FAMOUS_WEIGHT = 4;     // 대표 기술 무게: 1 + 4 × (자주 쓰는 정도 0~1)
+    private const double SAME_SHAPE_WEIGHT = 0.25;
+
+    private readonly Dictionary<int, int[]> _rolled = [];
 
     private List<SkillInfo> PickMoves(int speciesId, PokemonType type1, PokemonType type2)
+    {
+        if (!_rolled.TryGetValue(speciesId, out var ids))
+            _rolled[speciesId] = ids = RollMoves(speciesId, type1, type2).Select(s => s.Id).ToArray();
+        return ids.Select(skills.GetSkill).OfType<SkillInfo>().ToList();
+    }
+
+    private List<SkillInfo> RollMoves(int speciesId, PokemonType type1, PokemonType type2)
     {
         var line = StagesOf(speciesId).SelectMany(stage => stage).Distinct().ToList();
         bool SameType(SkillInfo s) => s.Type == type1 || s.Type == type2;
         bool IsStatus(SkillInfo s) => s.Category == SkillCategory.Status;
+        bool IsAura(SkillInfo s) => SurvivalRules.KindFor(s) == "aura";
 
         var fame = new Dictionary<int, int>();
         foreach (int id in line)
             foreach (var (moveId, weight) in skills.GetFamousMoves(id))
                 fame[moveId] = fame.GetValueOrDefault(moveId) + weight;
-        int topFame = fame.Count > 0 ? fame.Values.Max() : 0;
+        int topFame = fame.Count > 0 ? fame.Values.Max() : 1;
+        foreach (int moveId in fame.Where(p => p.Value * FAMOUS_MIN_SHARE < topFame).Select(p => p.Key).ToList()) fame.Remove(moveId);
 
-        var picked = new List<SkillInfo>();
-        foreach (var skill in fame
-            .Where(p => p.Value * FAMOUS_MIN_SHARE >= topFame)
-            .OrderByDescending(p => p.Value).ThenBy(p => p.Key)
-            .Select(p => skills.GetSkill(p.Key))
-            .OfType<SkillInfo>()
-            .Where(s => s.IsSupported))
-        {
-            if (picked.Count >= 4) break;
-            if (IsStatus(skill) && picked.Any(IsStatus)) continue;
-            picked.Add(skill);
-        }
-
-        // 모자라면 레벨업 기술: 공격 모양이 다른 공격 기술 → 변화 기술 1개 → 남은 공격 기술
-        var learnable = line
+        var pool = line
             .SelectMany(id => skills.GetActiveLearnset(id))
             .Where(m => m.Level is > 0 and <= SKILL_LEVEL)
-            .Select(m => skills.GetSkill(m.MoveId))
+            .Select(m => m.MoveId)
+            .Concat(fame.Keys)
+            .Distinct()
+            .Select(skills.GetSkill)
             .OfType<SkillInfo>()
-            .Where(s => s.IsSupported && picked.All(p => p.Id != s.Id))
-            .DistinctBy(s => s.Id)
+            .Where(s => s.IsSupported)
             .ToList();
-        int Score(SkillInfo s) => Math.Clamp(s.Power, 30, 120) + (SameType(s) ? 30 : 0);
-        var attacks = learnable.Where(s => !IsStatus(s)).OrderByDescending(Score).ThenBy(s => s.Id).ToList();
-        foreach (var skill in attacks)
+
+        double Weight(SkillInfo s)
         {
-            if (picked.Count >= 4) break;
-            if (picked.All(p => SurvivalRules.KindFor(p) != SurvivalRules.KindFor(skill))) picked.Add(skill);
+            double famous = fame.GetValueOrDefault(s.Id) / (double)topFame; // 0~1
+            if (IsStatus(s)) return famous > 0 ? 1 + 3 * famous : 0.3;
+            if (s.Power < 40 && famous == 0) return 0.15;
+            return Math.Clamp(s.Power, 40, 120) / 80.0 * (SameType(s) ? 1.6 : 1) * (1 + FAMOUS_WEIGHT * famous);
         }
-        if (picked.Count < 4 && !picked.Any(IsStatus) && learnable.Where(IsStatus).OrderByDescending(s => s.Ailment != SkillAilment.None).ThenBy(s => s.Id).FirstOrDefault() is { } status)
-            picked.Add(status);
-        foreach (var skill in attacks)
+
+        SkillInfo? Draw(IEnumerable<SkillInfo> candidates, Func<SkillInfo, double> extra)
         {
-            if (picked.Count >= 4) break;
-            if (!picked.Contains(skill)) picked.Add(skill);
+            var weighted = candidates.Select(s => (Skill: s, Weight: Weight(s) * extra(s))).Where(x => x.Weight > 0).ToList();
+            double roll = Random.Shared.NextDouble() * weighted.Sum(x => x.Weight);
+            foreach (var (skill, weight) in weighted)
+            {
+                roll -= weight;
+                if (roll <= 0) return skill;
+            }
+            return weighted.Count > 0 ? weighted[^1].Skill : null;
+        }
+
+        var picked = new List<SkillInfo>();
+        var attacks = pool.Where(s => !IsStatus(s) && !IsAura(s)).ToList();
+        var starters = attacks.Where(SameType).ToList();
+        if (Draw(starters.Count > 0 ? starters : attacks, _ => 1) is { } first)
+            picked.Add(first);
+        while (picked.Count < 4)
+        {
+            var next = Draw(pool.Where(s => !picked.Contains(s) && !(IsStatus(s) && picked.Any(IsStatus))),
+                s => picked.Any(p => SurvivalRules.KindFor(p) == SurvivalRules.KindFor(s)) ? SAME_SHAPE_WEIGHT : 1);
+            if (next is null) break;
+            picked.Add(next);
         }
 
         if (picked.All(IsStatus))
@@ -129,15 +150,7 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
             if (skills.GetSkill(skills.GetFallbackMove(type1)) is { } typed) picked.Insert(0, typed);
             else if (skills.GetSkill(SurvivalRules.DEFAULT_SKILL_ID) is { } tackle) picked.Insert(0, tackle);
         }
-        picked = picked.Take(4).ToList();
-        var first = picked.FirstOrDefault(s => SameType(s) && SurvivalRules.KindFor(s) != "aura")
-            ?? picked.FirstOrDefault(s => SurvivalRules.KindFor(s) != "aura");
-        if (first is not null)
-        {
-            picked.Remove(first);
-            picked.Insert(0, first);
-        }
-        return picked;
+        return picked.Take(4).ToList();
     }
 
     // --- 게임 준비 ---
@@ -146,6 +159,7 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
     {
         var random = new Random();
         var pick = PickFor(pet, speciesId);
+        _rolled.Remove(speciesId); // 다음 판에는 기술을 새로 뽑습니다.
         var info = dex.Get(speciesId);
 
         // 진화할 수 있는 모습을 모두 미리 준비합니다. (갈래가 여럿이면 모두)
@@ -267,6 +281,7 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
         var pick = PickFor(pet, speciesId);
         // 랭킹에는 끝까지 진화한 모습으로 올립니다. (고른 포켓몬의 진화 계통이 아니면 고른 포켓몬)
         int finalSpecies = result.FinalSpeciesId > 0 && pick.Stages.Any(stage => stage.Contains(result.FinalSpeciesId)) ? result.FinalSpeciesId : pick.SpeciesId;
+        var (moves, moveLevels) = SurvivalRules.MovesOf(result);
         var entry = new SurvivalEntry
         {
             Tag = ArenaRules.TagFor(uid),
@@ -279,6 +294,8 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
             TimeSec = result.TimeSec,
             Kills = result.Kills,
             Cleared = result.Cleared,
+            Moves = moves,
+            MoveLevels = moveLevels,
         };
 
         try

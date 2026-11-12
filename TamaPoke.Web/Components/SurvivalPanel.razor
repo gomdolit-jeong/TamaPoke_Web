@@ -125,6 +125,7 @@
                 </div>
 
                 <h3>@Loc.T("web.survival.weapons")</h3>
+                <p class="survival-weapons-note">@Loc.T("web.survival.weaponsRandom")</p>
                 <ul class="survival-weapons">
                     @for (int i = 0; i < pick.Weapons.Count; i++)
                     {
@@ -285,6 +286,18 @@
                 {
                     <span class="party-level">🏆 @Loc.T("web.survival.clearedShort")</span>
                 }
+                @if (entry.Moves.Length > 0)
+                {
+                    @* 그 판에서 쓴 기술 (데미지가 많은 순서) *@
+                    <span class="survival-rank-moves">
+                        @for (int i = 0; i < entry.Moves.Length; i++)
+                        {
+                            if (Skills.GetSkill(entry.Moves[i]) is not { } skill) continue;
+                            int level = i < entry.MoveLevels.Length ? entry.MoveLevels[i] : 1;
+                            <span class="survival-rank-move" style="--move-color:@SurvivalRules.ColorFor(skill.Type)">@skill.Name<small>@level</small></span>
+                        }
+                    </span>
+                }
             </span>
             <span class="arena-score">@SurvivalRules.Clock(entry.TimeSec)<small>KO @entry.Kills</small></span>
         </li>;
@@ -292,6 +305,8 @@
 
 #if DEBUG
     private static bool IsDebugBuild => true;
+
+    private static readonly int[] SampleMoves = [53, 85, 94, 89, 58, 247, 399, 126, 188, 370];
 
     private static readonly string[] SampleNames = ["AshKetchum", "MistyWater", "Speedy", "TankMode", "Lucky7", "NightOwl", "Volt", "LeafStorm"];
 
@@ -316,6 +331,8 @@
                 Kills = kills,
                 Cleared = cleared,
                 Score = SurvivalRules.Score(time, kills, cleared),
+                Moves = SampleMoves.OrderBy(_ => random.Next()).Take(random.Next(1, 5)).ToArray(),
+                MoveLevels = Enumerable.Range(0, 4).Select(_ => random.Next(1, SurvivalRules.MAX_MOVE_LEVEL + 1)).ToArray(),
             };
         }).OrderByDescending(e => e.Score).ToList();
         return new SurvivalBoard("sample", null, null, top);

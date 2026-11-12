@@ -30,6 +30,7 @@ public sealed record SurvivalResult
     public int FinalSpeciesId { get; init; } // 게임이 끝났을 때의 모습 (진화했으면 진화한 포켓몬)
 
     // 기술별 기록 (SurvivalSetup.Weapons 순서). 대폭발 아이템은 Item~에 따로 셉니다.
+    public int[] WeaponSkills { get; init; } = [];
     public int[] WeaponLevels { get; init; } = [];
     public int[] WeaponDamage { get; init; } = [];
     public int[] WeaponKills { get; init; } = [];
@@ -86,6 +87,10 @@ public sealed record SurvivalEntry
     public int TimeSec { get; init; }
     public int Kills { get; init; }
     public bool Cleared { get; init; }
+
+    // 그 판에서 배운 기술 (데미지가 많은 순서, 최대 4개)과 기술 레벨. 예전 기록에는 없습니다.
+    public int[] Moves { get; init; } = [];
+    public int[] MoveLevels { get; init; } = [];
 }
 
 public sealed class SurvivalBoardData
@@ -129,6 +134,19 @@ public static class SurvivalRules
     public static string RecordText(int timeSec, int kills) => $"{Clock(timeSec)} · KO {kills}";
 
     // 게임이 보낸 값을 가능한 범위로 맞춥니다.
+    public const int MAX_MOVE_LEVEL = 5;
+
+    // 결과에서 랭킹에 올릴 기술: 배운 기술만, 데미지가 많은 순서로
+    public static (int[] Moves, int[] Levels) MovesOf(SurvivalResult result)
+    {
+        var rows = Enumerable.Range(0, Math.Min(result.WeaponSkills.Length, result.WeaponLevels.Length))
+            .Where(i => result.WeaponLevels[i] > 0 && result.WeaponSkills[i] > 0)
+            .OrderByDescending(i => i < result.WeaponDamage.Length ? result.WeaponDamage[i] : 0)
+            .Take(4)
+            .ToList();
+        return (rows.Select(i => result.WeaponSkills[i]).ToArray(), rows.Select(i => Math.Clamp(result.WeaponLevels[i], 1, MAX_MOVE_LEVEL)).ToArray());
+    }
+
     public static SurvivalResult Clamp(SurvivalResult result)
     {
         int time = Math.Clamp(result.TimeSec, 0, RUN_SECONDS);
@@ -212,6 +230,8 @@ public static class SurvivalRules
             Cleared = cleared,
             Score = Score(time, kills, cleared),
             Nickname = ArenaNames.Check(entry.Nickname) == NicknameProblem.None ? entry.Nickname : null,
+            Moves = (entry.Moves ?? []).Take(4).Where(id => id is > 0 and <= 2000).ToArray(),
+            MoveLevels = (entry.MoveLevels ?? []).Take(4).Select(level => Math.Clamp(level, 1, MAX_MOVE_LEVEL)).ToArray(),
         };
     }
 

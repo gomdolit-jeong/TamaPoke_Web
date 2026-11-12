@@ -33,7 +33,7 @@ service cloud.firestore {
 
     function validSurvival() {
       let d = request.resource.data;
-      return d.keys().hasOnly(['tag', 'nickname', 'speciesId', 'level', 'form', 'shiny', 'score', 'timeSec', 'kills', 'cleared', 'updatedAt'])
+      return d.keys().hasOnly(['tag', 'nickname', 'speciesId', 'level', 'form', 'shiny', 'score', 'timeSec', 'kills', 'cleared', 'moves', 'moveLevels', 'updatedAt'])
         && d.keys().hasAll(['tag', 'speciesId', 'level', 'form', 'shiny', 'score', 'timeSec', 'kills', 'cleared', 'updatedAt'])
         && d.tag is string && d.tag.size() <= 12
         && (!('nickname' in d) || (d.nickname is string && d.nickname.matches('^[A-Za-z0-9]{3,12}$')))
@@ -45,7 +45,18 @@ service cloud.firestore {
         && inRange(d.kills, 0, d.timeSec * 20)
         && (d.cleared == false || d.timeSec == 600)
         && d.score == d.timeSec * 100000 + d.kills
+        && (!('moves' in d) || validMoveList(d.moves, 2000))
+        && (!('moveLevels' in d) || validMoveList(d.moveLevels, 5))
         && d.updatedAt == request.time;
+    }
+
+    // 서바이벌에서 쓴 기술(번호) 또는 기술 레벨: 0~4개, 각각 1~high
+    function validMoveList(list, high) {
+      return list is list && list.size() <= 4
+        && (list.size() < 1 || inRange(list[0], 1, high))
+        && (list.size() < 2 || inRange(list[1], 1, high))
+        && (list.size() < 3 || inRange(list[2], 1, high))
+        && (list.size() < 4 || inRange(list[3], 1, high));
     }
 
     function isOwner(uid) {

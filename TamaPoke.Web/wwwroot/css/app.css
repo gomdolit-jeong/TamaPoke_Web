@@ -3936,3 +3936,39 @@ nav.pet-menu .menu-arena {
     margin-left: auto;
     border-radius: 2px;
 }
+
+/* 서바이벌: 기술이 판마다 바뀐다는 안내 */
+.survival-weapons-note {
+    margin: -0.25rem 0 0.375rem;
+    color: var(--tp-ink-soft);
+    font-size: 11px;
+}
+
+/* 서바이벌 랭킹: 그 판에서 쓴 기술 */
+.survival-rank-moves {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 4px;
+    margin-top: 2px;
+}
+
+.survival-rank-move {
+    padding: 0 4px;
+    border-left: 3px solid var(--move-color, var(--tp-line));
+    border-radius: 2px;
+    background: var(--tp-cream-dark);
+    color: var(--tp-ink);
+    font-size: 10px;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+    .survival-rank-move small {
+        margin-left: 2px;
+        color: var(--tp-ink-soft);
+        font-size: 9px;
+    }
+
+        .survival-rank-move small::before {
+            content: "Lv";
+        }
