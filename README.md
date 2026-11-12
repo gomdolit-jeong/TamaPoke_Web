@@ -77,6 +77,7 @@ python tools/make_walk_bg.py                                       # 산책 풀�
 - **Badge Images:** 공식 배지 디자인(The Pokémon Company / Nintendo / Game Freak)을 바탕으로 이 프로젝트용으로 만든 32×32 도트 그림입니다.
 - **Survival Effects:** `TamaPoke.Web/wwwroot/pfx`의 효과 그림은 [patch-gg/pixelfx](https://github.com/patch-gg/pixelfx)로 만들었습니다. Copyright (c) 2026 Patch, Copyright (c) 2026 Hugo Duprez, [MIT License](./TamaPoke.Web/wwwroot/pfx/LICENSE.txt).
 - **Survival Moves:** `TamaPoke.Web/wwwroot/data/survival_moves.json`(포켓몬마다 자주 쓰는 기술)은 Pokémon Showdown 랜덤 배틀 세트를 모은 [pkmn/randbats](https://github.com/pkmn/randbats)를 `tools/make_survival_moves.py`로 정리했습니다. Copyright (c) 2020-2024 pkmn contributors, [MIT License](./TamaPoke.Web/wwwroot/data/survival_moves.LICENSE.txt).
+- **Abilities:** `TamaPoke.Web/wwwroot/data/abilities.json`(포켓몬별 특성과 특성 이름)은 [PokeAPI](https://github.com/PokeAPI/pokeapi) 데이터(BSD-3-Clause)를 `tools/make_ability_data.py`로 정리했습니다. 서바이벌에서 특성 효과에 씁니다.
 
 ## 라이선스
 

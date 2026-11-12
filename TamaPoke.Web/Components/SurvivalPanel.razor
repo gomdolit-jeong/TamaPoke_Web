@@ -124,6 +124,27 @@
                     </div>
                 </div>
 
+                @* 특성: 원작 특성 중 하나를 고르면 서바이벌 효과로 바뀝니다. (마지막으로 고른 특성을 기억) *@
+                var abilities = Survival.AbilitiesOf(pick.SpeciesId);
+                @if (abilities.Count > 0 && Survival.ChosenAbility(Pet, pick.SpeciesId) is { } chosenAbility)
+                {
+                    var (traitKey, traitType) = SurvivalRules.TraitOf(chosenAbility.Key, Dex.Get(pick.SpeciesId)?.Type1 ?? PokemonType.Normal);
+                    <h3>@Loc.T("web.survival.trait")</h3>
+                    <div class="survival-traits" role="group" aria-label="@Loc.T("web.survival.trait")">
+                        @foreach (var ability in abilities)
+                        {
+                            var item = ability;
+                            bool selected = item.Key == chosenAbility.Key;
+                            <button type="button" class="@(selected ? "is-selected" : "")" aria-pressed="@(selected ? "true" : "false")"
+                                    title="@(item.Hidden ? Loc.T("web.survival.trait.hidden") : "")"
+                                    @onclick="() => { Pet.SurvivalAbility = item.Key; Pet.NeedsSave = true; }">
+                                @Dex.GetAbilityName(item.Key, Loc.Language)@if (item.Hidden) {<small>★</small>}
+                            </button>
+                        }
+                    </div>
+                    <p class="survival-trait-desc">✨ @SurvivalService.TraitText(traitKey, traitType)</p>
+                }
+
                 <h3>@Loc.T("web.survival.weapons")</h3>
                 <p class="survival-weapons-note">@Loc.T("web.survival.weaponsRandom")</p>
                 <ul class="survival-weapons">

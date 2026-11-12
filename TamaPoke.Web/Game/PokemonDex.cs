@@ -30,8 +30,20 @@ public sealed class PokemonInfo
     public bool HasSprite { get; set; }
 }
 
+// wwwroot/data/abilities.json (tools/make_ability_data.py, PokeAPI 데이터)
+//   Names: 특성 → [한국어, 영어], Species: 포켓몬 번호 → [[특성, 숨겨진 특성이면 1], ...]
+public sealed class AbilityData
+{
+    [JsonPropertyName("names")] public Dictionary<string, string[]> Names { get; set; } = [];
+    [JsonPropertyName("species")] public Dictionary<string, List<List<System.Text.Json.JsonElement>>> Species { get; set; } = [];
+}
+
+// 포켓몬의 특성 하나. Key는 영어 이름을 소문자로 붙여 쓴 것(예: "overgrow")
+public sealed record PokemonAbility(string Key, bool Hidden);
+
 [JsonSerializable(typeof(List<PokemonInfo>))]
 [JsonSerializable(typeof(Dictionary<int, Dictionary<string, string>>), TypeInfoPropertyName = "Forms")]
+[JsonSerializable(typeof(AbilityData))]
 internal sealed partial class DexJsonContext : JsonSerializerContext;
 
 // 포켓몬 데이터와 진화 갈래. 규칙은 PC판 PokemonDex.cs / PokemonState.LifeCycle.cs와 같습니다.
@@ -139,6 +151,7 @@ public sealed class PokemonDex(HttpClient http)
         var all = await http.GetFromJsonAsync(Utils.BuildInfo.Versioned("data/pokemon.json"), DexJsonContext.Default.ListPokemonInfo) ?? [];
         _forms = await http.GetFromJsonAsync(Utils.BuildInfo.Versioned("data/forms.json"), DexJsonContext.Default.Forms) ?? [];
         _byId = all.GroupBy(p => p.Id).ToDictionary(g => g.Key, g => g.First());
+        await LoadAbilitiesAsync();
 
         // 레벨이 아닌 방법(돌, 교환 등)으로 진화하는 포켓몬은 Lv.36에 진화합니다.
         _evolutions = all.Where(p => p.EvolveTo > 0)
@@ -154,6 +167,41 @@ public sealed class PokemonDex(HttpClient http)
         _wildCandidates = all.Where(p => p.HasSprite && !LegendaryIds.Contains(p.Id)).Select(p => p.Id).ToArray();
         _wildLegendaries = all.Where(p => p.HasSprite && LegendaryIds.Contains(p.Id)).Select(p => p.Id).ToArray();
     }
+
+    // --- 특성 (서바이벌 특성 효과에 씀) ---
+
+    private Dictionary<string, string[]> _abilityNames = [];
+    private Dictionary<int, List<PokemonAbility>> _abilities = [];
+
+    // 특성 데이터는 없어도 게임은 돌아가야 해서, 못 받으면 비워 둡니다.
+    private async Task LoadAbilitiesAsync()
+    {
+        try
+        {
+            var data = await http.GetFromJsonAsync(Utils.BuildInfo.Versioned("data/abilities.json"), DexJsonContext.Default.AbilityData);
+            if (data is null) return;
+            _abilityNames = data.Names;
+            _abilities = data.Species
+                .Where(p => int.TryParse(p.Key, out _))
+                .ToDictionary(p => int.Parse(p.Key), p => p.Value
+                    .Where(row => row.Count >= 2)
+                    .Select(row => new PokemonAbility(row[0].GetString() ?? "", row[1].GetInt32() == 1))
+                    .Where(a => a.Key.Length > 0)
+                    .ToList());
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or NotSupportedException or InvalidOperationException)
+        {
+            Console.WriteLine($"특성 데이터 읽기 실패: {ex.Message}");
+        }
+    }
+
+    public IReadOnlyList<PokemonAbility> GetAbilities(int speciesId) =>
+        _abilities.TryGetValue(speciesId, out var list) ? list : [];
+
+    public string GetAbilityName(string key, string language) =>
+        _abilityNames.TryGetValue(key, out var names) && names.Length >= 2
+            ? (language == Utils.Loc.English && names[1].Length > 0 ? names[1] : names[0])
+            : key;
 
     // 시작 화면에서 뛰어다닐 포켓몬: 진화형과 전설까지 스프라이트가 있는 포켓몬 중 겹치지 않게 고릅니다.
     public int[] PickTitleSpecies(int count) =>

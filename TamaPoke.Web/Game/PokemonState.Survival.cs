@@ -21,6 +21,9 @@ public sealed partial class PokemonState
     // 마지막으로 고른 저주 단계 (0~SurvivalRules.MAX_CURSE)
     public int SurvivalCurse { get; set; }
 
+    // 마지막으로 고른 특성 (예: "blaze"). 고른 포켓몬에 없는 특성이면 SurvivalService.ChosenAbility가 기본 특성을 씁니다.
+    public string SurvivalAbility { get; set; } = "";
+
     // 고를 수 있는 포켓몬: 잡은 포켓몬과 지금 포켓몬의 첫 모습 (진화한 포켓몬을 잡았으면 진화 전 모습으로). 게임 안에서 진화합니다.
     [JsonIgnore] public IEnumerable<int> SurvivalCandidates =>
         (IsEgg ? UnlockedPokemon : UnlockedPokemon.Append(SpeciesId)).Select(Dex.BaseOf).Distinct()

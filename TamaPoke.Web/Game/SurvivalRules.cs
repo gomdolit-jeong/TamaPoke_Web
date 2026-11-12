@@ -14,7 +14,12 @@ public sealed record SurvivalForm(int SpeciesId, string Name, SurvivalSprite? Wa
 
 // 기술 하나 = 무기 하나. Kind는 공격 모양(bolt, spray, slash, nova, orbit, chain, aura), Type은 효과 그림(fx_shot_{type}.png)입니다.
 // Name은 화면 오른쪽 기술 목록에 보일 기술 이름입니다.
-public sealed record SurvivalWeapon(int SkillId, string Kind, string Type, string Color, double Power, double Cooldown, int Extra, bool Slow, string Name);
+// SameType: 내 타입 기술인지, MovePower: 원래 기술 위력 (특성 효과 적응력·테크니션에 씀)
+public sealed record SurvivalWeapon(int SkillId, string Kind, string Type, string Color, double Power, double Cooldown, int Extra, bool Slow, string Name,
+    bool SameType = false, int MovePower = 0);
+
+// 이번 판의 특성. Key는 서바이벌 효과(SurvivalRules.TraitOf), Ability는 원래 특성, Type은 효과가 걸리는 타입(소문자, 없으면 "")
+public sealed record SurvivalTrait(string Key, string Ability, string Name, string Type);
 
 // 적 한 종류. Eff는 내 무기(순서대로)가 이 포켓몬에게 주는 타입 상성 배율입니다.
 public sealed record SurvivalEnemy(int SpeciesId, string Name, SurvivalSprite? Sprite, double Hp, double Speed, double Damage, double[] Eff);
@@ -28,6 +33,9 @@ public sealed record SurvivalSetup(List<SurvivalForm> Forms, List<SurvivalWeapon
 {
     // 이번 주 순위표 (로그인하지 않았으면 비어 있음)
     public List<SurvivalRival> Rivals { get; init; } = [];
+
+    // 이번 판의 특성 (없으면 null)
+    public SurvivalTrait? Trait { get; init; }
 
     // 저주 단계 (0~SurvivalRules.MAX_CURSE): 적이 강해지고 많아지는 대신 경험치를 더 받습니다.
     public int Curse { get; init; }
@@ -213,6 +221,66 @@ public static class SurvivalRules
         };
     }
 
+    // --- 특성: 원작 특성을 서바이벌 효과(아래 TRAITS의 값)로 바꿉니다. 효과 수치는 survival.js의 TRAIT와 같게. ---
+    // 자주 나오는 특성 위주로 효과를 정했고, 표에 없는 특성은 "basic"(위기 때 내 첫 타입 기술 강화, 약하게)입니다.
+    // 값: (효과, 효과가 걸리는 타입. ""이면 타입과 상관없음)
+    private static readonly Dictionary<string, (string Trait, string Type)> TRAITS = new()
+    {
+        // 위기 때 그 타입 기술 위력 ↑ (원작: 체력 1/3 이하에서 1.5배)
+        ["overgrow"] = ("pinch", "grass"), ["blaze"] = ("pinch", "fire"), ["torrent"] = ("pinch", "water"), ["swarm"] = ("pinch", "bug"),
+        // 받는 데미지 ↓
+        ["intimidate"] = ("intimidate", ""), ["unnerve"] = ("intimidate", ""),
+        ["thickfat"] = ("guard", ""), ["filter"] = ("guard", ""), ["solidrock"] = ("guard", ""), ["prismarmor"] = ("guard", ""),
+        ["furcoat"] = ("guard", ""), ["shellarmor"] = ("guard", ""), ["battlearmor"] = ("guard", ""), ["magicguard"] = ("guard", ""),
+        ["overcoat"] = ("guard", ""), ["heatproof"] = ("guard", ""), ["icescales"] = ("guard", ""), ["fluffy"] = ("guard", ""),
+        ["multiscale"] = ("multiscale", ""), ["shadowshield"] = ("multiscale", ""),
+        ["sturdy"] = ("sturdy", ""),
+        // 회복
+        ["regenerator"] = ("regen", ""),
+        ["naturalcure"] = ("regenLite", ""), ["shedskin"] = ("regenLite", ""), ["hydration"] = ("regenLite", ""),
+        ["raindish"] = ("regenLite", ""), ["icebody"] = ("regenLite", ""), ["poisonheal"] = ("regenLite", ""),
+        ["waterabsorb"] = ("absorb", ""), ["voltabsorb"] = ("absorb", ""), ["flashfire"] = ("absorb", ""), ["sapsipper"] = ("absorb", ""),
+        ["lightningrod"] = ("absorb", ""), ["stormdrain"] = ("absorb", ""), ["motordrive"] = ("absorb", ""), ["dryskin"] = ("absorb", ""),
+        ["gluttony"] = ("glutton", ""), ["cheekpouch"] = ("glutton", ""), ["ripen"] = ("glutton", ""),
+        // 공격 ↑
+        ["adaptability"] = ("adaptability", ""),
+        ["protean"] = ("protean", ""), ["libero"] = ("protean", ""),
+        ["technician"] = ("technician", ""), ["skilllink"] = ("technician", ""),
+        ["hugepower"] = ("brute", ""), ["purepower"] = ("brute", ""), ["hustle"] = ("brute", ""), ["gorillatactics"] = ("brute", ""),
+        ["sheerforce"] = ("power", ""), ["toughclaws"] = ("power", ""), ["strongjaw"] = ("power", ""), ["ironfist"] = ("power", ""),
+        ["reckless"] = ("power", ""), ["sharpness"] = ("power", ""), ["megalauncher"] = ("power", ""), ["punkrock"] = ("power", ""),
+        ["guts"] = ("guts", ""), ["flareboost"] = ("guts", ""), ["toxicboost"] = ("guts", ""), ["marvelscale"] = ("guts", ""),
+        ["moxie"] = ("moxie", ""), ["beastboost"] = ("moxie", ""), ["chillingneigh"] = ("moxie", ""), ["grimneigh"] = ("moxie", ""),
+        ["asone"] = ("moxie", ""), ["battlebond"] = ("moxie", ""), ["supremeoverlord"] = ("moxie", ""),
+        ["keeneye"] = ("crit", ""), ["compoundeyes"] = ("crit", ""), ["sniper"] = ("crit", ""), ["superluck"] = ("crit", ""),
+        // 날씨·필드: 그 타입 기술 위력 ↑
+        ["drought"] = ("weather", "fire"), ["orichalcumpulse"] = ("weather", "fire"), ["desolateland"] = ("weather", "fire"),
+        ["drizzle"] = ("weather", "water"), ["primordialsea"] = ("weather", "water"),
+        ["sandstream"] = ("weather", "rock"), ["snowwarning"] = ("weather", "ice"),
+        ["electricsurge"] = ("weather", "electric"), ["hadronengine"] = ("weather", "electric"),
+        ["grassysurge"] = ("weather", "grass"), ["psychicsurge"] = ("weather", "psychic"), ["mistysurge"] = ("weather", "fairy"),
+        ["deltastream"] = ("weather", "flying"), ["solarpower"] = ("weather", "fire"),
+        // 이동 속도 ↑
+        ["swiftswim"] = ("speed", ""), ["chlorophyll"] = ("speed", ""), ["sandrush"] = ("speed", ""), ["slushrush"] = ("speed", ""),
+        ["surgesurfer"] = ("speed", ""), ["quickfeet"] = ("speed", ""), ["unburden"] = ("speed", ""), ["runaway"] = ("speed", ""),
+        ["levitate"] = ("speed", ""),
+        ["speedboost"] = ("speedboost", ""),
+        // 닿은 적에게 반격
+        ["static"] = ("contact", ""), ["flamebody"] = ("contact", ""), ["poisonpoint"] = ("contact", ""), ["effectspore"] = ("contact", ""),
+        ["roughskin"] = ("contact", ""), ["ironbarbs"] = ("contact", ""), ["gooey"] = ("contact", ""), ["tanglinghair"] = ("contact", ""),
+        ["cutecharm"] = ("contact", ""),
+        // 그 밖
+        ["pickup"] = ("pickup", ""), ["honeygather"] = ("pickup", ""), ["magnetpull"] = ("pickup", ""), ["frisk"] = ("pickup", ""),
+        ["pressure"] = ("pressure", ""),
+        ["serenegrace"] = ("serene", ""), ["shielddust"] = ("serene", ""),
+    };
+
+    // 특성 → 서바이벌 효과. 표에 없으면 기본 효과(basic, 내 첫 타입)
+    public static (string Trait, string Type) TraitOf(string ability, PokemonType type1) =>
+        TRAITS.TryGetValue(ability, out var trait) ? trait : ("basic", type1.ToString().ToLowerInvariant());
+
+    public static bool HasOwnTrait(string ability) => TRAITS.ContainsKey(ability);
+
     // 기술 진화의 짝 강화: 공격 모양마다 하나 (survival.js의 EVOLVE_PAIR와 같게)
     // 기술 Lv.5 + 짝 강화 EVOLVE_PAIR_LEVEL단계 이상일 때 보스 상자(EVOLVE_ELITE_FROM_MINUTES분부터는 엘리트 상자도)를 열면 진화합니다.
     // (survival.js TUNE.evolvePairLevel, TUNE.evolveEliteFrom과 같게)
@@ -285,7 +353,8 @@ public static class SurvivalRules
         int extra = skill.MaxHits > 1 ? Math.Min(2, skill.MaxHits - 1) : 0;
         if (extra > 0) power *= 0.7;
         bool slow = skill.Type == PokemonType.Ice || skill.Ailment is SkillAilment.Paralysis or SkillAilment.Freeze or SkillAilment.Sleep;
-        return new SurvivalWeapon(skill.Id, kind, skill.Type.ToString().ToLowerInvariant(), ColorFor(skill.Type), power, cooldown, extra, slow, skill.Name);
+        return new SurvivalWeapon(skill.Id, kind, skill.Type.ToString().ToLowerInvariant(), ColorFor(skill.Type), power, cooldown, extra, slow, skill.Name,
+            sameType, skill.Category == SkillCategory.Status ? 0 : skill.Power);
     }
 
     // 다른 사람이 올린 값은 믿지 않고 게임 안의 범위로 맞춥니다.

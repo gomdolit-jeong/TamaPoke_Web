@@ -51,6 +51,31 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
         return stages;
     }
 
+    // --- 특성 ---
+
+    // 고를 수 있는 특성 (원작 칸 순서: 보통 특성, 숨겨진 특성)
+    public IReadOnlyList<PokemonAbility> AbilitiesOf(int speciesId) => dex.GetAbilities(speciesId);
+
+    // 이번 판의 특성: 저장해 둔 선택이 이 포켓몬의 특성이면 그것, 아니면 서바이벌 효과가 있는 보통 특성 → 첫 특성
+    public PokemonAbility? ChosenAbility(PokemonState pet, int speciesId)
+    {
+        var list = AbilitiesOf(speciesId);
+        return list.FirstOrDefault(a => a.Key == pet.SurvivalAbility)
+            ?? list.FirstOrDefault(a => !a.Hidden && SurvivalRules.HasOwnTrait(a.Key))
+            ?? list.FirstOrDefault();
+    }
+
+    public SurvivalTrait? TraitFor(PokemonState pet, int speciesId)
+    {
+        if (ChosenAbility(pet, speciesId) is not { } ability) return null;
+        var (key, type) = SurvivalRules.TraitOf(ability.Key, dex.Get(speciesId)?.Type1 ?? PokemonType.Normal);
+        return new SurvivalTrait(key, ability.Key, dex.GetAbilityName(ability.Key, Utils.L.Language), type);
+    }
+
+    // 특성 설명 한 줄 (고르는 화면·일시정지 화면)
+    public static string TraitText(string trait, string type) =>
+        string.Format(Utils.L.T($"web.survival.trait.{trait}"), type.Length > 0 ? Utils.L.T($"web.type.{type}") : "");
+
     // 게임 중 모습이 바뀌어도 능력치 계산은 같습니다.
     private static (double MaxHp, double Speed, double Power, double Guard) PlayerStats((int Hp, int Attack, int Defense, int Speed) s) =>
         (Math.Round(80 + s.Hp * 0.6), Math.Min(110, 62 + s.Speed * 0.18), 0.8 + s.Attack / 200.0, 100.0 / (100 + s.Defense / 2.0));
@@ -230,9 +255,11 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
                 ["rivalFirst"] = Utils.L.T("web.survival.hud.rivalFirst"),
                 ["rivalNow"] = Utils.L.T("web.survival.hud.rivalNow"),
                 ["endless"] = Utils.L.T("web.survival.hud.endless"),
+                ["sturdy"] = Utils.L.T("web.survival.trait.sturdyUsed"),
             })
         {
             Curse = Math.Clamp(pet.SurvivalCurse, 0, SurvivalRules.MAX_CURSE),
+            Trait = TraitFor(pet, speciesId),
         };
     }
 

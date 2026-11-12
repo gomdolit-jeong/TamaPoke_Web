@@ -62,6 +62,20 @@ const OWNED_WEAPON_MAX = 4;
 const EVOLVE_PAIR = { bolt: "haste", spray: "might", slash: "armor", nova: "vital", orbit: "swift", chain: "magnet", aura: "armor" };
 // 레벨업 카드를 다룰 수 있는 횟수 (한 판): 다시 뽑기, 건너뛰기, 지우기 (뱀서라이크의 Reroll/Skip/Banish)
 const REROLLS = 2, SKIPS = 2, BANISHES = 2;
+// 특성 효과 수치 (SurvivalRules.TRAITS가 원작 특성을 아래 효과로 바꿈, 설명은 lang의 web.survival.trait.*)
+const TRAIT = {
+    pinch: 1.5, basic: 1.3,               // 체력 1/3 이하에서 그 타입 기술 위력 (맹화 등 / 기본 효과)
+    intimidate: 0.8, guard: 0.85, multiscale: 0.5, // 받는 데미지
+    regen: 0.01, regenLite: 0.005,        // 초당 회복 (최대 체력 대비)
+    absorb: 0.0002, glutton: 1.5,         // KO마다 회복 / 열매·레벨업 회복 배수 (KO가 아주 많아서 KO 회복은 작게. 0.003이면 봇 클리어 +37%p)
+    adaptability: 1.2, protean: 1.2, technician: 1.5, // 기술 위력
+    brute: 1.3, bruteHp: 0.85, power: 1.15, guts: 1.3,
+    moxieStep: 0.01, moxieKills: 200, moxieMax: 0.3, // moxieKills KO마다 moxieStep
+    critChance: 0.15, weather: 1.25,
+    speed: 1.15, speedBoostStep: 0.02, speedBoostMax: 0.2,
+    contact: 0.2, contactBoss: 0.02,      // 반격: 닿은 적 최대 체력 대비
+    pickup: 1.4, pressure: 0.85, serene: 2,
+};
 // 기술·강화를 다 올린 뒤의 레벨업 회복량 (최대 체력 대비). 후반 생존에 크게 걸려 있어서 줄이면 난이도를 다시 맞춰야 합니다. (봇: 0이면 저주 3 클리어 60% → 24%)
 const HEAL_ON_LEVEL = 0.35;
 const PLAYER_RADIUS = 7;
@@ -266,13 +280,18 @@ class Game {
 
     begin() {
         const s = this.setup;
+        this.traitKey = s.trait?.key ?? "";
+        const startHp = this.form.maxHp * this.traitHpMul;
         this.player = {
-            x: 0, y: 0, hp: this.form.maxHp, maxHp: this.form.maxHp, row: 0, moving: false, animMs: 0,
+            x: 0, y: 0, hp: startHp, maxHp: startHp, row: 0, moving: false, animMs: 0,
             invuln: 0, faceX: 0, faceY: 1, dead: false,
         };
         this.weapons = s.weapons.map((w, index) => ({ ...w, index, level: index === 0 ? TUNE.startLevel : 0, cd: 400 + index * 150, angle: 0, tick: 0, dealt: 0, ko: 0 }));
         // 대폭발 아이템의 기록 (기술처럼 데미지를 주지만 기술 기록과 따로 셉니다)
         this.bombSource = { ...this.weapons[0], index: -1, kind: "bomb", slow: false, dealt: 0, ko: 0 };
+        // 특성 반격(정전기 등)의 데미지 기록 (결과 화면에는 따로 보이지 않음)
+        this.traitSource = { ...this.weapons[0], index: -2, kind: "trait", slow: true, dealt: 0, ko: 0 };
+        this.sturdyUsed = false;
         this.passives = Object.fromEntries(PASSIVES.map(p => [p, 0]));
         this.enemies = [];
         this.gems = [];
@@ -431,9 +450,52 @@ class Game {
     // --- 능력치 ---
 
     get powerMul() { return this.form.power * (1 + 0.12 * this.passives.might); }
-    get speed() { return this.form.speed * (1 + 0.08 * this.passives.swift); }
+    get speed() {
+        const trait = this.traitKey === "speed" ? TRAIT.speed
+            : this.traitKey === "speedboost" ? 1 + Math.min(TRAIT.speedBoostMax, Math.floor(this.time / 60) * TRAIT.speedBoostStep) : 1;
+        return this.form.speed * (1 + 0.08 * this.passives.swift) * trait;
+    }
     get cooldownMul() { return Math.pow(0.92, this.passives.haste); }
-    get pickupRadius() { return PICKUP_RADIUS * (1 + 0.4 * this.passives.magnet); }
+    get pickupRadius() { return PICKUP_RADIUS * (1 + 0.4 * this.passives.magnet) * (this.traitKey === "pickup" ? TRAIT.pickup : 1); }
+
+    // --- 특성 (setup.trait.key, 효과는 SurvivalRules.TRAITS와 lang의 web.survival.trait.*) ---
+
+    // 최대 체력 배수 (천하장사 등은 위력 대신 체력이 줄어듦)
+    get traitHpMul() { return this.traitKey === "brute" ? TRAIT.bruteHp : 1; }
+
+    // 기술 위력 배수
+    traitPower(w) {
+        const p = this.player, t = this.setup.trait;
+        if (!t) return 1;
+        const hp = p.hp / p.maxHp;
+        switch (t.key) {
+            case "pinch": return hp <= 1 / 3 && w.type === t.type ? TRAIT.pinch : 1;
+            case "basic": return hp <= 1 / 3 && w.type === t.type ? TRAIT.basic : 1;
+            case "adaptability": return w.sameType ? TRAIT.adaptability : 1;
+            case "protean": return w.sameType ? 1 : TRAIT.protean;
+            case "technician": return w.movePower > 0 && w.movePower <= 60 ? TRAIT.technician : 1;
+            case "brute": return TRAIT.brute;
+            case "power": return TRAIT.power;
+            case "guts": return hp <= 0.5 ? TRAIT.guts : 1;
+            case "moxie": return 1 + Math.min(TRAIT.moxieMax, Math.floor(this.kills / TRAIT.moxieKills) * TRAIT.moxieStep);
+            case "weather": return w.type === t.type ? TRAIT.weather : 1;
+            default: return 1;
+        }
+    }
+
+    // 받는 데미지 배수
+    traitGuard() {
+        const p = this.player;
+        switch (this.traitKey) {
+            case "intimidate": return TRAIT.intimidate;
+            case "guard": return TRAIT.guard;
+            case "multiscale": return p.hp >= p.maxHp * 0.9 ? TRAIT.multiscale : 1;
+            default: return 1;
+        }
+    }
+
+    // 회복량 배수 (먹보 등: 열매·레벨업 회복)
+    get traitHeal() { return this.traitKey === "glutton" ? TRAIT.glutton : 1; }
     get guardMul() { return this.form.guard * Math.pow(0.92, this.passives.armor); }
 
     // --- 진화: 게임 안 레벨이 진화 레벨(도감 기준, C#에서 계산)이 되면 다음 모습으로 (갈래가 여럿이면 고르기) ---
@@ -477,7 +539,7 @@ class Game {
         }
         const ratio = p.hp / p.maxHp;
         this.form = next;
-        p.maxHp = next.maxHp * (1 + 0.15 * this.passives.vital);
+        p.maxHp = next.maxHp * (1 + 0.15 * this.passives.vital) * this.traitHpMul;
         p.hp = Math.min(p.maxHp, ratio * p.maxHp + p.maxHp * 0.25);
         this.evolveBanner = 3;
         this.addPfx("levelup", "levelup", p.x, p.y + 7, { scale: 1.4, speed: 0.9, follow: true });
@@ -522,6 +584,9 @@ class Game {
         }
 
         if (this.comboLeft > 0) this.comboLeft -= dt;
+        // 특성 재생력 등: 매초 조금 회복
+        const regen = this.traitKey === "regen" ? TRAIT.regen : this.traitKey === "regenLite" ? TRAIT.regenLite : 0;
+        if (regen > 0) this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * regen * dt);
         this.movePlayer(dt);
         this.spawn(dt);
         this.buildGrid();
@@ -712,7 +777,8 @@ class Game {
         const strength = (1 + ENDLESS.damage * x10) * (1 + c * (this.setup.curseDamage ?? 0));
         const quick = 1 + c * (this.setup.curseSpeed ?? 0);
         const rush = rank === "normal" && this.time >= TUNE.rushFrom && Math.random() < TUNE.rushChance;
-        const rankHp = rank === "boss" ? 25 + 15 * bossIndex : rank === "elite" ? 12 : 1;
+        const rankHp = (rank === "boss" ? 25 + 15 * bossIndex : rank === "elite" ? 12 : 1)
+            * (rank !== "normal" && this.traitKey === "pressure" ? TRAIT.pressure : 1); // 특성 프레셔
         const [x, y] = this.spawnPoint();
         const enemy = {
             def, rank, tier, x, y,
@@ -796,7 +862,7 @@ class Game {
                     e.life -= dt;
                     if (e.life <= 0) e.removed = true;
                 }
-                if (!frozen && p.invuln <= 0 && dist < e.radius + PLAYER_RADIUS) this.hurtPlayer(e.damage);
+                if (!frozen && p.invuln <= 0 && dist < e.radius + PLAYER_RADIUS) this.hurtPlayer(e.damage, e);
                 continue;
             }
             if (frozen) continue;
@@ -830,17 +896,28 @@ class Game {
                 }
             }
 
-            if (p.invuln <= 0 && dist < e.radius + PLAYER_RADIUS) this.hurtPlayer(e.damage);
+            if (p.invuln <= 0 && dist < e.radius + PLAYER_RADIUS) this.hurtPlayer(e.damage, e);
         }
     }
 
-    hurtPlayer(amount) {
+    hurtPlayer(amount, from) {
         const p = this.player;
-        const damage = Math.max(1, amount * this.guardMul);
+        const damage = Math.max(1, amount * this.guardMul * this.traitGuard());
         p.hp -= damage;
         p.invuln = INVULN_SECONDS;
         this.addNumber(p.x, p.y - 14, Math.round(damage), "#ff5a5a");
         this.sound([[180, 50]]);
+        // 특성 반격(정전기·불꽃몸 등): 닿은 적이 그 적 최대 체력의 일부를 잃습니다.
+        if (from && !from.dying && this.traitKey === "contact")
+            this.damage(from, from.maxHp * (from.rank === "boss" ? TRAIT.contactBoss : TRAIT.contact), this.traitSource, 60, p.x, p.y);
+        // 특성 옹골참: 한 판에 한 번, 쓰러질 공격을 체력 1로 버팁니다.
+        if (p.hp <= 0 && this.traitKey === "sturdy" && !this.sturdyUsed) {
+            this.sturdyUsed = true;
+            p.hp = 1;
+            p.invuln = 1.5;
+            this.showBanner(this.setup.texts?.sturdy ?? "!", "#ffd54f");
+            return;
+        }
         if (p.hp <= 0) {
             p.hp = 0;
             p.dead = true;
@@ -871,7 +948,8 @@ class Game {
     weaponDamage(w, e) {
         const levelMul = 1 + 0.3 * (this.lv(w) - 1);
         const eff = e.def.eff?.[w.index] ?? 1;
-        return w.power / 4 * this.powerMul * levelMul * eff * (0.9 + Math.random() * 0.2);
+        const crit = this.traitKey === "crit" && Math.random() < TRAIT.critChance ? 2 : 1;
+        return w.power / 4 * this.powerMul * levelMul * eff * this.traitPower(w) * crit * (0.9 + Math.random() * 0.2);
     }
 
     fireWeapons(dt) {
@@ -1046,6 +1124,8 @@ class Game {
         this.combo = this.comboLeft > 0 ? this.combo + 1 : 1;
         this.comboLeft = COMBO_WINDOW;
         this.bestCombo = Math.max(this.bestCombo, this.combo);
+        // 특성 저수·축전 등: 쓰러뜨릴 때마다 조금 회복
+        if (this.traitKey === "absorb" && !this.player.dead) this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * TRAIT.absorb);
         this.addPfx("poof", "poof", e.x, e.y + 7 * e.size, { scale: 0.45 * e.size, speed: 1.8 });
 
         if (e.rank === "boss") {
@@ -1058,7 +1138,7 @@ class Game {
         const value = e.rank === "elite" ? 20 : e.tier >= 6 ? 3 : e.tier >= 3 ? 2 : 1;
         this.dropGem(e.x, e.y, "candy", value);
         if (e.rank === "elite" || Math.random() < 0.006) this.dropGem(e.x + 6, e.y, "berry", 0);
-        if (e.rank === "elite" && Math.random() < 0.35) this.dropGem(e.x - 6, e.y, ["magnet", "ice", "bomb"][Math.floor(Math.random() * 3)], 0);
+        if (e.rank === "elite" && Math.random() < 0.35 * (this.traitKey === "serene" ? TRAIT.serene : 1)) this.dropGem(e.x - 6, e.y, ["magnet", "ice", "bomb"][Math.floor(Math.random() * 3)], 0);
     }
 
     dropGem(x, y, kind, value) {
@@ -1142,7 +1222,7 @@ class Game {
     collect(g) {
         const p = this.player;
         if (g.kind === "berry") {
-            p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25);
+            p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25 * this.traitHeal);
             this.sound([[988, 40], [1319, 70]]);
             return;
         }
@@ -1318,7 +1398,7 @@ class Game {
     // 강화가 다 끝난 뒤의 레벨업: 최대 체력의 HEAL_ON_LEVEL만큼 회복하고 머리 위에 초록 숫자만 띄웁니다.
     autoHeal() {
         const p = this.player;
-        const gain = Math.min(p.maxHp - p.hp, p.maxHp * HEAL_ON_LEVEL);
+        const gain = Math.min(p.maxHp - p.hp, p.maxHp * HEAL_ON_LEVEL * this.traitHeal);
         p.hp += gain;
         this.pendingLevels = Math.max(0, this.pendingLevels - 1);
         if (gain >= 1) this.addNumber(p.x, p.y - 22, `+${Math.round(gain)}`, "#5fe06b");
@@ -1372,7 +1452,7 @@ class Game {
             return;
         }
         if (id === "heal") {
-            this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * HEAL_ON_LEVEL);
+            this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * HEAL_ON_LEVEL * this.traitHeal);
         } else if (id.startsWith("w")) {
             const w = this.weapons[Number(id.slice(1))];
             if (w && w.level < WEAPON_MAX) w.level++;
@@ -1381,7 +1461,7 @@ class Game {
             if (this.passives[name] < PASSIVE_MAX) {
                 this.passives[name]++;
                 if (name === "vital") {
-                    const gain = this.form.maxHp * 0.15;
+                    const gain = this.form.maxHp * 0.15 * this.traitHpMul;
                     this.player.maxHp += gain;
                     this.player.hp += gain;
                 }
