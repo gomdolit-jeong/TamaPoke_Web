@@ -148,7 +148,17 @@
 
             <details class="arena-info">
                 <summary>@Loc.T("web.survival.info")</summary>
-                <p class="party-note">@string.Format(Loc.T("web.survival.rules"), SurvivalRules.MIN_ENERGY)</p>
+                @* 규칙: 한 줄에 "제목|내용" 하나씩 (lang의 web.survival.rules) *@
+                <dl class="survival-rules">
+                    @foreach (string line in string.Format(Loc.T("web.survival.rules"), SurvivalRules.MIN_ENERGY).Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        int bar = line.IndexOf('|');
+                        <div>
+                            <dt>@(bar > 0 ? line[..bar] : "")</dt>
+                            <dd>@(bar > 0 ? line[(bar + 1)..] : line)</dd>
+                        </div>
+                    }
+                </dl>
             </details>
 
             @if (IsSignedIn)
