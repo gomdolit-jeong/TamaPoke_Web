@@ -76,11 +76,13 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
     // 후보: 진화 계열 전체(갈래 포함)가 Lv.50까지 레벨업으로 배우는 기술 + 실전(Pokémon Showdown 랜덤 배틀)에서 쓰는 대표 기술.
     // 무게: 위력이 셀수록, 내 타입일수록, 대표 기술일수록(가장 많이 쓰는 기술은 5배) 잘 뽑힙니다.
     //       이미 뽑은 기술과 공격 모양이 같으면 1/4로 줄어 되도록 겹치지 않게 하고, 변화 기술(오라)은 1개까지입니다.
+    //       같은 공격 모양은 2개까지이고, 범위 공격(SurvivalRules.AREA_KINDS)이 적어도 하나 들어가게 합니다. (배울 수 있으면)
     // 처음부터 쓰는 기술(맨 앞)은 오라가 아닌 내 타입 공격 기술 중에서 뽑습니다.
     // 뽑은 기술은 게임을 시작할 때까지 기억해서, 고르는 화면에 보인 기술이 그대로 게임에 나옵니다.
     private const int FAMOUS_MIN_SHARE = 8;     // 가장 많이 쓰는 기술의 1/8 미만으로 나온 기술은 대표 기술로 치지 않습니다.
     private const double FAMOUS_WEIGHT = 4;     // 대표 기술 무게: 1 + 4 × (자주 쓰는 정도 0~1)
     private const double SAME_SHAPE_WEIGHT = 0.25;
+    private const double FIRST_AREA_WEIGHT = 4; // 처음 기술을 뽑을 때 범위 공격의 무게 배수
 
     private readonly Dictionary<int, int[]> _rolled = [];
 
@@ -137,14 +139,20 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
         }
 
         var picked = new List<SkillInfo>();
+        int SameShape(SkillInfo s) => picked.Count(p => SurvivalRules.KindFor(p) == SurvivalRules.KindFor(s));
+        bool IsArea(SkillInfo s) => SurvivalRules.AREA_KINDS.Contains(SurvivalRules.KindFor(s));
+
         var attacks = pool.Where(s => !IsStatus(s) && !IsAura(s)).ToList();
         var starters = attacks.Where(SameType).ToList();
-        if (Draw(starters.Count > 0 ? starters : attacks, _ => 1) is { } first)
+        // 처음 기술은 한동안 혼자 싸우므로 범위 공격이 잘 나오게 합니다. (한 마리씩 맞히는 기술로 시작하면 클리어율이 크게 낮았습니다)
+        if (Draw(starters.Count > 0 ? starters : attacks, s => IsArea(s) ? FIRST_AREA_WEIGHT : 1) is { } first)
             picked.Add(first);
         while (picked.Count < 4)
         {
-            var next = Draw(pool.Where(s => !picked.Contains(s) && !(IsStatus(s) && picked.Any(IsStatus))),
-                s => picked.Any(p => SurvivalRules.KindFor(p) == SurvivalRules.KindFor(s)) ? SAME_SHAPE_WEIGHT : 1);
+            var candidates = pool.Where(s => !picked.Contains(s) && !(IsStatus(s) && picked.Any(IsStatus)) && SameShape(s) < SurvivalRules.MAX_SAME_SHAPE).ToList();
+            // 마지막 칸까지 범위 공격이 없으면, 마지막 칸은 범위 공격 중에서 뽑습니다. (몰려오는 적을 쓸어낼 수단이 없으면 4~7분에 쓰러집니다)
+            if (picked.Count == 3 && !picked.Any(IsArea) && candidates.Where(IsArea).ToList() is { Count: > 0 } area) candidates = area;
+            var next = Draw(candidates, s => SameShape(s) > 0 ? SAME_SHAPE_WEIGHT : 1);
             if (next is null) break;
             picked.Add(next);
         }
@@ -185,8 +193,12 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
             int[] next = NextOf(x.SpeciesId).Select(n => ids.FindIndex(y => y.SpeciesId == n)).Where(n => n > i).ToArray();
             if (x.Depth >= SurvivalRules.MAX_EVOLUTIONS) next = [];
             int evolveLevel = next.Length > 0 ? Math.Max(EvolveLevelOf(x.SpeciesId), x.MinLevel + 1) : 0;
+            // 얼굴 그림: 지금 모습(폼·이로치)의 결의 표정 → 기본 표정 → 기본 모습의 결의 표정 → 기본 표정
+            string[] portraits = new[] { x.Path, $"{x.SpeciesId:D4}" }.Distinct()
+                .SelectMany(path => new[] { PortraitEmotion.Url(path, PortraitEmotion.Determined), PortraitEmotion.Url(path, PortraitEmotion.Normal) })
+                .ToArray();
             return new SurvivalForm(x.SpeciesId, dex.GetName(x.SpeciesId, Utils.L.Language), sprites[i].Walk, sprites[i].Idle,
-                maxHp, speed, power, guard, x.Depth, next, evolveLevel);
+                maxHp, speed, power, guard, x.Depth, next, evolveLevel, portraits);
         }).ToList();
 
         var weapons = pick.Weapons;
@@ -207,6 +219,8 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
                 ["ice"] = Utils.L.T("web.survival.item.ice"),
                 ["bomb"] = Utils.L.T("web.survival.item.bomb"),
                 ["flyby"] = Utils.L.T("web.survival.flyby"),
+                ["hp"] = Utils.L.T("web.survival.hud.hp"),
+                ["exp"] = Utils.L.T("web.survival.hud.exp"),
             });
     }
 

@@ -744,6 +744,8 @@
   "web.survival.final": "Final form",
   "web.survival.boss": "👑 Boss {0} appeared!",
   "web.survival.clearedShort": "Survived 10 min",
+  "web.survival.hud.hp": "HP",
+  "web.survival.hud.exp": "EXP",
   "web.survival.item.magnet": "🧲 Pulled in every candy!",
   "web.survival.item.ice": "❄️ Wild Pokémon froze!",
   "web.survival.item.bomb": "💥 Blasted everything nearby!",

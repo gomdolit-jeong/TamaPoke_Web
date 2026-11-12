@@ -8,11 +8,13 @@ public sealed record SurvivalSprite(string Url, int Fw, int Fh, int Cols, int Ro
 
 // 게임 중의 모습 하나. Forms[0]이 처음 모습이고, Next는 진화할 수 있는 모습의 번호(Forms 안)입니다. Depth는 몇 번 진화한 모습인지.
 // EvolveLevel: 게임 안 레벨이 이만큼 되면 다음 모습으로 진화합니다. (진화하지 않으면 0)
+// Portraits: 화면 왼쪽 위에 보일 얼굴 그림 주소. 없는 그림이 있어서 앞에서부터 차례로 받아 봅니다.
 public sealed record SurvivalForm(int SpeciesId, string Name, SurvivalSprite? Walk, SurvivalSprite? Idle,
-    double MaxHp, double Speed, double Power, double Guard, int Depth, int[] Next, int EvolveLevel);
+    double MaxHp, double Speed, double Power, double Guard, int Depth, int[] Next, int EvolveLevel, string[] Portraits);
 
 // 기술 하나 = 무기 하나. Kind는 공격 모양(bolt, spray, slash, nova, orbit, chain, aura), Type은 효과 그림(fx_shot_{type}.png)입니다.
-public sealed record SurvivalWeapon(int SkillId, string Kind, string Type, string Color, double Power, double Cooldown, int Extra, bool Slow);
+// Name은 화면 오른쪽 기술 목록에 보일 기술 이름입니다.
+public sealed record SurvivalWeapon(int SkillId, string Kind, string Type, string Color, double Power, double Cooldown, int Extra, bool Slow, string Name);
 
 // 적 한 종류. Eff는 내 무기(순서대로)가 이 포켓몬에게 주는 타입 상성 배율입니다.
 public sealed record SurvivalEnemy(int SpeciesId, string Name, SurvivalSprite? Sprite, double Hp, double Speed, double Damage, double[] Eff);
@@ -168,6 +170,11 @@ public static class SurvivalRules
         };
     }
 
+    // 판마다 뽑는 기술 4개의 모양 제한: 같은 모양은 MAX_SAME_SHAPE개까지, 범위 공격(AREA_KINDS)은 적어도 하나.
+    // 한 마리씩 맞히는 모양(bolt)이나 주변만 도는 모양(orbit, aura)만 있으면 적이 쌓여 4~7분에 쓰러지는 판이 많았습니다. (봇 시뮬레이션)
+    public const int MAX_SAME_SHAPE = 2;
+    public static readonly string[] AREA_KINDS = ["spray", "nova", "slash", "chain"];
+
     // 기술 타입에 따라 공격 모양이 달라집니다. 변화 기술은 주변에 머무는 오라가 됩니다.
     public static string KindFor(SkillInfo skill) => skill.Category == SkillCategory.Status ? "aura" : skill.Type switch
     {
@@ -219,7 +226,7 @@ public static class SurvivalRules
         int extra = skill.MaxHits > 1 ? Math.Min(2, skill.MaxHits - 1) : 0;
         if (extra > 0) power *= 0.7;
         bool slow = skill.Type == PokemonType.Ice || skill.Ailment is SkillAilment.Paralysis or SkillAilment.Freeze or SkillAilment.Sleep;
-        return new SurvivalWeapon(skill.Id, kind, skill.Type.ToString().ToLowerInvariant(), ColorFor(skill.Type), power, cooldown, extra, slow);
+        return new SurvivalWeapon(skill.Id, kind, skill.Type.ToString().ToLowerInvariant(), ColorFor(skill.Type), power, cooldown, extra, slow, skill.Name);
     }
 
     // 다른 사람이 올린 값은 믿지 않고 게임 안의 범위로 맞춥니다.

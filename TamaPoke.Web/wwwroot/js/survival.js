@@ -42,6 +42,7 @@ function candyStage(value) {
     return stage;
 }
 const MAX_NUMBERS = 40;
+const MINIMAP_RANGE = 420; // 동그란 지도에 보이는 거리 (게임 좌표, 화면 반쯤 바깥까지)
 const WEAPON_MAX = 5;
 const PASSIVE_MAX = 5;
 const OWNED_WEAPON_MAX = 4;
@@ -73,6 +74,9 @@ const PASSIVES = ["might", "swift", "vital", "haste", "magnet", "armor"];
 
 // 강화 아이콘 (레벨업 카드, 일시정지 화면과 같은 그림 문자)
 const PASSIVE_ICONS = { might: "💪", swift: "👟", vital: "❤️", haste: "⏱️", magnet: "🧲", armor: "🛡️" };
+
+// 공격 모양 아이콘 (화면 오른쪽 기술 목록, SurvivalRules.KindIcon과 같은 그림 문자)
+const KIND_ICONS = { bolt: "🎯", spray: "🌊", slash: "⚔️", nova: "💥", orbit: "🌀", chain: "⚡", aura: "🔮" };
 
 // 방향 줄: 0 아래, 1 오른쪽 아래, 2 오른쪽, 3 오른쪽 위, 4 위, 5 왼쪽 위, 6 왼쪽, 7 왼쪽 아래 (PMD 시트 순서)
 const SECTOR_TO_ROW = [2, 1, 0, 7, 6, 5, 4, 3];
@@ -194,6 +198,16 @@ class Game {
         this.form = this.forms[0];
         this.roster = setup.enemies.map(enemy => ({ ...enemy, holder: sprite(enemy.sprite) }));
         this.bosses = setup.bosses.map(boss => ({ ...boss, holder: sprite(boss.sprite) }));
+
+        // 왼쪽 위 얼굴 그림: 없는 그림이 있어서 앞에서부터 차례로 받아 봅니다.
+        for (const form of this.forms) {
+            jobs.push((async () => {
+                for (const url of form.portraits ?? []) {
+                    const image = await loadImage(url);
+                    if (image) { form.portrait = image; return; }
+                }
+            })());
+        }
 
         const files = new Set(["ui/icon_candy.png", "ui/icon_berry_red.png", "ui/icon_ball.png"]);
         for (const weapon of setup.weapons) {
@@ -791,6 +805,7 @@ class Game {
             const target = this.nearest(p.x, p.y, w.kind === "slash" ? 46 + 7 * w.level : 220);
             if (!target && w.kind !== "nova") { w.cd = 120; continue; }
             w.cd = base;
+            w.cdMax = base; // 화면 오른쪽 재사용 시간 표시용
 
             const aimX = target ? target.x - p.x : p.faceX, aimY = target ? target.y - p.y : p.faceY;
             const aim = Math.atan2(aimY, aimX);
@@ -1673,89 +1688,437 @@ class Game {
         ctx.globalAlpha = 1;
     }
 
+    // --- 화면 위 표시 (HUD) ---
+
+    // 반투명 둥근 상자
+    panel(x, y, w, h, r) {
+        const ctx = this.ctx;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+        ctx.fillStyle = "rgb(18 22 40 / 82%)";
+        ctx.fill();
+        ctx.strokeStyle = "rgb(255 255 255 / 18%)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+
+    // 글자가 넓이를 넘으면 뒤를 …로 줄입니다.
+    fitText(text, maxWidth) {
+        const ctx = this.ctx;
+        if (ctx.measureText(text).width <= maxWidth) return text;
+        let cut = text;
+        while (cut.length > 1 && ctx.measureText(cut + "…").width > maxWidth) cut = cut.slice(0, -1);
+        return cut + "…";
+    }
+
+    // 글자 테두리를 둘러 어느 바탕에서도 읽히게 씁니다.
+    outlinedText(text, x, y, color, width = 3) {
+        const ctx = this.ctx;
+        ctx.lineWidth = width;
+        ctx.strokeStyle = "rgb(10 12 24 / 90%)";
+        ctx.strokeText(text, x, y);
+        ctx.fillStyle = color;
+        ctx.fillText(text, x, y);
+    }
+
+    // 이름표가 붙은 막대 하나 (체력, 경험치)
+    labeledBar(label, value, max, x, y, w, h, labelW, colors, fontSize) {
+        const ctx = this.ctx;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, labelW, h, 3); else ctx.rect(x, y, labelW, h);
+        ctx.fillStyle = colors.label;
+        ctx.fill();
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(label, x + labelW / 2, y + h / 2 + 0.5);
+
+        const bx = x + labelW + 4, bw = w - labelW - 4;
+        ctx.fillStyle = "rgb(0 0 0 / 60%)";
+        ctx.fillRect(bx, y, bw, h);
+        const ratio = Math.max(0, Math.min(1, value / max));
+        if (ratio > 0) {
+            const gradient = ctx.createLinearGradient(0, y, 0, y + h);
+            gradient.addColorStop(0, colors.top);
+            gradient.addColorStop(1, colors.bottom);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(bx + 1, y + 1, (bw - 2) * ratio, h - 2);
+            ctx.fillStyle = "rgb(255 255 255 / 30%)"; // 위쪽 빛
+            ctx.fillRect(bx + 1, y + 1, (bw - 2) * ratio, Math.max(1, Math.floor(h / 4)));
+        }
+        ctx.strokeStyle = "rgb(255 255 255 / 25%)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx + 0.5, y + 0.5, bw - 1, h - 1);
+        this.outlinedText(`${Math.ceil(value).toLocaleString()} / ${Math.round(max).toLocaleString()}`, bx + bw / 2, y + h / 2 + 0.5, "#ffffff");
+    }
+
+    // 왼쪽 위: 얼굴 그림, 레벨, 이름과 KO, 체력·경험치 막대
+    drawProfile(wide, mapR) {
+        const ctx = this.ctx, p = this.player;
+        const x = 8, y = 8;
+        const face = wide ? 58 : 44;
+        // 휴대폰은 오른쪽 위 지도(일시정지 단추 왼쪽)와 겹치지 않을 만큼만
+        const w = wide ? 280 : Math.min(220, this.viewW - 54 - mapR * 2 - 24);
+        const h = face + 14;
+        this.panel(x, y, w, h, 12);
+
+        // 얼굴: 둥근 틀 안에 초상화 (없으면 몬스터볼)
+        const cx = x + 8 + face / 2, cy = y + 6 + face / 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, face / 2, 0, Math.PI * 2);
+        ctx.fillStyle = "#2b3358";
+        ctx.fill();
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, face / 2 - 2, 0, Math.PI * 2);
+        ctx.clip();
+        const portrait = this.form.portrait ?? this.images["ui/icon_ball.png"];
+        if (portrait) ctx.drawImage(portrait, cx - face / 2 + 2, cy - face / 2 + 2, face - 4, face - 4);
+        // 맞으면 잠깐 붉게
+        if (p.invuln > INVULN_SECONDS - 0.25) {
+            ctx.fillStyle = "rgb(255 60 60 / 40%)";
+            ctx.fillRect(cx - face / 2, cy - face / 2, face, face);
+        }
+        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(cx, cy, face / 2 - 1, 0, Math.PI * 2);
+        ctx.strokeStyle = "#ffd54f";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // 레벨 표 (얼굴 아래에 걸침)
+        const levelText = `Lv ${this.level}`;
+        ctx.font = `bold ${wide ? 12 : 10}px sans-serif`;
+        const lw = ctx.measureText(levelText).width + 12, lh = wide ? 16 : 14, ly = cy + face / 2 - lh / 2 - 1;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(cx - lw / 2, ly, lw, lh, lh / 2); else ctx.rect(cx - lw / 2, ly, lw, lh);
+        ctx.fillStyle = "#1c2242";
+        ctx.fill();
+        ctx.strokeStyle = "#ffd54f";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffd54f";
+        ctx.fillText(levelText, cx, ly + lh / 2 + 0.5);
+
+        // 이름과 KO
+        const tx = x + 8 + face + 10, tw = x + w - 10 - tx;
+        const nameY = y + (wide ? 15 : 12);
+        // KO는 이름 옆에 자리가 있을 때만 (이름이 6글자쯤 들어갈 자리), 없으면 drawHud가 시간 옆에 씁니다.
+        ctx.font = "bold 11px sans-serif";
+        const ko = `KO ${this.kills.toLocaleString()}`;
+        const koW = ctx.measureText(ko).width;
+        const koShown = tw - koW - 8 >= 72;
+        if (koShown) {
+            ctx.textAlign = "right";
+            ctx.fillStyle = "#ffcf6e";
+            ctx.fillText(ko, tx + tw, nameY);
+        }
+        ctx.font = `bold ${wide ? 15 : 12}px sans-serif`;
+        ctx.textAlign = "left";
+        this.outlinedText(this.fitText(this.form.name, koShown ? tw - koW - 8 : tw), tx, nameY, "#ffffff", 2);
+
+        // 체력, 경험치
+        const texts = this.setup.texts ?? {};
+        const rowH = wide ? 15 : 12, labelW = wide ? 44 : 38, font = wide ? 10 : 9;
+        const y1 = y + (wide ? 29 : 22), y2 = y1 + rowH + (wide ? 5 : 4);
+        const low = p.hp / p.maxHp <= 0.3 && Math.floor(this.time * 4) % 2 === 0;
+        this.labeledBar(texts.hp ?? "HP", p.hp, p.maxHp, tx, y1, tw, rowH, labelW,
+            { label: "#c62828", top: low ? "#ffb4b4" : "#ff7b7b", bottom: low ? "#ff5252" : "#d32f2f" }, font);
+        this.labeledBar(texts.exp ?? "EXP", this.exp, this.expNext, tx, y2, tw, rowH, labelW,
+            { label: "#1f6fc4", top: "#8fd6ff", bottom: "#2f7fe0" }, font);
+        return { right: x + w, bottom: y + h, koShown };
+    }
+
+    // 기술의 남은 재사용 시간 (0~1). 계속 도는 기술(orbit)은 null
+    cooldownOf(w) {
+        if (w.kind === "orbit") return null;
+        if (w.kind === "aura") return Math.max(0, Math.min(1, w.tick / (AURA_TICK * w.cooldown * this.cooldownMul)));
+        return w.cdMax ? Math.max(0, Math.min(1, w.cd / w.cdMax)) : 0;
+    }
+
+    // 기술 그림 하나와 재사용 시간 표시 (시계 방향으로 어둠이 걷힘)
+    drawSkillIcon(w, x, y, size) {
+        const ctx = this.ctx;
+        const owned = w.level > 0;
+        const r = 7;
+        ctx.save();
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, size, size, r); else ctx.rect(x, y, size, size);
+        ctx.fillStyle = owned ? "#2b3358" : "#22263a";
+        ctx.fill();
+        ctx.clip();
+        const image = this.images[`ui/fx_shot_${w.type}.png`];
+        ctx.globalAlpha = owned ? 1 : 0.3;
+        const s = size * 0.72;
+        if (image) ctx.drawImage(image, 0, 0, 16, 16, x + (size - s) / 2, y + (size - s) / 2, s, s);
+        else { ctx.fillStyle = w.color; ctx.fillRect(x + size / 4, y + size / 4, size / 2, size / 2); }
+        ctx.globalAlpha = 1;
+
+        const left = owned ? this.cooldownOf(w) : 0;
+        const cx = x + size / 2, cy = y + size / 2;
+        if (left > 0) {
+            const start = -Math.PI / 2 + (1 - left) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, size, start, Math.PI * 1.5);
+            ctx.closePath();
+            ctx.fillStyle = "rgb(8 10 20 / 62%)";
+            ctx.fill();
+            const seconds = w.kind === "aura" ? left * AURA_TICK * w.cooldown * this.cooldownMul : w.cd / 1000;
+            if (seconds >= 0.3 && (w.kind === "aura" ? AURA_TICK : (w.cdMax ?? 0) / 1000) >= 1.2) {
+                ctx.font = `bold ${Math.round(size * 0.32)}px sans-serif`;
+                ctx.textAlign = "center";
+                this.outlinedText(seconds.toFixed(1), cx, cy + 1, "#ffffff");
+            }
+        }
+        ctx.restore();
+
+        // 테두리: 쓸 수 있을 때 기술 색으로 밝게
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x + 1, y + 1, size - 2, size - 2, r - 1); else ctx.rect(x + 1, y + 1, size - 2, size - 2);
+        ctx.strokeStyle = !owned ? "rgb(255 255 255 / 15%)" : left > 0 ? "rgb(255 255 255 / 35%)" : w.color;
+        ctx.lineWidth = owned && left === 0 ? 2.5 : 1.5;
+        ctx.stroke();
+
+        // 계속 도는 기술은 테두리를 도는 빛으로 표시
+        if (owned && left === null) {
+            const a = this.time * 5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, size / 2 - 1, a, a + 1.3);
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+        }
+    }
+
+    // 오른쪽 아래: 기술 목록 (넓은 화면은 이름과 레벨까지, 휴대폰은 그림만. 휴대폰 가로는 가로로 한 줄)
+    drawSkills(wide, row) {
+        const ctx = this.ctx;
+        const size = wide ? 36 : row ? 34 : 30, gap = wide ? 8 : 6;
+        const count = this.weapons.length;
+        const span = 6 + (count - 1) * (size + gap) + size + 6;
+        const w = wide ? 196 : row ? span : size + 12;
+        const h = row ? size + 12 : span;
+        const x = this.viewW - w - 8, y = this.viewH - h - 8;
+        this.panel(x, y, w, h, 12);
+        this.weapons.forEach((wp, i) => {
+            const ix = row ? x + 6 + i * (size + gap) : x + 6, iy = row ? y + 6 : y + 6 + i * (size + gap);
+            this.drawSkillIcon(wp, ix, iy, size);
+            const owned = wp.level > 0;
+            if (wide) {
+                const tx = ix + size + 8, tw = x + w - 8 - tx;
+                ctx.textAlign = "left";
+                ctx.font = "bold 12px sans-serif";
+                ctx.fillStyle = owned ? "#ffffff" : "rgb(255 255 255 / 40%)";
+                ctx.fillText(this.fitText(wp.name ?? "", tw - 18), tx, iy + 10);
+                ctx.font = "11px sans-serif";
+                ctx.textAlign = "right";
+                ctx.globalAlpha = owned ? 1 : 0.4;
+                ctx.fillText(KIND_ICONS[wp.kind] ?? "", tx + tw, iy + 10);
+                ctx.globalAlpha = 1;
+                // 레벨 칸 5개
+                for (let k = 0; k < WEAPON_MAX; k++) {
+                    ctx.fillStyle = k < wp.level ? wp.color : "rgb(255 255 255 / 14%)";
+                    ctx.fillRect(tx + k * 12, iy + size - 11, 9, 6);
+                    if (k < wp.level) {
+                        ctx.fillStyle = "rgb(255 255 255 / 35%)";
+                        ctx.fillRect(tx + k * 12, iy + size - 11, 9, 2);
+                    }
+                }
+                if (wp.level >= WEAPON_MAX) {
+                    ctx.font = "bold 9px sans-serif";
+                    ctx.textAlign = "left";
+                    ctx.fillStyle = "#ffd54f";
+                    ctx.fillText("MAX", tx + WEAPON_MAX * 12 + 2, iy + size - 8);
+                }
+            } else if (owned) {
+                ctx.font = "bold 10px sans-serif";
+                ctx.textAlign = "right";
+                this.outlinedText(`${wp.level}`, ix + size - 2, iy + size - 5, "#ffffff");
+            }
+        });
+        return { left: x, right: x + w, top: y, bottom: y + h };
+    }
+
+    // 강화(패시브) 그림을 한 줄로 늘어놓습니다. (아래 기준, 넘치면 위로 한 줄 더)
+    drawPassives(x, bottom, width) {
+        const ctx = this.ctx;
+        const list = PASSIVES.filter(name => this.passives[name] > 0);
+        if (list.length === 0) return;
+        const size = 24, gap = 4, perRow = Math.max(1, Math.floor((width + gap) / (size + gap)));
+        list.forEach((name, i) => {
+            const bx = x + (i % perRow) * (size + gap), by = bottom - size - Math.floor(i / perRow) * (size + gap);
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(bx, by, size, size, 6); else ctx.rect(bx, by, size, size);
+            ctx.fillStyle = "rgb(18 22 40 / 82%)";
+            ctx.fill();
+            ctx.strokeStyle = this.passives[name] >= PASSIVE_MAX ? "#ffd54f" : "rgb(255 202 40 / 60%)";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.font = "14px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#ffffff";
+            ctx.fillText(PASSIVE_ICONS[name], bx + size / 2, by + size / 2 + 1);
+            ctx.font = "bold 9px sans-serif";
+            ctx.textAlign = "right";
+            this.outlinedText(`${this.passives[name]}`, bx + size - 2, by + size - 5, "#ffffff", 2.5);
+        });
+    }
+
+    // 오른쪽 위: 동그란 지도. 내 포켓몬이 가운데이고, 주변 MINIMAP_RANGE 안의 적과 아이템을 점으로 보여 줍니다.
+    // 보스가 지도 밖에 있으면 테두리에 방향 표시를 띄웁니다. 일시정지 단추(SurvivalLayer) 왼쪽에 둡니다.
+    drawMinimap(r) {
+        const ctx = this.ctx, p = this.player;
+        const cx = this.viewW - 54 - r, cy = 8 + r;
+        const range = r >= 60 ? MINIMAP_RANGE : MINIMAP_RANGE * 0.8;
+        const k = (r - 3) / range;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgb(18 22 40 / 88%)";
+        ctx.fill();
+        ctx.clip();
+
+        // 거리 고리와 십자선
+        ctx.strokeStyle = "rgb(255 255 255 / 10%)";
+        ctx.lineWidth = 1;
+        for (const ring of [0.33, 0.66]) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * ring, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+        ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
+        ctx.stroke();
+
+        // 지금 화면에 보이는 넓이
+        ctx.strokeStyle = "rgb(255 255 255 / 28%)";
+        ctx.strokeRect(cx - this.halfW * k, cy - this.halfH * k, this.halfW * 2 * k, this.halfH * 2 * k);
+
+        const dot = (x, y, size, color) => {
+            const dx = (x - p.x) * k, dy = (y - p.y) * k;
+            if (dx * dx + dy * dy > (r - 2) * (r - 2)) return;
+            ctx.fillStyle = color;
+            ctx.fillRect(cx + dx - size / 2, cy + dy - size / 2, size, size);
+        };
+
+        // 아이템: 큰 사탕, 열매, 상자, 자석·얼음·폭탄
+        for (const g of this.gems) {
+            if (g.kind === "candy") { if (candyStage(g.value) > 0) dot(g.x, g.y, 2.5, CANDY_STAGES[candyStage(g.value)].tint); }
+            else if (g.kind === "berry") dot(g.x, g.y, 3, "#ff5c8a");
+            else if (g.kind === "chest") dot(g.x, g.y, 5, "#ffd54f");
+            else dot(g.x, g.y, 4, "#9fe3ff");
+        }
+        // 적: 보통은 작은 빨간 점, 엘리트는 주황, 보스는 크게
+        let boss = null;
+        for (const e of this.enemies) {
+            if (e.dying) continue;
+            if (e.rank === "boss") { boss = e; continue; }
+            if (e.rank === "elite") dot(e.x, e.y, 5, "#ffa726");
+            else dot(e.x, e.y, 3, e.rush ? "#ff9b5c" : "#ff5a5a");
+        }
+        if (boss) {
+            const dx = (boss.x - p.x) * k, dy = (boss.y - p.y) * k, d = Math.hypot(dx, dy);
+            const pulse = 1 + 0.25 * Math.sin(this.time * 8);
+            if (d <= r - 6) {
+                ctx.beginPath();
+                ctx.arc(cx + dx, cy + dy, 4.5 * pulse, 0, Math.PI * 2);
+                ctx.fillStyle = "#ff2d2d";
+                ctx.fill();
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            } else {
+                // 지도 밖: 테두리 안쪽에 보스 쪽을 가리키는 삼각형
+                const a = Math.atan2(dy, dx), ex = cx + Math.cos(a) * (r - 8), ey = cy + Math.sin(a) * (r - 8);
+                ctx.save();
+                ctx.translate(ex, ey);
+                ctx.rotate(a);
+                ctx.beginPath();
+                ctx.moveTo(6 * pulse, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5);
+                ctx.closePath();
+                ctx.fillStyle = "#ff2d2d";
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 나: 바라보는 쪽을 가리키는 흰 삼각형
+        const face = Math.atan2(p.faceY, p.faceX);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(face);
+        ctx.beginPath();
+        ctx.moveTo(6, 0); ctx.lineTo(-4, -4.5); ctx.lineTo(-2, 0); ctx.lineTo(-4, 4.5);
+        ctx.closePath();
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.strokeStyle = "#4fa3ff";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.restore();
+        ctx.restore();
+
+        // 테두리: 보스가 있으면 붉게
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 1, 0, Math.PI * 2);
+        ctx.strokeStyle = boss ? "#ff4d4d" : "rgb(255 255 255 / 45%)";
+        ctx.lineWidth = boss ? 2.5 : 2;
+        ctx.stroke();
+        return { left: cx - r, bottom: cy + r };
+    }
+
     drawHud() {
         const ctx = this.ctx;
         const W = this.viewW, H = this.viewH;
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
-        // 경험치 바
-        ctx.fillStyle = "rgb(20 24 40 / 85%)";
-        ctx.fillRect(0, 0, W, 12);
-        ctx.fillStyle = "#4fa3ff";
-        ctx.fillRect(1, 1, (W - 2) * Math.min(1, this.exp / this.expNext), 10);
-        ctx.font = "bold 10px sans-serif";
+        ctx.imageSmoothingEnabled = false;
         ctx.textBaseline = "middle";
-        ctx.textAlign = "right";
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(`Lv ${this.level}`, W - 6, 6.5);
 
-        // 남은 시간과 쓰러뜨린 수
+        // 화면 모양에 따라 세 가지로 늘어놓습니다. (CSS 픽셀 기준. 휴대폰은 해상도 설정을 바꿔도 이 크기는 같습니다)
+        // - 넓은 화면(PC·태블릿): 크게, 기술 목록에 이름까지
+        // - 휴대폰 세로: 작게, 기술은 그림만 세로로
+        // - 휴대폰 가로(높이가 낮음): 작게, 기술은 그림만 가로로 (세로로 쌓으면 지도·강화와 겹침)
+        const wide = W >= 700 && H >= 500;
+        const landscape = !wide && W > H;
+        const mapR = wide ? 62 : W < 360 ? 38 : 46;
+        const profile = this.drawProfile(wide, mapR);
+        const skills = this.drawSkills(wide, landscape);
+        const map = this.drawMinimap(mapR);
+
+        // 지난 시간: 얼굴 상자와 지도 사이가 넉넉하면 그 가운데 위에, 아니면 얼굴 상자 아래 왼쪽에 (KO가 상자에 안 들어갔으면 그 오른쪽에)
         const remain = Math.max(0, RUN_SECONDS - this.time);
         const clock = `${String(Math.floor(this.time / 60)).padStart(2, "0")}:${String(Math.floor(this.time % 60)).padStart(2, "0")}`;
-        ctx.textAlign = "center";
-        ctx.font = "bold 20px sans-serif";
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = "rgb(20 24 40 / 85%)";
-        ctx.strokeText(clock, W / 2, 30);
-        ctx.fillStyle = remain < 60 ? "#ffcf3f" : "#ffffff";
-        ctx.fillText(clock, W / 2, 30);
+        const gap = map.left - profile.right;
+        const top = gap >= 96;
+        const clockX = top ? (profile.right + map.left) / 2 : 14;
+        const clockY = top ? (wide ? 26 : 22) : profile.bottom + 14;
+        ctx.textAlign = top ? "center" : "left";
+        ctx.font = `bold ${wide ? 22 : 18}px sans-serif`;
+        this.outlinedText(clock, clockX, clockY, remain < 60 ? "#ffcf3f" : "#ffffff", 4);
+        if (!profile.koShown) {
+            ctx.font = "bold 12px sans-serif";
+            ctx.textAlign = "right";
+            this.outlinedText(`KO ${this.kills.toLocaleString()}`, profile.right - 4, clockY, "#ffcf6e");
+        }
 
-        ctx.textAlign = "left";
-        ctx.font = "bold 13px sans-serif";
-        const kills = `KO ${this.kills}`;
-        ctx.strokeText(kills, 10, 28);
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(kills, 10, 28);
-
-        // 보스 체력
+        // 보스 체력 (시간 아래)
         const boss = this.bossRef;
         if (boss && !boss.dying) {
-            const barW = Math.min(320, W - 40);
+            const barW = top ? Math.min(320, gap - 24) : profile.right - 8;
+            const bx = top ? clockX - barW / 2 : 8, by = clockY + (top ? 16 : 13);
             ctx.fillStyle = "rgb(20 24 40 / 85%)";
-            ctx.fillRect(W / 2 - barW / 2 - 2, 46, barW + 4, 10);
+            ctx.fillRect(bx - 2, by, barW + 4, 10);
             ctx.fillStyle = "#ff4d4d";
-            ctx.fillRect(W / 2 - barW / 2, 48, barW * Math.max(0, boss.hp / boss.maxHp), 6);
+            ctx.fillRect(bx, by + 2, barW * Math.max(0, boss.hp / boss.maxHp), 6);
         }
 
-        // 가진 기술과 강화 (왼쪽 아래)
-        let x = 10;
-        const y = H - 38;
-        ctx.font = "bold 9px sans-serif";
-        ctx.textAlign = "center";
-        const badge = (draw, level, border) => {
-            ctx.fillStyle = "rgb(20 24 40 / 85%)";
-            ctx.fillRect(x, y, 30, 30);
-            ctx.strokeStyle = border;
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x + 1, y + 1, 28, 28);
-            draw(x + 15, y + 14);
-            ctx.font = "bold 11px sans-serif";
-            ctx.textAlign = "right";
-            ctx.strokeStyle = "rgb(0 0 0 / 85%)";
-            ctx.lineWidth = 3;
-            ctx.strokeText(`${level}`, x + 28, y + 26);
-            ctx.fillStyle = "#ffffff";
-            ctx.fillText(`${level}`, x + 28, y + 26);
-            x += 34;
-        };
-        for (const w of this.weapons) {
-            if (w.level === 0) continue;
-            const image = this.images[`ui/fx_shot_${w.type}.png`];
-            badge((cx, cy) => {
-                if (image) ctx.drawImage(image, 0, 0, 16, 16, cx - 12, cy - 12, 24, 24);
-                else { ctx.fillStyle = w.color; ctx.fillRect(cx - 9, cy - 9, 18, 18); }
-            }, w.level, w.color);
-        }
-        x += 6;
-        for (const name of PASSIVES) {
-            const level = this.passives[name];
-            if (level === 0) continue;
-            badge((cx, cy) => {
-                ctx.font = "17px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText(PASSIVE_ICONS[name], cx, cy + 1);
-            }, level, "#ffca28");
-        }
+        // 강화: 넓은 화면은 기술 목록 바로 위, 휴대폰은 왼쪽 아래 (기술 목록 왼쪽까지)
+        this.drawPassives(wide ? skills.left : 8, wide ? skills.top - 6 : H - 8, wide ? skills.right - skills.left : skills.left - 16);
 
         // 아이템·떼 알림
         if (this.banner) {

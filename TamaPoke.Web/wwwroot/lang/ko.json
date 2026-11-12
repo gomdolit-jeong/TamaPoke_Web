@@ -744,6 +744,8 @@
   "web.survival.final": "최종 모습",
   "web.survival.boss": "👑 보스 {0} 등장!",
   "web.survival.clearedShort": "10분 생존",
+  "web.survival.hud.hp": "체력",
+  "web.survival.hud.exp": "경험치",
   "web.survival.item.magnet": "🧲 사탕을 모두 끌어왔다!",
   "web.survival.item.ice": "❄️ 야생 포켓몬이 얼어붙었다!",
   "web.survival.item.bomb": "💥 주변 포켓몬을 날려 버렸다!",
