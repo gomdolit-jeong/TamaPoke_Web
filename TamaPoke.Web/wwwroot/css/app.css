@@ -1860,13 +1860,15 @@ select {
 
 .title-stage {
     position: relative;
-    height: 200px;
+    height: 240px;
     overflow: hidden;
     border-bottom: 3px solid var(--tp-line);
     background: url("../backgrounds/TALL GRASS.png") center bottom / cover;
     image-rendering: pixelated;
 }
 
+/* 크기가 0인 칸 가운데에 그림을 놓아서, 그림의 가운데가 늘 같은 점에 옵니다.
+   (점프 그림은 걷기 그림보다 훨씬 커서, 위쪽 모서리에 맞추면 점프할 때 아래로 내려가 보입니다) */
 .title-runner {
     position: absolute;
     left: 0;
@@ -1874,14 +1876,11 @@ select {
     width: 0;
     height: 0;
     display: grid;
+    grid-template: 0 / 0;
     place-items: center;
     pointer-events: none;
     image-rendering: auto;
 }
-
-    .title-runner .sprite {
-        margin: -60px 0 0 -40px;
-    }
 
 .title-logo {
     position: absolute;

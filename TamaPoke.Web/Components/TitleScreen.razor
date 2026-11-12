@@ -17,7 +17,7 @@
             <div class="title-runner" @key="runner.SpeciesId"
                  style="transform:translate(@(runner.X.ToString("F1"))px,@(runner.Y.ToString("F0"))px);z-index:@((int)runner.Y)">
                 <AnimatedSprite SpritePath="@runner.SpritePath" FallbackPath="@($"{runner.SpeciesId:D4}")" Action="runner.Action" Row="PokemonAnim.ROW_LEFT"
-                                Flipped="runner.Direction > 0" Scale="2" NoPreload="true" Alt="" />
+                                Flipped="runner.Direction > 0" Scale="SPRITE_SCALE" NoPreload="true" Alt="" />
             </div>
         }
         <div class="title-logo">
@@ -60,8 +60,10 @@
 
 @code {
     private const int RUNNER_COUNT = 6;
-    private const double STAGE_WIDTH = 440;
-    private const double GROUND_TOP = 95, GROUND_BOTTOM = 165;
+    private const double SPRITE_SCALE = 2.5;
+    // 포켓몬 그림의 가운데가 (X, Y)에 옵니다. 발은 가운데보다 조금 아래입니다. (모션마다 그림 크기가 달라도 같은 자리)
+    private const double MIN_X = 24, MAX_X = 440;
+    private const double GROUND_TOP = 110, GROUND_BOTTOM = 205;
     private const double MIN_SPEED = 25, MAX_SPEED = 60;
     private const double HOP_MS = 700;
     private const int SHINY_CHANCE_PERCENT = 25; // 시작 화면이 화려해 보이도록 게임 속 확률보다 높게 둡니다.
@@ -99,7 +101,7 @@
         {
             SpeciesId = id,
             SpritePath = Random.Shared.Next(100) < SHINY_CHANCE_PERCENT ? $"{id:D4}/0000/0001" : $"{id:D4}",
-            X = Random.Shared.NextDouble() * STAGE_WIDTH,
+            X = MIN_X + Random.Shared.NextDouble() * (MAX_X - MIN_X),
             Y = GROUND_TOP + (GROUND_BOTTOM - GROUND_TOP) * index / (RUNNER_COUNT - 1),
             Direction = Random.Shared.Next(2) == 0 ? -1 : 1,
             Speed = MIN_SPEED + Random.Shared.NextDouble() * (MAX_SPEED - MIN_SPEED),
@@ -142,9 +144,9 @@
                     }
 
                     runner.X += runner.Direction * runner.Speed * ms / 1000;
-                    if (runner.X < 0 || runner.X > STAGE_WIDTH)
+                    if (runner.X < MIN_X || runner.X > MAX_X)
                     {
-                        runner.X = Math.Clamp(runner.X, 0, STAGE_WIDTH);
+                        runner.X = Math.Clamp(runner.X, MIN_X, MAX_X);
                         runner.Direction = -runner.Direction;
                     }
                     else if (Random.Shared.NextDouble() < ms / 8000)
