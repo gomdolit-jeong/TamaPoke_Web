@@ -221,6 +221,9 @@ public sealed partial class PokemonState
         UpdateMotion(Math.Min(elapsedMs, MAX_MOTION_STEP_MS));
         UpdateEventMessage(elapsedMs);
 
+        // 서바이벌 중에는 시간이 멈춥니다. (보상과 배고픔은 끝날 때 한꺼번에)
+        if (IsSurviving) return;
+
         // 산책 중에는 산책 규칙으로 시간이 흐릅니다.
         if (IsWalking)
         {
@@ -237,6 +240,7 @@ public sealed partial class PokemonState
         if (IsBattleOpen)
         {
             UpdateEnemyMotion(Math.Min(elapsedMs, MAX_MOTION_STEP_MS));
+            UpdateBattlePfx(Math.Min(elapsedMs, MAX_MOTION_STEP_MS));
             return;
         }
         if (IsCeremony)

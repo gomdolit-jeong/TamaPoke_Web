@@ -75,6 +75,7 @@ python tools/make_walk_bg.py                                       # 산책 풀�
 - **Sprites:** [PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab) 기여자들의 작업물이며, [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)에 따라 비상업적 목적으로만 사용합니다.
 - **Game Data:** 포켓몬 이름, 종족값, 진화, 기술, 메가진화 데이터는 [PokéAPI](https://pokeapi.co/) ([PokeAPI/api-data](https://github.com/PokeAPI/api-data), BSD-3-Clause)를 바탕으로 만들었습니다.
 - **Badge Images:** 공식 배지 디자인(The Pokémon Company / Nintendo / Game Freak)을 바탕으로 이 프로젝트용으로 만든 32×32 도트 그림입니다.
+- **Survival Effects:** `TamaPoke.Web/wwwroot/pfx`의 효과 그림은 [patch-gg/pixelfx](https://github.com/patch-gg/pixelfx)로 만들었습니다. Copyright (c) 2026 Patch, Copyright (c) 2026 Hugo Duprez, [MIT License](./TamaPoke.Web/wwwroot/pfx/LICENSE.txt).
 
 ## 라이선스
 
@@ -96,4 +97,4 @@ TamaPoke PC, which this project ports to the web, drew its game loops, planning 
 
 This is an unofficial, non-commercial fan project, not affiliated with or endorsed by Nintendo, Creatures Inc., GAME FREAK inc. or The Pokémon Company. Pokémon © Nintendo / Creatures Inc. / GAME FREAK inc.
 
-The MIT license covers the source code only. Sprites ([PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab), [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)), gym badges and Pokémon data belong to their respective owners and may be used for non-commercial purposes only.
+The MIT license covers the source code only. Sprites ([PMDCollab/SpriteCollab](https://github.com/PMDCollab/SpriteCollab), [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)), gym badges and Pokémon data belong to their respective owners and may be used for non-commercial purposes only. Survival effects in `TamaPoke.Web/wwwroot/pfx` are rendered from [patch-gg/pixelfx](https://github.com/patch-gg/pixelfx) (Copyright (c) 2026 Patch, Copyright (c) 2026 Hugo Duprez, [MIT License](./TamaPoke.Web/wwwroot/pfx/LICENSE.txt)).

@@ -319,6 +319,7 @@ public sealed partial class PokemonState
                 await PlaySkillFxAsync(playerSkill, targetIsEnemy: true);
 
                 IsEnemyTakingDamage = true;
+                PlayHitPfx(playerSkill, targetIsEnemy: true, crit, typeMultiplier);
                 dealt += Math.Min(damage, EnemyHp);
                 EnemyHp = Math.Max(0, EnemyHp - damage);
                 _enemyHitBy = playerSkill;
@@ -552,6 +553,7 @@ public sealed partial class PokemonState
                 await PlaySkillFxAsync(enemySkill, targetIsEnemy: false);
 
                 IsPlayerTakingDamage = true;
+                PlayHitPfx(enemySkill, targetIsEnemy: false, crit, typeMultiplier);
                 dealt += Math.Min(enemyDamage, PlayerHp);
                 PlayerHp = Math.Max(0, PlayerHp - enemyDamage);
                 _playerHitBy = enemySkill;

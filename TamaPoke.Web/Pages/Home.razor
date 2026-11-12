@@ -33,6 +33,10 @@ else if (_pet.IsWalking)
 {
     <WalkLayer Pet="_pet" OnEnd="() => _pet.EndWalk()" />
 }
+else if (_pet.IsSurviving)
+{
+    <SurvivalLayer Pet="_pet" OnEnd="() => _pet.EndSurvival()" />
+}
 else if (ShowTitle)
 {
     <TitleScreen CanSignIn="CloudSave.Status != CloudStatus.Unavailable"
@@ -121,6 +125,10 @@ else
         else if (_isArenaOpen)
         {
             <ArenaPanel Pet="_pet" OnClose="() => _isArenaOpen = false" OnChallenge="StartArena" />
+        }
+        else if (_isSurvivalOpen)
+        {
+            <SurvivalPanel Pet="_pet" OnClose="() => _isSurvivalOpen = false" OnStart="StartSurvival" />
         }
         else if (_isSettingsOpen)
         {
@@ -250,7 +258,7 @@ else
         }
     </section>
 
-    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnOpenParty="OpenParty" OnOpenGym="OpenGym" OnOpenArena="OpenArena" OnStartWalk="StartWalk" OnOpenSettings="OpenSettings" OnOpenBag="OpenBag" OnStartBattle="StartBattle" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync">
+    <PetMenu Pet="_pet" OnOpenDex="OpenDex" OnOpenProfile="OpenProfile" OnOpenParty="OpenParty" OnOpenGym="OpenGym" OnOpenArena="OpenArena" OnOpenSurvival="OpenSurvival" OnStartWalk="StartWalk" OnOpenSettings="OpenSettings" OnOpenBag="OpenBag" OnStartBattle="StartBattle" OnToggleMute="ToggleMute" OnToggleLanguage="ToggleLanguageAsync">
         <Cloud>
             @if (CloudSave.IsSignedIn)
             {
@@ -291,6 +299,7 @@ else
     private bool _isBagOpen;
     private bool _isGymOpen;
     private bool _isArenaOpen;
+    private bool _isSurvivalOpen;
     private bool _isOtherTabActive;
     private const double CeremonySpriteSize = 110;
     private DotNetObjectReference<Home>? _pageRef;
@@ -490,6 +499,7 @@ else
         _isBagOpen = false;
         _isGymOpen = false;
         _isArenaOpen = false;
+        _isSurvivalOpen = false;
         _isSettingsOpen = false;
     }
 
@@ -505,6 +515,19 @@ else
         PlaySound(SoundEffects.Tap);
         CloseSidePanels();
         _isArenaOpen = true;
+    }
+
+    private void OpenSurvival()
+    {
+        PlaySound(SoundEffects.Tap);
+        CloseSidePanels();
+        _isSurvivalOpen = true;
+    }
+
+    private void StartSurvival(int speciesId)
+    {
+        CloseSidePanels();
+        if (_pet!.BeginSurvival(speciesId)) PlaySound(SoundEffects.Play);
     }
 
     private void StartArena((ArenaEntry Foe, ArenaEntry Me) match)
@@ -595,7 +618,7 @@ else
                 last = now;
                 if (elapsedMs > MAX_CATCH_UP_MS || ShowTitle || CloudSave.IsWaitingForChoice) continue;
 
-                _pet!.IsPanelOpen = _isDexOpen || _isPartyOpen || _isBagOpen || _isGymOpen || _isArenaOpen || _isSettingsOpen;
+                _pet!.IsPanelOpen = _isDexOpen || _isPartyOpen || _isBagOpen || _isGymOpen || _isArenaOpen || _isSurvivalOpen || _isSettingsOpen;
                 _pet.Update(elapsedMs);
                 CloudSave.Tick(elapsedMs);
 

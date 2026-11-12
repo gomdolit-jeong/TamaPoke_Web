@@ -169,6 +169,30 @@ public sealed class PokemonDex(HttpClient http)
         return candidates.Length > 0 ? candidates[Random.Shared.Next(candidates.Length)] : 1;
     }
 
+    // 서바이벌에 나올 야생 포켓몬: 처음 모습 절반, 진화한 모습 절반을 고르고 약한 순서로 늘어놓습니다. (전설 제외)
+    public int[] PickSurvivalRoster(IReadOnlyCollection<int> generations, int count, Random random)
+    {
+        var basics = _hatchCandidates.Where(id => IsInGenerations(id, generations)).ToArray();
+        var evolved = _wildCandidates.Where(id => IsInGenerations(id, generations)).Except(basics).ToArray();
+        if (basics.Length == 0) basics = _hatchCandidates;
+        if (evolved.Length == 0) evolved = basics;
+
+        int basicCount = count / 2;
+        return basics.OrderBy(_ => random.Next()).Take(basicCount)
+            .Concat(evolved.OrderBy(_ => random.Next()).Take(count - basicCount))
+            .Distinct()
+            .OrderBy(id => _byId.TryGetValue(id, out var p) ? p.BaseHp + p.BaseAtk + p.BaseDef + p.BaseSpA + p.BaseSpD + p.BaseSpeed : 0)
+            .ToArray();
+    }
+
+    // 서바이벌 보스: 고른 세대의 전설 포켓몬 count마리 (겹치지 않게, 모자라면 다른 세대에서도)
+    public int[] PickSurvivalBosses(IReadOnlyCollection<int> generations, int count, Random random)
+    {
+        var picked = _wildLegendaries.Where(id => IsInGenerations(id, generations)).OrderBy(_ => random.Next()).Take(count).ToList();
+        picked.AddRange(_wildLegendaries.Except(picked).OrderBy(_ => random.Next()).Take(count - picked.Count));
+        return picked.Count > 0 ? [.. picked] : [150];
+    }
+
     public PokemonInfo? Get(int speciesId) => _byId.GetValueOrDefault(speciesId);
 
     public string GetName(int speciesId, string language)
@@ -206,6 +230,20 @@ public sealed class PokemonDex(HttpClient http)
         if (rate == 8) return (false, true);  // 100% 암컷
         return (false, Random.Shared.Next(8) < rate);
     }
+
+    // 진화 전 모습을 거슬러 올라간 첫 모습 (리자몽 → 파이리). 진화하지 않는 포켓몬은 자기 자신입니다.
+    public int BaseOf(int speciesId)
+    {
+        _previous ??= _evolutions
+            .SelectMany(e => e.Value.NextSpeciesIds.Select(next => (Next: next, Prev: e.Key)))
+            .GroupBy(x => x.Next)
+            .ToDictionary(g => g.Key, g => g.Min(x => x.Prev));
+        int current = speciesId;
+        for (int i = 0; i < 4 && _previous.TryGetValue(current, out int prev) && Get(prev)?.HasSprite == true; i++) current = prev;
+        return current;
+    }
+
+    private Dictionary<int, int>? _previous;
 
     // 스프라이트가 없는 진화 갈래는 뺍니다. (갈래가 모두 없으면 진화하지 않음)
     public (int EvolveLevel, int[] NextSpeciesIds)? GetEvolution(int speciesId) =>

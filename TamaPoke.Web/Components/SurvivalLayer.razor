@@ -1,0 +1,345 @@
+@using System.Text.Json
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@implements IAsyncDisposable
+@inject Loc Loc
+@inject PokemonDex Dex
+@inject SkillDex Skills
+@inject CloudSave CloudSave
+@inject SurvivalService Survival
+@inject IJSRuntime JS
+
+@* 서바이벌 화면: 게임은 캔버스(wwwroot/js/survival.js)가 그리고, 레벨업·일시정지·결과는 이 위에 띄웁니다. *@
+<div class="survival-layer">
+    <canvas class="survival-canvas" @ref="_canvas"></canvas>
+
+    @if (_isLoading)
+    {
+        <p class="survival-loading" role="status">@Loc.T("web.survival.loading")</p>
+    }
+    else if (_result is null && _options is null && !_isPaused)
+    {
+        <button type="button" class="survival-pause" aria-label="@Loc.T("web.survival.pause")" title="@Loc.T("web.survival.pause")" @onclick="PauseAsync">⏸</button>
+        @if (_showHint)
+        {
+            <p class="survival-hint">@Loc.T("web.survival.hint")</p>
+        }
+    }
+
+    @if (_options is { } options)
+    {
+        string heading = Loc.T(options.All(o => o.Kind == "evolve") ? "web.survival.evolve.choose" : "web.survival.levelUp");
+        <div class="survival-overlay" role="dialog" aria-label="@heading">
+            <h2>@heading</h2>
+            <div class="survival-cards">
+                @foreach (var option in options)
+                {
+                    <button type="button" class="survival-card" @onclick="() => ChooseAsync(option.Id)">
+                        @OptionCard(option)
+                    </button>
+                }
+            </div>
+        </div>
+    }
+    else if (_isPaused && _result is null)
+    {
+        <div class="survival-overlay" role="dialog" aria-label="@Loc.T("web.survival.paused")">
+            <h2>@Loc.T("web.survival.paused")</h2>
+            @if (_state is { } state && _setup is { } setup)
+            {
+                @* 지금 상태: 체력·레벨·시간, 기술(배운 것과 아직 못 배운 것), 강화, 처음 대비 능력 *@
+                <div class="survival-status">
+                    <dl class="survival-status-top">
+                        <dt>🐾</dt><dd>@Dex.GetName(state.SpeciesId, Loc.Language)</dd>
+                        <dt>HP</dt><dd>@state.Hp / @state.MaxHp</dd>
+                        <dt>Lv</dt><dd>@state.Level <small>(@state.Exp/@state.ExpNext)</small></dd>
+                        <dt>@Loc.T("web.survival.time")</dt><dd>@SurvivalRules.Clock(state.TimeSec)</dd>
+                        <dt>KO</dt><dd>@state.Kills</dd>
+                    </dl>
+
+                    <h3>@Loc.T("web.survival.status.moves")</h3>
+                    <ul class="survival-status-moves">
+                        @for (int i = 0; i < setup.Weapons.Count; i++)
+                        {
+                            var weapon = setup.Weapons[i];
+                            var skill = Skills.GetSkill(weapon.SkillId);
+                            int level = i < state.Weapons.Length ? state.Weapons[i] : 0;
+                            <li class="@(level == 0 ? "is-locked" : "")">
+                                <span class="survival-weapon-name">
+                                    <span class="battle-type battle-type-@weapon.Type">@(skill?.Type.ToString() ?? "")</span>
+                                    <strong>@(skill?.Name ?? "?")</strong>
+                                    <span class="survival-card-level">@(level == 0 ? Loc.T("web.survival.status.notYet") : $"Lv.{level}/5")</span>
+                                </span>
+                                <span class="survival-weapon-kind">@SurvivalRules.KindIcon(weapon.Kind) @Loc.T($"web.survival.kind.{weapon.Kind}") · @Loc.T($"web.survival.kind.{weapon.Kind}.desc")</span>
+                                <span class="survival-weapon-kind">@PowerText(weapon)</span>
+                            </li>
+                        }
+                    </ul>
+
+                    @if (state.Passives.Any(p => p.Level > 0))
+                    {
+                        <h3>@Loc.T("web.survival.status.passives")</h3>
+                        <ul class="survival-status-passives">
+                            @foreach (var passive in state.Passives.Where(p => p.Level > 0))
+                            {
+                                <li><strong>@SurvivalRules.PassiveIcon(passive.Name) @Loc.T($"web.survival.passive.{passive.Name}") Lv.@passive.Level</strong> · @Loc.T($"web.survival.passive.{passive.Name}.desc")</li>
+                            }
+                        </ul>
+                    }
+
+                    <h3>@Loc.T("web.survival.status.stats")</h3>
+                    <dl class="survival-status-stats">
+                        <dt>@Loc.T("web.survival.status.damage")</dt><dd>@state.Power%</dd>
+                        <dt>@Loc.T("web.survival.status.move")</dt><dd>@state.Speed%</dd>
+                        <dt>@Loc.T("web.survival.status.taken")</dt><dd>@state.Guard%</dd>
+                        <dt>@Loc.T("web.survival.status.cooldown")</dt><dd>@state.Cooldown%</dd>
+                        <dt>@Loc.T("web.survival.status.pickup")</dt><dd>@state.Pickup%</dd>
+                    </dl>
+                </div>
+            }
+            <div class="survival-buttons">
+                <button type="button" class="pet-prompt-main" @onclick="ResumeAsync">@Loc.T("web.survival.resume")</button>
+                <button type="button" @onclick="QuitAsync">@Loc.T("web.survival.quit")</button>
+            </div>
+        </div>
+    }
+
+    @if (_result is { } result)
+    {
+        <div class="survival-overlay" role="dialog" aria-label="@Loc.T("web.survival.result")">
+            <h2>@Loc.T(result.Cleared ? "web.survival.cleared" : "web.survival.result")</h2>
+            <dl class="survival-stats">
+                <dt>@Loc.T("web.survival.final")</dt><dd>@Dex.GetName(result.FinalSpeciesId > 0 ? result.FinalSpeciesId : Pet.SurvivalSpecies, Loc.Language)</dd>
+                <dt>@Loc.T("web.survival.time")</dt><dd>@SurvivalRules.Clock(result.TimeSec)</dd>
+                <dt>@Loc.T("web.survival.kills")</dt><dd>@result.Kills</dd>
+                <dt>@Loc.T("web.survival.level")</dt><dd>Lv.@result.Level</dd>
+            </dl>
+            @if (_isBest)
+            {
+                <p class="survival-best">@Loc.T("web.survival.newBest")</p>
+            }
+            <p class="survival-rank" role="status">@_rankText</p>
+            <ul class="survival-rewards">
+                @foreach (string reward in _rewards)
+                {
+                    <li>@reward</li>
+                }
+            </ul>
+            <div class="survival-buttons">
+                <button type="button" class="pet-prompt-main" disabled="@(!Pet.CanStartSurvival || _isSubmitting)" @onclick="RetryAsync">@Loc.T("web.survival.retry")</button>
+                <button type="button" disabled="@_isSubmitting" @onclick="ExitAsync">@Loc.T("web.survival.exit")</button>
+            </div>
+            @if (!Pet.CanStartSurvival)
+            {
+                <p class="party-note">@string.Format(Loc.T("web.survival.tired"), SurvivalRules.MIN_ENERGY)</p>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnEnd { get; set; }
+
+    private ElementReference _canvas;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<SurvivalLayer>? _self;
+    private SurvivalSetup? _setup;
+    private bool _isLoading = true;
+    private bool _isPaused;
+    private bool _showHint = true;
+    private List<SurvivalOption>? _options;
+    private SurvivalResult? _result;
+    private List<string> _rewards = [];
+    private bool _isBest;
+    private bool _isSubmitting;
+    private string _rankText = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _self = DotNetObjectReference.Create(this);
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", BuildInfo.Versioned("./js/survival.js"));
+        await StartRunAsync();
+    }
+
+    private async Task StartRunAsync()
+    {
+        _isLoading = true;
+        _result = null;
+        _options = null;
+        _isPaused = false;
+        _showHint = true;
+        StateHasChanged();
+
+        _setup = await Survival.BuildSetupAsync(Pet, Pet.SurvivalSpecies);
+        string json = JsonSerializer.Serialize(_setup, SurvivalJsonContext.Default.SurvivalSetup);
+        await _module!.InvokeVoidAsync("start", _canvas, json, _self);
+        _isLoading = false;
+        StateHasChanged();
+
+        await Task.Delay(6000);
+        _showHint = false;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnLevelUp(string json)
+    {
+        _options = JsonSerializer.Deserialize(json, SurvivalJsonContext.Default.ListSurvivalOption);
+        _showHint = false;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnPauseChanged(bool paused)
+    {
+        _isPaused = paused;
+        if (paused) await LoadStateAsync();
+        StateHasChanged();
+    }
+
+    private SurvivalState? _state;
+
+    private async Task LoadStateAsync()
+    {
+        if (_module is null) return;
+        string json = await _module.InvokeAsync<string>("getState");
+        _state = json.Length > 0 ? JsonSerializer.Deserialize(json, SurvivalJsonContext.Default.SurvivalState) : null;
+    }
+
+    private string PowerText(SurvivalWeapon weapon) =>
+        string.Format(Loc.T("web.survival.status.power"), (int)Math.Round(weapon.Power))
+        + (weapon.Slow ? Loc.T("web.survival.status.slow") : "")
+        + (weapon.Extra > 0 ? string.Format(Loc.T("web.survival.status.extra"), weapon.Extra) : "");
+
+    [JSInvokable]
+    public async Task OnGameOver(string json)
+    {
+        var result = JsonSerializer.Deserialize(json, SurvivalJsonContext.Default.SurvivalResult);
+        if (result is null || _result is not null) return;
+
+        result = SurvivalRules.Clamp(result);
+        _result = result;
+        _options = null;
+        _isPaused = false;
+        (_rewards, _isBest) = Pet.FinishSurvival(result);
+        StateHasChanged();
+
+        if (!CloudSave.IsSignedIn || !CloudSave.IsAccountReady)
+        {
+            _rankText = Loc.T("web.survival.rank.signIn");
+            return;
+        }
+
+        _isSubmitting = true;
+        _rankText = Loc.T("web.survival.rank.saving");
+        StateHasChanged();
+        var (outcome, board) = await Survival.SubmitAsync(Pet, Pet.SurvivalSpecies, result);
+        _isSubmitting = false;
+        _rankText = outcome switch
+        {
+            SurvivalService.SubmitOutcome.Saved => board?.MyRank is int rank ? string.Format(Loc.T("web.survival.rank.saved"), rank) : Loc.T("web.survival.rank.savedNoRank"),
+            SurvivalService.SubmitOutcome.NotBetter => board?.Me is { } best
+                ? string.Format(Loc.T("web.survival.rank.notBetter"), SurvivalRules.RecordText(best.TimeSec, best.Kills), board.MyRank is int r ? string.Format(Loc.T("web.arena.rank"), r) : "-")
+                : "",
+            SurvivalService.SubmitOutcome.Failed => Loc.T("web.survival.rank.failed"),
+            _ => Loc.T("web.survival.rank.signIn"),
+        };
+        StateHasChanged();
+    }
+
+    private async Task ChooseAsync(string id)
+    {
+        _options = null;
+        if (_module is not null) await _module.InvokeVoidAsync("choose", id);
+    }
+
+    private async Task PauseAsync()
+    {
+        _isPaused = true;
+        if (_module is not null) await _module.InvokeVoidAsync("setPaused", true);
+        await LoadStateAsync();
+    }
+
+    private async Task ResumeAsync()
+    {
+        _isPaused = false;
+        if (_module is not null) await _module.InvokeVoidAsync("setPaused", false);
+    }
+
+    private async Task QuitAsync()
+    {
+        _isPaused = false;
+        if (_module is not null) await _module.InvokeVoidAsync("quit");
+    }
+
+    private async Task RetryAsync()
+    {
+        if (!Pet.CanStartSurvival) return;
+        await StartRunAsync();
+    }
+
+    private async Task ExitAsync()
+    {
+        if (_module is not null) await _module.InvokeVoidAsync("stop");
+        await OnEnd.InvokeAsync();
+    }
+
+    private RenderFragment OptionCard(SurvivalOption option) => __builder =>
+    {
+        if (option.Kind is "new" or "up" && _setup is { } setup && option.Index < setup.Weapons.Count)
+        {
+            var weapon = setup.Weapons[option.Index];
+            var skill = Skills.GetSkill(weapon.SkillId);
+            <span class="survival-card-head">
+                <span class="survival-card-icon survival-icon-shot" style="border-color:@weapon.Color;background-image:url('ui/fx_shot_@(weapon.Type).png')"></span>
+                <strong>@(skill?.Name ?? "?")</strong>
+                <span class="survival-card-level">@(option.Kind == "new" ? "NEW" : $"Lv.{option.Level}")</span>
+            </span>
+            <span class="survival-card-tag">@SurvivalRules.KindIcon(weapon.Kind) @Loc.T($"web.survival.kind.{weapon.Kind}")</span>
+            <span class="survival-card-desc">@(option.Kind == "new" ? Loc.T($"web.survival.kind.{weapon.Kind}.desc") : Loc.T("web.survival.up"))</span>
+        }
+        else if (option.Kind == "evolve" && _setup is { } evolveSetup && option.Index < evolveSetup.Forms.Count)
+        {
+            var form = evolveSetup.Forms[option.Index];
+            <span class="survival-card-head">
+                <PortraitImage SpritePath="@($"{form.SpeciesId:D4}")" Emotion="@Sprites.PortraitEmotion.Joyous" Size="32" />
+                <strong>@form.Name</strong>
+                <span class="survival-card-level">@Loc.T("web.survival.evolve.card")</span>
+            </span>
+            <span class="survival-card-desc">@Loc.T("web.survival.evolve.desc")</span>
+        }
+        else if (option.Kind == "passive")
+        {
+            <span class="survival-card-head">
+                <span class="survival-card-icon survival-card-icon-passive">@SurvivalRules.PassiveIcon(option.Name)</span>
+                <strong>@Loc.T($"web.survival.passive.{option.Name}")</strong>
+                <span class="survival-card-level">Lv.@option.Level</span>
+            </span>
+            <span class="survival-card-desc">@Loc.T($"web.survival.passive.{option.Name}.desc")</span>
+        }
+        else
+        {
+            <span class="survival-card-head">
+                <span class="survival-card-icon survival-card-icon-passive">🍎</span>
+                <strong>@Loc.T("web.survival.heal")</strong>
+            </span>
+            <span class="survival-card-desc">@Loc.T("web.survival.heal.desc")</span>
+        }
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("stop");
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException) { }
+        _self?.Dispose();
+    }
+}

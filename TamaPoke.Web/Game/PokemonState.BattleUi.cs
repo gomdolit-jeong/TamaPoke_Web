@@ -102,6 +102,12 @@ public sealed partial class PokemonState
     [JsonIgnore] public SkillInfo? RecommendedSkill1 { get; private set; }
     [JsonIgnore] public SkillInfo? RecommendedSkill2 { get; private set; }
     [JsonIgnore] public BattleFxFrame? BattleFx { get; private set; }
+
+    // pixelfx 효과 (타격 불꽃, 급소, 기절 연기, 포획 빛). 기존 기술 그림 위에 겹쳐 그립니다.
+    [JsonIgnore] public List<BattlePfx> BattlePfxList { get; } = [];
+    [JsonIgnore] public double BattleClockMs { get; private set; }
+    [JsonIgnore] public bool IsBattleShaking => BattleClockMs < _shakeUntilMs;
+    private double _shakeUntilMs;
     [JsonIgnore] public bool IsBallVisible { get; private set; }
     [JsonIgnore] public bool IsBallWobbling { get; private set; }
 
@@ -153,6 +159,7 @@ public sealed partial class PokemonState
     {
         bool fainted = (targetIsEnemy ? EnemyHp : PlayerHp) <= 0;
         int motion = fainted ? PokemonAnim.FAINT : PokemonAnim.HURT;
+        if (fainted && targetIsEnemy) AddBattlePfx("poof", ENEMY_CENTER_X, ENEMY_CENTER_Y + 28, 0.8, delayMs: 600); // 상대가 쓰러지면 연기
 
         if (targetIsEnemy)
         {
@@ -264,6 +271,7 @@ public sealed partial class PokemonState
         IsBattleOpen = false;
         BattleMessage = "";
         BattleFx = null;
+        BattlePfxList.Clear();
         IsBallVisible = false;
         NeedsSave = true;
     }
@@ -285,6 +293,32 @@ public sealed partial class PokemonState
             }
         }
         await PlayBurstAsync($"fx_skill_{type}.png", targetIsEnemy);
+    }
+
+    // 배틀 시계를 진행하고 끝난 효과를 지웁니다. (Update에서 배틀 중에 부릅니다)
+    private void UpdateBattlePfx(double ms)
+    {
+        BattleClockMs += ms;
+        BattlePfxList.RemoveAll(fx => fx.IsDone(BattleClockMs));
+    }
+
+    private void AddBattlePfx(string name, double x, double y, double scale, bool flip = false, double angleDeg = 0, double speed = 1, double delayMs = 0)
+    {
+        if (!PfxSheets.All.ContainsKey(name) || BattlePfxList.Count >= 8) return;
+        BattlePfxList.Add(new BattlePfx(name, x, y, scale, flip, angleDeg, speed, BattleClockMs + delayMs));
+    }
+
+    // 맞았을 때: 타입 색 타격 불꽃이 공격 방향으로 튀고, 급소면 급소 효과, 급소나 효과가 굉장하면 화면이 흔들립니다.
+    private void PlayHitPfx(SkillInfo skill, bool targetIsEnemy, bool crit, double typeMultiplier)
+    {
+        var (fromX, fromY) = FxCenter(!targetIsEnemy);
+        var (x, y) = FxCenter(targetIsEnemy);
+        double angle = Math.Atan2(y - fromY, x - fromX) * 180 / Math.PI;
+        string type = skill.Type.ToString().ToLowerInvariant();
+        double scale = targetIsEnemy ? 0.9 : 1.2;
+        AddBattlePfx($"hit_{type}", x, y, scale, angleDeg: angle);
+        if (crit) AddBattlePfx("crit", x, y, scale * 0.8, angleDeg: angle);
+        if (crit || typeMultiplier > 1) _shakeUntilMs = BattleClockMs + (crit ? 320 : 220);
     }
 
     private Task PlayStatFxAsync(bool rose, bool targetIsEnemy) =>
@@ -441,6 +475,7 @@ public sealed partial class PokemonState
                 Skills = (int[])EnemySkills.Clone(),
             });
 
+            AddBattlePfx("levelup", ENEMY_CENTER_X, ENEMY_CENTER_Y + 28, 1.0);
             BattleMessage = L.F(wasFull ? "battle.caught.full" : "battle.caught", EnemyName);
             await Task.Delay(wasFull ? 2500 : 2000);
             await ProcessWildBattleRewardsAsync();

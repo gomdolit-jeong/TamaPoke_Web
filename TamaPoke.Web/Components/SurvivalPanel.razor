@@ -1,0 +1,328 @@
+@using TamaPoke.Web.Game
+@using TamaPoke.Web.Utils
+@inject Loc Loc
+@inject PokemonDex Dex
+@inject SkillDex Skills
+@inject CloudSave CloudSave
+@inject SurvivalService Survival
+@inject IJSRuntime JS
+
+@* 서바이벌 준비 화면과 주간 랭킹. 대전 창과 같은 모양입니다. *@
+<div class="arena-backdrop" @onclick="OnClose"></div>
+<section class="pet-panel arena-panel" role="dialog" aria-label="@Loc.T("web.survival.title")">
+    <header class="pet-panel-header">
+        <h2>@Loc.T("web.survival.title")</h2>
+        <button type="button" class="pet-close" aria-label="@Loc.T("common.close")" title="@Loc.T("common.close")" @onclick="OnClose"></button>
+    </header>
+
+    <div class="arena-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="@(_showRanking ? "false" : "true")" class="@(_showRanking ? "" : "is-active")" @onclick="() => _showRanking = false">@Loc.T("web.survival.tab.play")</button>
+        <button type="button" role="tab" aria-selected="@(_showRanking ? "true" : "false")" class="@(_showRanking ? "is-active" : "")" @onclick="ShowRankingAsync">@Loc.T("web.arena.tab.ranking")</button>
+    </div>
+
+    @if (!Pet.IsEgg)
+    {
+        <div class="arena-me">
+            <span>@(MyWeekly is { } week ? string.Format(Loc.T("web.survival.me"), SurvivalRules.RecordText(week.TimeSec, week.Kills)) : Loc.T("web.survival.me.none"))</span>
+            @if (_showRanking && _board?.MyRank is not null)
+            {
+                <button type="button" class="arena-jump" @onclick="JumpToMeAsync">@Loc.T("web.arena.jump")</button>
+            }
+            <span class="arena-rank">@(_board?.MyRank is int rank ? string.Format(Loc.T("web.arena.rank"), rank) : Loc.T("web.arena.unranked"))</span>
+        </div>
+    }
+
+    <div class="arena-body">
+        <p class="party-note">@SeasonText</p>
+
+        @if (Pet.IsEgg)
+        {
+            <p class="arena-message">@Loc.T("web.survival.egg")</p>
+        }
+        else if (_showRanking)
+        {
+            @if (!IsSignedIn && !IsDebugBuild)
+            {
+                <p class="arena-message">@Loc.T("web.survival.signIn")</p>
+            }
+            else if (_isLoading)
+            {
+                <p class="arena-message" role="status">@Loc.T("web.arena.loading")</p>
+            }
+            else if (_board is null)
+            {
+                <p class="arena-message is-warning" role="alert">@Loc.T("web.arena.failed")</p>
+                <button type="button" class="arena-random" @onclick="LoadAsync">@Loc.T("web.arena.retry")</button>
+            }
+            else if (_board.Top.Count == 0)
+            {
+                <p class="arena-message">@Loc.T("web.survival.empty")</p>
+            }
+            else
+            {
+                @if (!IsSignedIn)
+                {
+                    <p class="arena-message is-warning">@Loc.T("web.arena.sample")</p>
+                }
+                <ol class="arena-list">
+                    @for (int i = 0; i < _board.Top.Count; i++)
+                    {
+                        @RankRow(_board.Top[i], i + 1)
+                    }
+                </ol>
+            }
+        }
+        else
+        {
+            <div class="survival-best-box">
+                <span>@Loc.T("web.survival.allTimeBest")</span>
+                <strong>@(Pet.SurvivalBestScore > 0 ? SurvivalRules.RecordText(Pet.SurvivalBestTime, Pet.SurvivalBestKills) : "-")</strong>
+            </div>
+
+            @* 잡은 포켓몬 중 하나를 골라 도전합니다. 능력치는 모두 같은 기준이라, 고르는 재미는 종족값과 기술에서 나옵니다. *@
+            <h3>@string.Format(Loc.T("web.survival.choose"), Candidates.Count)</h3>
+            <div class="dex-filters">
+                <select aria-label="@Loc.T("web.dex.region")" @bind="_generation">
+                    <option value="0">@Loc.T("web.survival.allRegions") (@Candidates.Count)</option>
+                    @foreach (var region in PokemonDex.Regions)
+                    {
+                        int count = Candidates.Count(id => id >= region.StartId && id <= region.EndId);
+                        @if (count > 0)
+                        {
+                            <option value="@region.Generation">@Loc.T($"region.{region.Generation}") (@count)</option>
+                        }
+                    }
+                </select>
+            </div>
+            <ul class="survival-picker">
+                @foreach (int id in Shown)
+                {
+                    int species = id;
+                    <li @key="id">
+                        <button type="button" class="@(species == _selected ? "is-selected" : "")" title="@Dex.GetName(species, Loc.Language)"
+                                aria-pressed="@(species == _selected ? "true" : "false")" @onclick="() => _selected = species">
+                            <PortraitImage SpritePath="@(species == Pet.SpeciesId && !Pet.IsEgg ? Pet.SpritePath : $"{species:D4}")" FallbackPath="@($"{species:D4}")" />
+                            <span>@Dex.GetName(species, Loc.Language)</span>
+                        </button>
+                    </li>
+                }
+            </ul>
+
+            @if (Selected is { } pick)
+            {
+                <div class="survival-pick">
+                    <PortraitImage SpritePath="@pick.SpritePath" FallbackPath="@($"{pick.SpeciesId:D4}")" Emotion="Determined" Size="64" />
+                    <div class="survival-pick-info">
+                        <strong>@((pick.Shiny ? "✨" : "") + Dex.GetName(pick.SpeciesId, Loc.Language))</strong>
+                        <dl class="survival-pick-stats">
+                            <dt>HP</dt><dd>@pick.Hp</dd>
+                            <dt>@Loc.T("web.survival.stat.attack")</dt><dd>@pick.Attack</dd>
+                            <dt>@Loc.T("web.survival.stat.defense")</dt><dd>@pick.Defense</dd>
+                            <dt>@Loc.T("web.survival.stat.speed")</dt><dd>@pick.Speed</dd>
+                        </dl>
+                        <p class="survival-chain">@ChainText(pick)</p>
+                    </div>
+                </div>
+
+                <h3>@Loc.T("web.survival.weapons")</h3>
+                <ul class="survival-weapons">
+                    @for (int i = 0; i < pick.Weapons.Count; i++)
+                    {
+                        var weapon = pick.Weapons[i];
+                        var skill = Skills.GetSkill(weapon.SkillId);
+                        <li>
+                            <span class="survival-weapon-name">
+                                <span class="battle-type battle-type-@weapon.Type">@(skill?.Type.ToString() ?? "")</span>
+                                <strong>@(skill?.Name ?? "?")</strong>
+                                @if (i == 0)
+                                {
+                                    <small class="survival-first">@Loc.T("web.survival.first")</small>
+                                }
+                            </span>
+                            <span class="survival-weapon-kind">@SurvivalRules.KindIcon(weapon.Kind) @Loc.T($"web.survival.kind.{weapon.Kind}") · @Loc.T($"web.survival.kind.{weapon.Kind}.desc")</span>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <details class="arena-info">
+                <summary>@Loc.T("web.survival.info")</summary>
+                <p class="party-note">@string.Format(Loc.T("web.survival.rules"), SurvivalRules.MIN_ENERGY)</p>
+            </details>
+
+            @if (IsSignedIn)
+            {
+                <p class="party-note">@Loc.T("web.survival.signedNote")</p>
+            }
+            else
+            {
+                <p class="party-note">@Loc.T("web.survival.guestNote")</p>
+            }
+        }
+    </div>
+
+    @* 목록이 길어도 시작 버튼은 창 아래에 늘 보입니다. *@
+    @if (!_showRanking && !Pet.IsEgg)
+    {
+        <div class="survival-start">
+            <button type="button" class="arena-random" disabled="@(!Pet.CanStartSurvival || Selected is null)" @onclick="() => OnStart.InvokeAsync(_selected)">
+                @(Selected is { } chosen ? string.Format(Loc.T("web.survival.startWith"), Dex.GetName(chosen.SpeciesId, Loc.Language)) : Loc.T("web.survival.start"))
+            </button>
+            @if (StartProblem is { } problem)
+            {
+                <p class="arena-message is-warning">@problem</p>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<int> OnStart { get; set; }
+
+    private SurvivalBoard? _board;
+    private bool _isLoading;
+    private bool _showRanking;
+    private bool _loaded;
+
+    private bool IsSignedIn => CloudSave.IsSignedIn && CloudSave.IsAccountReady;
+
+    // 진화 미리보기: "파이리 → 리자드 (Lv.8) → 리자몽 (Lv.16)", 갈래가 여럿이면 " / "로 이어 붙입니다.
+    private string ChainText(SurvivalService.Pick pick)
+    {
+        if (pick.Stages.Count <= 1) return Loc.T("web.survival.chain.none");
+        var parts = new List<string> { Dex.GetName(pick.SpeciesId, Loc.Language) };
+        for (int i = 1; i < pick.Stages.Count; i++)
+            parts.Add($"{string.Join(" / ", pick.Stages[i].Select(id => Dex.GetName(id, Loc.Language)))} (Lv.{SurvivalRules.EvolveLevels[i - 1]})");
+        return "🧬 " + string.Join(" → ", parts);
+    }
+
+    // 시작할 수 없는 이유 (대표 포켓몬이 자고 있거나, 기력이 모자라거나, 다른 활동 중)
+    private string? StartProblem =>
+        Pet.CanStartSurvival ? (Selected is null ? Loc.T("web.survival.pickFirst") : null)
+        : Pet.IsSleeping ? Loc.T("web.survival.sleeping")
+        : Pet.CanStartActivity ? string.Format(Loc.T("web.survival.tired"), SurvivalRules.MIN_ENERGY)
+        : Loc.T("web.survival.busy");
+
+    private int _generation;
+    private int _selected;
+    private SurvivalService.Pick? _pick;
+
+    private List<int> Candidates => _candidates ??= Pet.SurvivalCandidates.ToList();
+    private List<int>? _candidates;
+
+    private IEnumerable<int> Shown => _generation == 0
+        ? Candidates
+        : PokemonDex.Regions.First(r => r.Generation == _generation) is var region
+            ? Candidates.Where(id => id >= region.StartId && id <= region.EndId)
+            : Candidates;
+
+    // 고른 포켓몬의 능력치와 기술 (고를 때마다 다시 계산)
+    private SurvivalService.Pick? Selected
+    {
+        get
+        {
+            if (_selected == 0 || !Candidates.Contains(_selected)) return null;
+            if (_pick?.SpeciesId != _selected) _pick = Survival.PickFor(Pet, _selected);
+            return _pick;
+        }
+    }
+    private SurvivalEntry? MyWeekly => _board?.Me;
+
+    private string SeasonText
+    {
+        get
+        {
+            var (start, end) = ArenaRules.SeasonRange(DateTime.UtcNow);
+            return string.Format(Loc.T("web.arena.season"), start.ToString("M/d"), end.ToString("M/d"));
+        }
+    }
+
+    protected override Task OnInitializedAsync()
+    {
+        // 지난번에 고른 포켓몬, 없으면 지금 포켓몬을 먼저 골라 둡니다.
+        _selected = Candidates.Contains(Pet.SurvivalSpecies) ? Pet.SurvivalSpecies
+            : Candidates.Contains(Pet.SpeciesId) ? Pet.SpeciesId
+            : Candidates.FirstOrDefault();
+        return Pet.IsEgg ? Task.CompletedTask : LoadAsync();
+    }
+
+    private async Task ShowRankingAsync()
+    {
+        _showRanking = true;
+        if (!_loaded) await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (!IsSignedIn)
+        {
+            _board = SampleBoard();
+            _loaded = true;
+            return;
+        }
+        _isLoading = true;
+        StateHasChanged();
+        _board = await Survival.LoadAsync();
+        _loaded = _board is not null;
+        _isLoading = false;
+    }
+
+    private async Task JumpToMeAsync() => await JS.InvokeVoidAsync("tamaPoke.scrollToElement", ".arena-row.is-me");
+
+    private RenderFragment RankRow(SurvivalEntry entry, int place)
+    {
+        bool isMe = entry.Uid == _board?.Me?.Uid && entry.Uid is not null;
+        string placeText = place switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => place.ToString() };
+        return @<li class="arena-row @(isMe ? "is-me" : "")">
+            <span class="arena-place">@placeText</span>
+            <span class="party-sprite"><PortraitImage SpritePath="@Dex.SpritePath(entry.SpeciesId, entry.Form)" FallbackPath="@($"{entry.SpeciesId:D4}")" /></span>
+            <span class="party-info">
+                <span class="party-name">@SurvivalRules.Display(entry) <small class="arena-tag">@entry.Tag</small></span>
+                <span class="party-level">@($"{(entry.Shiny ? "✨" : "")}{Dex.GetName(entry.SpeciesId, Loc.Language)} Lv.{entry.Level}")</span>
+                @if (entry.Cleared)
+                {
+                    <span class="party-level">🏆 @Loc.T("web.survival.clearedShort")</span>
+                }
+            </span>
+            <span class="arena-score">@SurvivalRules.Clock(entry.TimeSec)<small>KO @entry.Kills</small></span>
+        </li>;
+    }
+
+#if DEBUG
+    private static bool IsDebugBuild => true;
+
+    private static readonly string[] SampleNames = ["AshKetchum", "MistyWater", "Speedy", "TankMode", "Lucky7", "NightOwl", "Volt", "LeafStorm"];
+
+    // 로컬 테스트: 로그인 없이 가짜 트레이너 30명으로 랭킹 화면을 미리 봅니다.
+    private SurvivalBoard SampleBoard()
+    {
+        var random = new Random(17);
+        var top = Enumerable.Range(0, 30).Select(i =>
+        {
+            int time = Math.Min(600, random.Next(60, 700));
+            int kills = time * random.Next(2, 6);
+            bool cleared = time >= 600;
+            return new SurvivalEntry
+            {
+                Uid = $"sample{i}",
+                Tag = $"#S{i:D3}",
+                Nickname = random.Next(4) == 0 ? null : SampleNames[random.Next(SampleNames.Length)],
+                SpeciesId = Dex.PickWildSpecies([1, 2, 3, 4, 5, 6, 7, 8, 9]),
+                Level = random.Next(1, 101),
+                Shiny = random.Next(20) == 0,
+                TimeSec = time,
+                Kills = kills,
+                Cleared = cleared,
+                Score = SurvivalRules.Score(time, kills, cleared),
+            };
+        }).OrderByDescending(e => e.Score).ToList();
+        return new SurvivalBoard("sample", null, null, top);
+    }
+#else
+    private static bool IsDebugBuild => false;
+
+    private static SurvivalBoard? SampleBoard() => null;
+#endif
+}

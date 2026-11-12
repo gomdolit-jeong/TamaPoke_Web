@@ -3368,3 +3368,508 @@ nav.pet-menu .menu-arena {
         flex: 1;
         min-width: 0;
     }
+
+/* 서바이벌 메뉴 버튼: 대전과 구분되는 주황색 */
+.pet-menu .menu-survival {
+    background: #fb8c00;
+    color: #fff;
+    text-shadow: 0 1px 1px rgb(0 0 0 / 30%);
+}
+
+    .pet-menu .menu-survival:hover:not(:disabled) {
+        background: #ffa133;
+    }
+
+    .pet-menu .menu-survival:disabled {
+        background: #f6f4ef;
+        color: #8a8275;
+        text-shadow: none;
+    }
+
+/* 서바이벌 준비 화면 */
+.survival-best-box {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0.25rem 0 0.5rem;
+    padding: 0.375rem 0.5rem;
+    border: 2px solid var(--tp-cream-dark);
+    border-radius: 0.375rem;
+    background: #fff;
+    font-size: 12px;
+}
+
+.survival-weapons {
+    margin: 0 0 0.5rem;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+}
+
+    .survival-weapons li {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 0.25rem 0;
+        border-bottom: 1px dashed var(--tp-cream-dark);
+    }
+
+.survival-weapon-name {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.survival-weapon-kind {
+    color: var(--tp-ink-soft);
+    font-size: 11px;
+}
+
+.survival-first {
+    padding: 0 0.25rem;
+    border-radius: 0.25rem;
+    background: var(--tp-gold);
+    color: var(--tp-ink);
+    font-size: 10px;
+}
+
+/* 서바이벌 게임 화면 (전체 화면) */
+.survival-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    overflow: hidden;
+    background: #7fc65e;
+    user-select: none;
+    touch-action: none;
+}
+
+.survival-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+}
+
+.survival-loading,
+.survival-hint {
+    position: absolute;
+    left: 50%;
+    margin: 0;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.5rem;
+    background: rgb(20 24 40 / 80%);
+    color: #fff;
+    font-size: 13px;
+    text-align: center;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.survival-loading {
+    top: 45%;
+}
+
+.survival-hint {
+    bottom: 3.5rem;
+    max-width: calc(100% - 32px);
+}
+
+.survival-pause {
+    position: absolute;
+    top: 18px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    border: 2px solid var(--tp-line);
+    border-radius: 0.5rem;
+    background: var(--tp-cream);
+    color: var(--tp-ink);
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.survival-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 16px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    background: rgb(20 24 40 / 72%);
+    color: #fff;
+}
+
+    .survival-overlay h2 {
+        margin: 0;
+        color: var(--tp-gold);
+        font-size: 22px;
+        text-shadow: 0 2px 0 rgb(0 0 0 / 40%);
+    }
+
+.survival-cards {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.625rem;
+    width: 100%;
+    max-width: 720px;
+}
+
+.survival-card {
+    display: flex;
+    flex: 1 1 200px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    max-width: 260px;
+    padding: 0.625rem 0.75rem;
+    border: 3px solid var(--tp-line);
+    border-radius: 0.625rem;
+    background: var(--tp-cream);
+    color: var(--tp-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+    .survival-card:hover,
+    .survival-card:focus-visible {
+        border-color: var(--tp-gold-dark);
+        transform: translateY(-3px);
+    }
+
+.survival-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    width: 100%;
+    font-size: 15px;
+}
+
+    .survival-card-head strong {
+        flex: 1;
+    }
+
+.survival-card-icon {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border: 2px solid var(--tp-line);
+    border-radius: 0.375rem;
+    font-size: 15px;
+    line-height: 1;
+}
+
+/* 기술: 타입별 탄환 그림의 첫 장면 (16x16 두 장짜리 시트) */
+.survival-icon-shot {
+    background-color: #1f2438;
+    background-repeat: no-repeat;
+    background-position: 1px 1px;
+    background-size: 40px 20px;
+    image-rendering: pixelated;
+}
+
+.survival-card-icon-passive {
+    background: #fff4cc;
+    border-color: var(--tp-gold-dark);
+}
+
+.survival-card-level {
+    padding: 0 0.375rem;
+    border-radius: 0.25rem;
+    background: var(--tp-red);
+    color: #fff;
+    font-size: 11px;
+}
+
+.survival-card-tag {
+    color: var(--tp-ink-soft);
+    font-size: 11px;
+}
+
+.survival-card-desc {
+    font-size: 12px;
+}
+
+.survival-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+    .survival-buttons button {
+        min-width: 110px;
+        padding: 0.5rem 0.875rem;
+        border: 2px solid var(--tp-line);
+        border-radius: 0.5rem;
+        background: var(--tp-cream);
+        color: var(--tp-ink);
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+    }
+
+        .survival-buttons button.pet-prompt-main {
+            background: var(--tp-gold);
+        }
+
+        .survival-buttons button:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+.survival-stats {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 0.25rem 1.5rem;
+    margin: 0;
+    font-size: 15px;
+}
+
+    .survival-stats dd {
+        margin: 0;
+        text-align: right;
+        font-weight: bold;
+    }
+
+.survival-score {
+    color: var(--tp-gold);
+}
+
+.survival-best {
+    margin: 0;
+    color: var(--tp-gold);
+    font-size: 16px;
+}
+
+.survival-rank {
+    margin: 0;
+    font-size: 13px;
+}
+
+.survival-rewards {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+    text-align: center;
+    color: #e8e1cf;
+}
+
+/* 서바이벌: 잡은 포켓몬 고르기 */
+.survival-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 4px;
+    max-height: 168px;
+    margin: 0.25rem 0 0.5rem;
+    padding: 4px;
+    overflow-y: auto;
+    border: 2px solid var(--tp-cream-dark);
+    border-radius: 0.375rem;
+    background: #fff;
+    list-style: none;
+}
+
+    .survival-picker button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        width: 100%;
+        padding: 3px 2px;
+        border: 2px solid transparent;
+        border-radius: 0.375rem;
+        background: var(--tp-cream);
+        color: var(--tp-ink);
+        font: inherit;
+        font-size: 10px;
+        cursor: pointer;
+    }
+
+        .survival-picker button span {
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .survival-picker button:hover {
+            border-color: var(--tp-cream-dark);
+        }
+
+        .survival-picker button.is-selected {
+            border-color: #fb8c00;
+            background: #fff1dc;
+        }
+
+.survival-pick {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+    .survival-pick .portrait {
+        border: 2px solid var(--tp-line);
+        border-radius: 0.5rem;
+        background: #fff;
+    }
+
+.survival-pick-info {
+    flex: 1;
+    font-size: 13px;
+}
+
+.survival-pick-stats {
+    display: grid;
+    grid-template-columns: repeat(4, auto 1fr);
+    gap: 2px 0.375rem;
+    margin: 0.25rem 0 0;
+    font-size: 11px;
+}
+
+    .survival-pick-stats dt {
+        color: var(--tp-ink-soft);
+    }
+
+    .survival-pick-stats dd {
+        margin: 0;
+        font-weight: bold;
+    }
+
+/* 서바이벌 일시정지: 내 상태 */
+.survival-status {
+    width: 100%;
+    max-width: 460px;
+    max-height: 62vh;
+    padding: 0.625rem 0.75rem;
+    overflow-y: auto;
+    box-sizing: border-box;
+    border: 3px solid var(--tp-line);
+    border-radius: 0.625rem;
+    background: var(--tp-cream);
+    color: var(--tp-ink);
+    font-size: 12px;
+}
+
+    .survival-status h3 {
+        margin: 0.5rem 0 0.25rem;
+        color: var(--tp-red);
+        font-size: 13px;
+    }
+
+.survival-status-top,
+.survival-status-stats {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
+    gap: 2px 0.5rem;
+    margin: 0;
+}
+
+    .survival-status-top dt,
+    .survival-status-stats dt {
+        color: var(--tp-ink-soft);
+    }
+
+    .survival-status-top dd,
+    .survival-status-stats dd {
+        margin: 0;
+        font-weight: bold;
+    }
+
+.survival-status-moves,
+.survival-status-passives {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+    .survival-status-moves li {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 0.25rem 0;
+        border-bottom: 1px dashed var(--tp-cream-dark);
+    }
+
+        .survival-status-moves li.is-locked {
+            opacity: 0.55;
+        }
+
+    .survival-status-passives li {
+        padding: 2px 0;
+    }
+
+/* 서바이벌 시작 버튼: 창 아래 고정 */
+.survival-start {
+    flex: none;
+    padding-top: 0.375rem;
+    border-top: 2px dashed var(--tp-cream-dark);
+}
+
+    .survival-start .arena-random {
+        margin: 0;
+        padding: 0.5rem;
+        background: #fb8c00;
+        font-size: 14px;
+    }
+
+        .survival-start .arena-random:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+    .survival-start .arena-message {
+        margin: 0.25rem 0 0;
+    }
+
+/* 배틀 pixelfx 효과와 화면 흔들림 */
+.battle-pfx {
+    position: absolute;
+    z-index: 3;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+
+.battle-field.is-shaking {
+    animation: battle-shake 0.08s linear infinite;
+}
+
+@keyframes battle-shake {
+    0% { transform: translate(0, 0); }
+    25% { transform: translate(-3px, 1px); }
+    50% { transform: translate(2px, -2px); }
+    75% { transform: translate(-1px, 2px); }
+    100% { transform: translate(0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .battle-field.is-shaking {
+        animation: none;
+    }
+}
+
+/* 서바이벌 진화 미리보기 */
+.survival-chain {
+    margin: 0.25rem 0 0;
+    color: var(--tp-ink-soft);
+    font-size: 11px;
+}
+
+/* 서바이벌 순위표: 오른쪽에 버틴 시간, 그 아래 KO */
+.arena-score small {
+    display: block;
+    color: var(--tp-ink-soft);
+    font-size: 10px;
+    font-weight: normal;
+    text-align: right;
+}
