@@ -145,7 +145,14 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
         var bosses = (await Task.WhenAll(bossTasks)).ToList();
         while (bosses.Count < SurvivalRules.BossTimes.Length) bosses.Add(bosses[^1]);
         return new SurvivalSetup(forms, SurvivalRules.EvolveLevels, weapons, enemies, bosses, SurvivalRules.BossTimes, pet.IsMuted,
-            Utils.L.T("web.survival.swarm"), Utils.L.T("web.survival.evolve.text"), Utils.L.T("web.survival.boss"));
+            Utils.L.T("web.survival.swarm"), Utils.L.T("web.survival.evolve.text"), Utils.L.T("web.survival.boss"),
+            new Dictionary<string, string>
+            {
+                ["magnet"] = Utils.L.T("web.survival.item.magnet"),
+                ["ice"] = Utils.L.T("web.survival.item.ice"),
+                ["bomb"] = Utils.L.T("web.survival.item.bomb"),
+                ["flyby"] = Utils.L.T("web.survival.flyby"),
+            });
     }
 
     private async Task<SurvivalEnemy> BuildEnemyAsync(int speciesId, List<SurvivalWeapon> weapons, bool isBoss)

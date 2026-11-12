@@ -7,6 +7,12 @@ const ELITE_EVERY = 45;
 const MAX_ENEMIES = 320;
 const SWARM_AT = [150, 300, 420, 540]; // 사방에서 둘러싸는 습격 (초)
 const SWARM_SIZE = 36;
+const FLYBY_AT = [90, 210, 330, 450]; // 무리가 화면을 가로질러 지나가는 때 (초)
+const FLYBY_SIZE = 22, FLYBY_SPEED = 115;
+const OPENING_SIZE = 12; // 시작하자마자 화면 안에 나와 있는 약한 무리
+const OPENING_RATE = 3;   // 처음 30초쯤은 초당 이만큼은 나옵니다.
+const FREEZE_SECONDS = 4;
+const ITEM_ICONS = { magnet: "🧲", ice: "❄️", bomb: "💥" };
 const MAX_GEMS = 350;
 const MAX_NUMBERS = 40;
 const WEAPON_MAX = 5;
@@ -69,6 +75,8 @@ export function getState() {
         hp: Math.ceil(p.hp), maxHp: Math.round(p.maxHp), level: g.level, exp: g.exp, expNext: g.expNext,
         timeSec: Math.floor(g.time), kills: g.kills,
         weapons: g.weapons.map(w => w.level),
+        weaponDamage: g.weapons.map(w => Math.round(w.dealt)),
+        weaponKills: g.weapons.map(w => w.ko),
         passives: PASSIVES.map(name => ({ name, level: g.passives[name] })),
         power: Math.round(g.powerMul / base.power * 100),
         speed: Math.round(g.speed / base.speed * 100),
@@ -190,7 +198,9 @@ class Game {
             x: 0, y: 0, hp: this.form.maxHp, maxHp: this.form.maxHp, row: 0, moving: false, animMs: 0,
             invuln: 0, faceX: 0, faceY: 1, dead: false,
         };
-        this.weapons = s.weapons.map((w, index) => ({ ...w, index, level: index === 0 ? 1 : 0, cd: 400 + index * 150, angle: 0, tick: 0 }));
+        this.weapons = s.weapons.map((w, index) => ({ ...w, index, level: index === 0 ? 1 : 0, cd: 400 + index * 150, angle: 0, tick: 0, dealt: 0, ko: 0 }));
+        // 대폭발 아이템의 기록 (기술처럼 데미지를 주지만 기술 기록과 따로 셉니다)
+        this.bombSource = { ...this.weapons[0], index: -1, kind: "bomb", slow: false, dealt: 0, ko: 0 };
         this.passives = Object.fromEntries(PASSIVES.map(p => [p, 0]));
         this.enemies = [];
         this.gems = [];
@@ -209,6 +219,9 @@ class Game {
         this.spawnAcc = 0;
         this.nextElite = ELITE_EVERY;
         this.nextSwarm = 0;
+        this.nextFlyby = 0;
+        this.freezeUntil = 0;
+        this.banner = null;
         this.nextBoss = 0;
         this.bossRef = null;
         this.paused = false;
@@ -217,6 +230,7 @@ class Game {
         this.lastPickupSound = 0;
 
         this.resize();
+        this.spawnOpening();
         this.listen(window, "resize", () => this.resize());
         this.listen(window, "keydown", (e) => this.onKey(e, true));
         this.listen(window, "keyup", (e) => this.onKey(e, false));
@@ -398,6 +412,10 @@ class Game {
         if (this.swarmBanner > 0) this.swarmBanner -= dt;
         if (this.evolveBanner > 0) this.evolveBanner -= dt;
         if (this.bossBanner > 0) this.bossBanner -= dt;
+        if (this.banner) {
+            this.banner.t -= dt;
+            if (this.banner.t <= 0) this.banner = null;
+        }
         this.enemies = this.enemies.filter(e => !e.removed);
 
         if (this.evolveQueued && !this.awaitingChoice) {
@@ -425,11 +443,15 @@ class Game {
 
     spawn(dt) {
         const t = this.time;
-        this.spawnAcc += dt * Math.min(16, 1.8 + t / 26);
+        this.spawnAcc += dt * Math.min(16, Math.max(OPENING_RATE, 1.8 + t / 26));
         while (this.spawnAcc >= 1) {
             this.spawnAcc -= 1;
             if (this.enemies.length < MAX_ENEMIES) this.spawnEnemy(this.pickTier(), "normal");
             else this.recycleFarthest();
+        }
+        if (this.nextFlyby < FLYBY_AT.length && t >= FLYBY_AT[this.nextFlyby]) {
+            this.nextFlyby++;
+            this.spawnFlyby();
         }
         if (this.nextSwarm < SWARM_AT.length && t >= SWARM_AT[this.nextSwarm]) {
             this.nextSwarm++;
@@ -492,6 +514,46 @@ class Game {
         }
         this.swarmBanner = 2.5;
         this.sound([[330, 80], [0, 30], [330, 80], [0, 30], [440, 160]]);
+    }
+
+    // 지나가는 떼: 한 종류가 줄지어 화면을 한쪽에서 반대쪽으로 곧게 가로지릅니다. (쫓아오지 않음)
+    spawnFlyby() {
+        const p = this.player;
+        const angle = Math.random() * Math.PI * 2;
+        const dx = Math.cos(angle), dy = Math.sin(angle);
+        const distance = Math.hypot(this.halfW, this.halfH) + 30;
+        const tier = this.pickTier();
+        for (let i = 0; i < FLYBY_SIZE; i++) {
+            const e = this.spawnEnemy(tier, "normal");
+            const side = (i - (FLYBY_SIZE - 1) / 2) * 13 + (Math.random() - 0.5) * 8;
+            const back = (i % 3) * 12;
+            e.rank = "flyby";
+            e.x = p.x - dx * (distance + back) - dy * side;
+            e.y = p.y - dy * (distance + back) + dx * side;
+            e.vx = dx * FLYBY_SPEED;
+            e.vy = dy * FLYBY_SPEED;
+            e.life = (distance * 2 + 60) / FLYBY_SPEED;
+            e.row = rowFor(dx, dy);
+        }
+        this.showBanner(this.setup.texts?.flyby ?? "!", "#ffb74d");
+        this.sound([[660, 60], [0, 20], [660, 60], [0, 20], [880, 120]]);
+    }
+
+    // 시작 무리: 원조 장르처럼 시작하자마자 화면 가장자리 안쪽에 가장 약한 포켓몬들이 둘러서 있습니다.
+    spawnOpening() {
+        const p = this.player;
+        const radius = Math.min(this.halfW, this.halfH);
+        for (let i = 0; i < OPENING_SIZE; i++) {
+            const e = this.spawnEnemy(0, "normal");
+            const angle = Math.random() * Math.PI * 2;
+            const distance = radius * (0.65 + Math.random() * 0.35);
+            e.x = p.x + Math.cos(angle) * distance;
+            e.y = p.y + Math.sin(angle) * distance;
+        }
+    }
+
+    showBanner(text, color) {
+        this.banner = { text, color, t: 2.5 };
     }
 
     spawnEnemy(tier, rank) {
@@ -573,6 +635,19 @@ class Game {
 
             const dx = p.x - e.x, dy = p.y - e.y;
             const dist = Math.hypot(dx, dy) || 1;
+
+            const frozen = this.time < this.freezeUntil && e.rank !== "boss";
+            if (e.rank === "flyby") {
+                if (!frozen) {
+                    e.x += e.vx * dt;
+                    e.y += e.vy * dt;
+                    e.life -= dt;
+                    if (e.life <= 0) e.removed = true;
+                }
+                if (!frozen && p.invuln <= 0 && dist < e.radius + PLAYER_RADIUS) this.hurtPlayer(e.damage);
+                continue;
+            }
+            if (frozen) continue;
 
             // 너무 멀어진 적은 내 앞쪽으로 다시 데려옵니다. (보스 제외)
             if (dist > far && e.rank !== "boss") {
@@ -759,6 +834,7 @@ class Game {
 
     damage(e, amount, w, knockback, fromX, fromY) {
         if (e.dying) return;
+        w.dealt = (w.dealt ?? 0) + Math.max(0, Math.min(amount, e.hp));
         e.hp -= amount;
         e.hitMs = 90;
         if (w.slow) e.slow = Math.max(e.slow, 1);
@@ -782,6 +858,7 @@ class Game {
         e.dying = true;
         e.dieMs = 220;
         this.kills++;
+        if (w) w.ko = (w.ko ?? 0) + 1;
         this.addPfx("poof", "poof", e.x, e.y + 7 * e.size, { scale: 0.45 * e.size, speed: 1.8 });
 
         if (e.rank === "boss") {
@@ -792,6 +869,7 @@ class Game {
         const value = e.rank === "elite" ? 20 : e.tier >= 6 ? 3 : e.tier >= 3 ? 2 : 1;
         this.dropGem(e.x, e.y, "candy", value);
         if (e.rank === "elite" || Math.random() < 0.006) this.dropGem(e.x + 6, e.y, "berry", 0);
+        if (e.rank === "elite" && Math.random() < 0.35) this.dropGem(e.x - 6, e.y, ["magnet", "ice", "bomb"][Math.floor(Math.random() * 3)], 0);
     }
 
     dropGem(x, y, kind, value) {
@@ -845,6 +923,31 @@ class Game {
         if (g.kind === "berry") {
             p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25);
             this.sound([[988, 40], [1319, 70]]);
+            return;
+        }
+        if (g.kind === "magnet") {
+            for (const other of this.gems) if (other.kind === "candy") other.pulled = true;
+            this.showBanner(this.setup.texts?.magnet ?? "🧲", "#ffffff");
+            this.sound([[523, 50], [784, 50], [1047, 90]]);
+            return;
+        }
+        if (g.kind === "ice") {
+            this.freezeUntil = this.time + FREEZE_SECONDS;
+            this.showBanner(this.setup.texts?.ice ?? "❄️", "#9fe3ff");
+            this.sound([[1568, 40], [1319, 40], [1047, 120]]);
+            return;
+        }
+        if (g.kind === "bomb") {
+            // 화면 안의 일반 적은 쓰러지고, 엘리트와 보스는 최대 체력의 25%를 잃습니다.
+            const reach = Math.hypot(this.halfW, this.halfH);
+            const w = this.bombSource;
+            for (const e of this.enemies) {
+                if (e.dying || Math.hypot(e.x - p.x, e.y - p.y) > reach) continue;
+                this.damage(e, e.rank === "elite" || e.rank === "boss" ? e.maxHp * 0.25 : e.hp + 1, w, 160);
+            }
+            this.addPfx("nova", "nova", p.x, p.y + 7, { scale: 3.2, speed: 1.6, follow: true });
+            this.showBanner(this.setup.texts?.bomb ?? "💥", "#ffca28");
+            this.sound([[196, 80], [147, 120], [98, 220]]);
             return;
         }
         if (g.kind === "chest") {
@@ -1006,6 +1109,10 @@ class Game {
         this.stick = null;
         this.dotnet.invokeMethodAsync("OnGameOver", JSON.stringify({
             timeSec: Math.floor(this.time), kills: this.kills, level: this.level, cleared, finalSpeciesId: this.form.speciesId,
+            weaponLevels: this.weapons.map(w => w.level),
+            weaponDamage: this.weapons.map(w => Math.round(w.dealt)),
+            weaponKills: this.weapons.map(w => w.ko),
+            itemDamage: Math.round(this.bombSource.dealt), itemKills: this.bombSource.ko,
         }));
     }
 
@@ -1074,6 +1181,13 @@ class Game {
         for (const g of this.gems) {
             if (g.kind === "berry" && berry) ctx.drawImage(berry, g.x - 5, g.y - 5 + bob, 10, 10);
             else if (g.kind === "chest" && ball) ctx.drawImage(ball, g.x - 9, g.y - 9 + bob, 18, 18);
+            else if (ITEM_ICONS[g.kind]) {
+                ctx.font = "12px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = "#ffffff";
+                ctx.fillText(ITEM_ICONS[g.kind], g.x, g.y + bob);
+            }
             else if (candy) {
                 const size = g.value >= 10 ? 13 : g.value >= 3 ? 10 : g.value >= 2 ? 8 : 7;
                 ctx.drawImage(candy, g.x - size / 2, g.y - size / 2 + bob, size, size);
@@ -1126,12 +1240,19 @@ class Game {
         this.drawShadow(e.x, e.y + 7 * e.size, 16 * e.size);
         if (e.dying) ctx.globalAlpha = Math.max(0, e.dieMs / 220);
         else if (e.hitMs > 0) ctx.globalAlpha = 0.55;
-        if (sprite) this.drawSprite(sprite, e.x, e.y, e.row, e.animMs, e.size, false);
+        const frozen = this.time < this.freezeUntil && e.rank !== "boss" && !e.dying;
+        if (sprite) this.drawSprite(sprite, e.x, e.y, e.row, frozen ? 0 : e.animMs, e.size, frozen);
         else {
             ctx.fillStyle = "#c04040";
             ctx.fillRect(e.x - 6, e.y - 6, 12, 12);
         }
         ctx.globalAlpha = 1;
+        if (frozen) {
+            ctx.fillStyle = "rgb(160 225 255 / 45%)";
+            ctx.beginPath();
+            ctx.ellipse(e.x, e.y, 9 * e.size, 11 * e.size, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         if (e.rank === "elite" && !e.dying) {
             const barW = 22;
@@ -1366,6 +1487,19 @@ class Game {
                 ctx.textAlign = "center";
                 ctx.fillText(PASSIVE_ICONS[name], cx, cy + 1);
             }, level, "#ffca28");
+        }
+
+        // 아이템·떼 알림
+        if (this.banner) {
+            ctx.globalAlpha = Math.min(1, this.banner.t);
+            ctx.font = "bold 16px sans-serif";
+            ctx.textAlign = "center";
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = "rgb(20 24 40 / 90%)";
+            ctx.strokeText(this.banner.text, W / 2, 152);
+            ctx.fillStyle = this.banner.color;
+            ctx.fillText(this.banner.text, W / 2, 152);
+            ctx.globalAlpha = 1;
         }
 
         // 보스 등장 알림

@@ -71,7 +71,7 @@
                                     <span class="survival-card-level">@(level == 0 ? Loc.T("web.survival.status.notYet") : $"Lv.{level}/5")</span>
                                 </span>
                                 <span class="survival-weapon-kind">@SurvivalRules.KindIcon(weapon.Kind) @Loc.T($"web.survival.kind.{weapon.Kind}") · @Loc.T($"web.survival.kind.{weapon.Kind}.desc")</span>
-                                <span class="survival-weapon-kind">@PowerText(weapon)</span>
+                                <span class="survival-weapon-kind">@PowerText(weapon)@(level > 0 && i < state.WeaponDamage.Length ? string.Format(Loc.T("web.survival.status.record"), state.WeaponDamage[i].ToString("N0"), i < state.WeaponKills.Length ? state.WeaponKills[i] : 0) : "")</span>
                             </li>
                         }
                     </ul>
@@ -114,6 +114,48 @@
                 <dt>@Loc.T("web.survival.kills")</dt><dd>@result.Kills</dd>
                 <dt>@Loc.T("web.survival.level")</dt><dd>Lv.@result.Level</dd>
             </dl>
+            @if (_setup is { } resultSetup)
+            {
+                @* 기술별 기록: 데미지가 많은 순서. 배우지 않은 기술은 뺍니다. *@
+                var rows = resultSetup.Weapons.Select((weapon, i) => (Weapon: weapon,
+                        Level: i < result.WeaponLevels.Length ? result.WeaponLevels[i] : 0,
+                        Damage: i < result.WeaponDamage.Length ? result.WeaponDamage[i] : 0,
+                        Kills: i < result.WeaponKills.Length ? result.WeaponKills[i] : 0))
+                    .Where(r => r.Level > 0 || r.Damage > 0)
+                    .OrderByDescending(r => r.Damage)
+                    .ToList();
+                int total = Math.Max(1, rows.Sum(r => r.Damage) + result.ItemDamage);
+                <table class="survival-weapon-stats">
+                    <thead>
+                        <tr><th>@Loc.T("web.survival.status.moves")</th><th>@Loc.T("web.survival.stat.damage")</th><th>KO</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in rows)
+                        {
+                            var skill = Skills.GetSkill(row.Weapon.SkillId);
+                            <tr>
+                                <td>
+                                    <span class="survival-card-icon survival-icon-shot" style="border-color:@row.Weapon.Color;background-image:url('ui/fx_shot_@(row.Weapon.Type).png')"></span>
+                                    <span>@(skill?.Name ?? "?") <small>Lv.@row.Level</small></span>
+                                </td>
+                                <td>
+                                    @row.Damage.ToString("N0")
+                                    <span class="survival-share" style="width:@((row.Damage * 100 / total).ToString())%;background:@row.Weapon.Color"></span>
+                                </td>
+                                <td>@row.Kills</td>
+                            </tr>
+                        }
+                        @if (result.ItemKills > 0 || result.ItemDamage > 0)
+                        {
+                            <tr>
+                                <td><span class="survival-card-icon survival-card-icon-passive">💥</span><span>@Loc.T("web.survival.item.bombName")</span></td>
+                                <td>@result.ItemDamage.ToString("N0")</td>
+                                <td>@result.ItemKills</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
             @if (_isBest)
             {
                 <p class="survival-best">@Loc.T("web.survival.newBest")</p>

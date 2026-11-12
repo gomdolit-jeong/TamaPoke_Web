@@ -17,7 +17,8 @@ public sealed record SurvivalWeapon(int SkillId, string Kind, string Type, strin
 public sealed record SurvivalEnemy(int SpeciesId, string Name, SurvivalSprite? Sprite, double Hp, double Speed, double Damage, double[] Eff);
 
 public sealed record SurvivalSetup(List<SurvivalForm> Forms, int[] EvolveLevels, List<SurvivalWeapon> Weapons, List<SurvivalEnemy> Enemies,
-    List<SurvivalEnemy> Bosses, int[] BossTimes, bool Muted, string SwarmText, string EvolveText, string BossText);
+    List<SurvivalEnemy> Bosses, int[] BossTimes, bool Muted, string SwarmText, string EvolveText, string BossText,
+    Dictionary<string, string> Texts);
 
 // 게임이 끝나면 돌려받는 값
 public sealed record SurvivalResult
@@ -27,6 +28,13 @@ public sealed record SurvivalResult
     public int Level { get; init; }
     public bool Cleared { get; init; }
     public int FinalSpeciesId { get; init; } // 게임이 끝났을 때의 모습 (진화했으면 진화한 포켓몬)
+
+    // 기술별 기록 (SurvivalSetup.Weapons 순서). 대폭발 아이템은 Item~에 따로 셉니다.
+    public int[] WeaponLevels { get; init; } = [];
+    public int[] WeaponDamage { get; init; } = [];
+    public int[] WeaponKills { get; init; } = [];
+    public int ItemDamage { get; init; }
+    public int ItemKills { get; init; }
 }
 
 // 일시정지 화면에 보여 줄 지금 상태. Power~Pickup은 처음 대비 % (받는 데미지와 재사용 시간은 낮을수록 좋음)
@@ -43,6 +51,8 @@ public sealed record SurvivalState
     public int TimeSec { get; init; }
     public int Kills { get; init; }
     public int[] Weapons { get; init; } = [];
+    public int[] WeaponDamage { get; init; } = [];
+    public int[] WeaponKills { get; init; } = [];
     public List<SurvivalPassive> Passives { get; init; } = [];
     public int Power { get; init; }
     public int Speed { get; init; }
