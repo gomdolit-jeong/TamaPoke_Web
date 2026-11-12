@@ -161,11 +161,10 @@ public sealed partial class PokemonState
     {
         bool fainted = (targetIsEnemy ? EnemyHp : PlayerHp) <= 0;
         int motion = fainted ? PokemonAnim.FAINT : PokemonAnim.HURT;
-        if (fainted && targetIsEnemy) AddBattlePfx("poof", ENEMY_CENTER_X, ENEMY_CENTER_Y + 28, 0.8, delayMs: 600); // 상대가 쓰러지면 연기
-
         if (targetIsEnemy)
         {
-            if (_enemyTempActionId == PokemonAnim.FAINT) return;
+            if (_enemyTempActionId == PokemonAnim.FAINT) return; // 이미 쓰러진 모션 중이면 연기도 다시 내지 않음
+            if (fainted) AddBattlePfx("poof", ENEMY_CENTER_X, ENEMY_CENTER_Y + 28, 0.8, delayMs: 600); // 상대가 쓰러지면 연기
             _enemyTempActionTimer = fainted ? 0 : HIT_MOTION_TICKS;
             UpdateEnemyAnimation(motion);
         }
