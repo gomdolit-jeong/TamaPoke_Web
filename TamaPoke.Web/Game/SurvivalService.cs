@@ -35,10 +35,14 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
 
     private int[] NextOf(int speciesId) => dex.GetEvolution(speciesId)?.NextSpeciesIds ?? [];
 
+    // 이 포켓몬이 게임 안 몇 레벨에 진화하는지 (진화하지 않으면 0)
+    public int EvolveLevelOf(int speciesId) =>
+        dex.GetEvolution(speciesId) is { NextSpeciesIds.Length: > 0 } evolution ? SurvivalRules.EvolveLevel(evolution.EvolveLevel) : 0;
+
     private List<int[]> StagesOf(int speciesId)
     {
         var stages = new List<int[]> { new[] { speciesId } };
-        for (int depth = 0; depth < SurvivalRules.EvolveLevels.Length; depth++)
+        for (int depth = 0; depth < SurvivalRules.MAX_EVOLUTIONS; depth++)
         {
             int[] next = stages[^1].SelectMany(NextOf).Distinct().ToArray();
             if (next.Length == 0) break;
@@ -163,12 +167,14 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
         var info = dex.Get(speciesId);
 
         // 진화할 수 있는 모습을 모두 미리 준비합니다. (갈래가 여럿이면 모두)
-        var ids = new List<(int SpeciesId, int Depth, string Path)> { (speciesId, 0, pick.SpritePath) };
+        // MinLevel: 앞 모습이 진화한 레벨보다는 늦게 진화합니다. (진화하자마자 또 진화하지 않도록)
+        var ids = new List<(int SpeciesId, int Depth, string Path, int MinLevel)> { (speciesId, 0, pick.SpritePath, 0) };
         for (int i = 0; i < ids.Count; i++)
         {
-            if (ids[i].Depth >= SurvivalRules.EvolveLevels.Length) continue;
+            if (ids[i].Depth >= SurvivalRules.MAX_EVOLUTIONS) continue;
+            int level = Math.Max(EvolveLevelOf(ids[i].SpeciesId), ids[i].MinLevel + 1);
             foreach (int next in NextOf(ids[i].SpeciesId))
-                if (ids.All(x => x.SpeciesId != next)) ids.Add((next, ids[i].Depth + 1, $"{next:D4}"));
+                if (ids.All(x => x.SpeciesId != next)) ids.Add((next, ids[i].Depth + 1, $"{next:D4}", level));
         }
         var sprites = await Task.WhenAll(ids.Select(async x =>
             (Walk: await LoadSpriteAsync(x.Path, $"{x.SpeciesId:D4}", PokemonAnim.WALK),
@@ -177,9 +183,10 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
         {
             var (maxHp, speed, power, guard) = PlayerStats(StatsOf(x.SpeciesId));
             int[] next = NextOf(x.SpeciesId).Select(n => ids.FindIndex(y => y.SpeciesId == n)).Where(n => n > i).ToArray();
-            if (x.Depth >= SurvivalRules.EvolveLevels.Length) next = [];
+            if (x.Depth >= SurvivalRules.MAX_EVOLUTIONS) next = [];
+            int evolveLevel = next.Length > 0 ? Math.Max(EvolveLevelOf(x.SpeciesId), x.MinLevel + 1) : 0;
             return new SurvivalForm(x.SpeciesId, dex.GetName(x.SpeciesId, Utils.L.Language), sprites[i].Walk, sprites[i].Idle,
-                maxHp, speed, power, guard, x.Depth, next);
+                maxHp, speed, power, guard, x.Depth, next, evolveLevel);
         }).ToList();
 
         var weapons = pick.Weapons;
@@ -192,7 +199,7 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
 
         var bosses = (await Task.WhenAll(bossTasks)).ToList();
         while (bosses.Count < SurvivalRules.BossTimes.Length) bosses.Add(bosses[^1]);
-        return new SurvivalSetup(forms, SurvivalRules.EvolveLevels, weapons, enemies, bosses, SurvivalRules.BossTimes, pet.IsMuted,
+        return new SurvivalSetup(forms, weapons, enemies, bosses, SurvivalRules.BossTimes, pet.IsMuted,
             Utils.L.T("web.survival.swarm"), Utils.L.T("web.survival.evolve.text"), Utils.L.T("web.survival.boss"),
             new Dictionary<string, string>
             {

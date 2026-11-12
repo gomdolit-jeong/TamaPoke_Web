@@ -27,16 +27,18 @@ const OPENING_MIN_DISTANCE = 160; // 시작 무리는 적어도 이만큼 떨어
 const OPENING_RATE = 3;   // 처음 30초쯤은 초당 이만큼은 나옵니다.
 const FREEZE_SECONDS = 4;
 const ITEM_ICONS = { magnet: "🧲", ice: "❄️", bomb: "💥" };
-const MAX_CANDIES = 60; // 바닥의 사탕이 이만큼 차면, 그 뒤 사탕은 모두 큰 사탕 하나에 모입니다.
-// 큰 사탕은 모인 양에 따라 3단계로 커지고 색이 바뀝니다. (from: 이 값부터 그 단계)
-const BIG_CANDY_STAGES = [
-    { from: 0, size: 18, tint: null, glow: "255 215 90" },          // 1단계: 원래 색, 금빛 고리
-    { from: 100, size: 23, tint: "#4aa8ff", glow: "110 180 255" },  // 2단계: 파랑
-    { from: 400, size: 28, tint: "#ffd23c", glow: "255 240 150" },  // 3단계: 금색, 반짝임
+// 사탕은 바로 옆(이 거리 안)에 떨어지면 따로 생기지 않고 그 사탕에 더해집니다. (적이 몰린 곳에서 바닥이 사탕으로 덮이지 않도록)
+const CANDY_MERGE_RADIUS = 22;
+const MAX_CANDIES = 150; // 그래도 이만큼 넘게 깔리면, 나에게서 가장 먼 사탕을 그 옆 사탕에 합칩니다.
+// 사탕은 담긴 양에 따라 3단계로 커지고 색이 바뀝니다. (from: 이 값부터 그 단계, size 0은 양에 따라 작게)
+const CANDY_STAGES = [
+    { from: 0, size: 0, tint: null, glow: null },                   // 1단계: 원래 분홍 사탕
+    { from: 20, size: 15, tint: "#4aa8ff", glow: "110 180 255" },  // 2단계: 파랑, 빛나는 고리
+    { from: 60, size: 20, tint: "#ffd23c", glow: "255 240 150" },  // 3단계: 금색, 반짝임
 ];
-function bigCandyStage(value) {
+function candyStage(value) {
     let stage = 0;
-    while (stage + 1 < BIG_CANDY_STAGES.length && value >= BIG_CANDY_STAGES[stage + 1].from) stage++;
+    while (stage + 1 < CANDY_STAGES.length && value >= CANDY_STAGES[stage + 1].from) stage++;
     return stage;
 }
 const MAX_NUMBERS = 40;
@@ -384,10 +386,10 @@ class Game {
     get pickupRadius() { return PICKUP_RADIUS * (1 + 0.4 * this.passives.magnet); }
     get guardMul() { return this.form.guard * Math.pow(0.92, this.passives.armor); }
 
-    // --- 진화: 게임 안 레벨이 정해진 값이 되면 다음 모습으로 (갈래가 여럿이면 고르기) ---
+    // --- 진화: 게임 안 레벨이 진화 레벨(도감 기준, C#에서 계산)이 되면 다음 모습으로 (갈래가 여럿이면 고르기) ---
 
     checkEvolve() {
-        const need = this.setup.evolveLevels[this.form.depth];
+        const need = this.form.evolveLevel;
         if (this.form.next.length > 0 && need && this.level >= need) this.evolveQueued = true;
     }
 
@@ -955,18 +957,46 @@ class Game {
     }
 
     dropGem(x, y, kind, value) {
-        if (kind === "candy" && this.gems.filter(g => g.kind === "candy" && !g.big).length >= MAX_CANDIES) {
-            // 사탕이 너무 많으면 큰 사탕 하나에 모읍니다. (주우면 모인 사탕을 한꺼번에 얻습니다)
-            const big = this.bigCandy;
-            if (big && !big.taken) {
-                const before = bigCandyStage(big.value);
-                big.value += value;
-                if (bigCandyStage(big.value) > before) big.grownAt = this.time; // 한 단계 커질 때 톡 튀어 오릅니다.
-            }
-            else this.gems.push(this.bigCandy = { x, y, kind, value, pulled: false, big: true, grownAt: this.time });
+        if (kind !== "candy") {
+            this.gems.push({ x, y, kind, value, pulled: false });
             return;
         }
+        // 바닥에 놓인 사탕 (나에게 끌려오는 중인 사탕은 빼고)
+        const candies = this.gems.filter(g => g.kind === "candy" && !g.taken && !g.pulled);
+        const near = this.nearestCandy(candies, x, y, null);
+        if (near && Math.hypot(near.x - x, near.y - y) <= CANDY_MERGE_RADIUS) {
+            this.addToCandy(near, value);
+            return;
+        }
+        if (candies.length >= MAX_CANDIES) {
+            // 너무 많으면 나에게서 가장 먼 사탕을 그 옆 사탕에 합칩니다.
+            const p = this.player;
+            const far = candies.reduce((a, b) => Math.hypot(b.x - p.x, b.y - p.y) > Math.hypot(a.x - p.x, a.y - p.y) ? b : a);
+            const target = this.nearestCandy(candies, far.x, far.y, far);
+            if (target) {
+                far.taken = true;
+                this.gems.splice(this.gems.indexOf(far), 1);
+                this.addToCandy(target, far.value);
+            }
+        }
         this.gems.push({ x, y, kind, value, pulled: false });
+    }
+
+    nearestCandy(candies, x, y, except) {
+        let best = null, bestD = Infinity;
+        for (const g of candies) {
+            if (g === except) continue;
+            const d = Math.hypot(g.x - x, g.y - y);
+            if (d < bestD) { best = g; bestD = d; }
+        }
+        return best;
+    }
+
+    addToCandy(g, value) {
+        const before = candyStage(g.value);
+        g.value += value;
+        g.bumpAt = this.time; // 합쳐질 때 살짝 부풀고
+        if (candyStage(g.value) > before) g.grownAt = this.time; // 한 단계 커질 때는 톡 튀어 오릅니다.
     }
 
     moveShots(dt) {
@@ -1367,9 +1397,9 @@ class Game {
                 ctx.fillStyle = "#ffffff";
                 ctx.fillText(ITEM_ICONS[g.kind], g.x, g.y + bob);
             }
-            else if (candy && g.big) {
-                // 큰 사탕: 모인 양에 따라 단계별로 커지고 색이 바뀝니다.
-                const index = bigCandyStage(g.value), stage = BIG_CANDY_STAGES[index];
+            else if (candy && candyStage(g.value) > 0) {
+                // 많이 모인 사탕: 단계별로 커지고 색이 바뀝니다.
+                const index = candyStage(g.value), stage = CANDY_STAGES[index];
                 const pop = 1 + 0.5 * Math.max(0, 1 - (this.time - (g.grownAt ?? -9)) / 0.35);
                 const size = stage.size * pop, pulse = 1 + Math.sin(this.time * 5) * 0.12;
                 ctx.fillStyle = `rgb(${stage.glow} / 35%)`;
@@ -1378,7 +1408,7 @@ class Game {
                 ctx.fill();
                 const image = stage.tint ? this.candyTint(candy, stage.tint) : candy;
                 ctx.drawImage(image, g.x - size / 2, g.y - size / 2 + bob, size, size);
-                if (index === BIG_CANDY_STAGES.length - 1) {
+                if (index === CANDY_STAGES.length - 1) {
                     // 마지막 단계: 둘레를 도는 반짝임
                     ctx.fillStyle = "#ffffff";
                     for (let i = 0; i < 3; i++) {
@@ -1390,7 +1420,8 @@ class Game {
                 }
             }
             else if (candy) {
-                const size = g.value >= 10 ? 13 : g.value >= 3 ? 10 : g.value >= 2 ? 8 : 7;
+                const pop = 1 + 0.3 * Math.max(0, 1 - (this.time - (g.bumpAt ?? -9)) / 0.2);
+                const size = (g.value >= 10 ? 13 : g.value >= 3 ? 10 : g.value >= 2 ? 8 : 7) * pop;
                 ctx.drawImage(candy, g.x - size / 2, g.y - size / 2 + bob, size, size);
             }
         }

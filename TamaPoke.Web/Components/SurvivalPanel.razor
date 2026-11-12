@@ -189,13 +189,16 @@
 
     private bool IsSignedIn => CloudSave.IsSignedIn && CloudSave.IsAccountReady;
 
-    // 진화 미리보기: "파이리 → 리자드 (Lv.8) → 리자몽 (Lv.16)", 갈래가 여럿이면 " / "로 이어 붙입니다.
+    // 진화 미리보기: "파이리 → 리자드 (Lv.11) → 리자몽 (Lv.25)", 갈래가 여럿이면 " / "로 이어 붙입니다.
     private string ChainText(SurvivalService.Pick pick)
     {
         if (pick.Stages.Count <= 1) return Loc.T("web.survival.chain.none");
         var parts = new List<string> { Dex.GetName(pick.SpeciesId, Loc.Language) };
         for (int i = 1; i < pick.Stages.Count; i++)
-            parts.Add($"{string.Join(" / ", pick.Stages[i].Select(id => Dex.GetName(id, Loc.Language)))} (Lv.{SurvivalRules.EvolveLevels[i - 1]})");
+        {
+            var levels = pick.Stages[i - 1].Select(Survival.EvolveLevelOf).Where(level => level > 0).Distinct().Order();
+            parts.Add($"{string.Join(" / ", pick.Stages[i].Select(id => Dex.GetName(id, Loc.Language)))} (Lv.{string.Join("/", levels)})");
+        }
         return "🧬 " + string.Join(" → ", parts);
     }
 

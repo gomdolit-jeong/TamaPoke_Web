@@ -7,8 +7,9 @@ namespace TamaPoke.Web.Game;
 public sealed record SurvivalSprite(string Url, int Fw, int Fh, int Cols, int Rows, int[] Durations);
 
 // 게임 중의 모습 하나. Forms[0]이 처음 모습이고, Next는 진화할 수 있는 모습의 번호(Forms 안)입니다. Depth는 몇 번 진화한 모습인지.
+// EvolveLevel: 게임 안 레벨이 이만큼 되면 다음 모습으로 진화합니다. (진화하지 않으면 0)
 public sealed record SurvivalForm(int SpeciesId, string Name, SurvivalSprite? Walk, SurvivalSprite? Idle,
-    double MaxHp, double Speed, double Power, double Guard, int Depth, int[] Next);
+    double MaxHp, double Speed, double Power, double Guard, int Depth, int[] Next, int EvolveLevel);
 
 // 기술 하나 = 무기 하나. Kind는 공격 모양(bolt, spray, slash, nova, orbit, chain, aura), Type은 효과 그림(fx_shot_{type}.png)입니다.
 public sealed record SurvivalWeapon(int SkillId, string Kind, string Type, string Color, double Power, double Cooldown, int Extra, bool Slow);
@@ -16,7 +17,7 @@ public sealed record SurvivalWeapon(int SkillId, string Kind, string Type, strin
 // 적 한 종류. Eff는 내 무기(순서대로)가 이 포켓몬에게 주는 타입 상성 배율입니다.
 public sealed record SurvivalEnemy(int SpeciesId, string Name, SurvivalSprite? Sprite, double Hp, double Speed, double Damage, double[] Eff);
 
-public sealed record SurvivalSetup(List<SurvivalForm> Forms, int[] EvolveLevels, List<SurvivalWeapon> Weapons, List<SurvivalEnemy> Enemies,
+public sealed record SurvivalSetup(List<SurvivalForm> Forms, List<SurvivalWeapon> Weapons, List<SurvivalEnemy> Enemies,
     List<SurvivalEnemy> Bosses, int[] BossTimes, bool Muted, string SwarmText, string EvolveText, string BossText,
     Dictionary<string, string> Texts);
 
@@ -117,8 +118,16 @@ public static class SurvivalRules
     public const int MIN_ENERGY = 20;
     public const int DEFAULT_SKILL_ID = 33; // 기술이 하나도 없으면 몸통박치기
 
-    // 게임 안 레벨이 이만큼 되면 진화합니다. (첫 진화, 두 번째 진화)
-    public static readonly int[] EvolveLevels = [8, 16];
+    // 진화는 도감의 진화 레벨을 따르되, 조금 일찍 합니다. (돌, 교환 등 레벨이 아닌 진화는 도감처럼 Lv.36으로 셈)
+    // 예: 파이리 Lv.11 → 리자드 Lv.25, 딥상어동 Lv.17 → 한바이트 Lv.34, 잉어킹 Lv.14
+    // 진화하면 체력이 크게 늘어서, 도감 레벨 그대로면 초반을 버티기 어렵습니다.
+    public const int MAX_EVOLUTIONS = 2;
+    public const double EVOLVE_LEVEL_SCALE = 0.7;
+    public const int MIN_EVOLVE_LEVEL = 8;
+    public const int MAX_EVOLVE_LEVEL = 40;
+
+    public static int EvolveLevel(int dexLevel) =>
+        Math.Clamp((int)Math.Round(dexLevel * EVOLVE_LEVEL_SCALE), MIN_EVOLVE_LEVEL, MAX_EVOLVE_LEVEL);
 
     // 정기 보스: 이 시간(초)마다 전설 포켓몬이 하나씩 나옵니다. 뒤에 나올수록 단단합니다.
     public static readonly int[] BossTimes = [120, 240, 360, 480];
