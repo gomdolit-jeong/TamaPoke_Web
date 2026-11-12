@@ -18,6 +18,9 @@ public sealed partial class PokemonState
     // 마지막으로 고른 포켓몬 (다음에 창을 열면 먼저 골라 둡니다)
     public int SurvivalSpecies { get; set; }
 
+    // 마지막으로 고른 저주 단계 (0~SurvivalRules.MAX_CURSE)
+    public int SurvivalCurse { get; set; }
+
     // 고를 수 있는 포켓몬: 잡은 포켓몬과 지금 포켓몬의 첫 모습 (진화한 포켓몬을 잡았으면 진화 전 모습으로). 게임 안에서 진화합니다.
     [JsonIgnore] public IEnumerable<int> SurvivalCandidates =>
         (IsEgg ? UnlockedPokemon : UnlockedPokemon.Append(SpeciesId)).Select(Dex.BaseOf).Distinct()
@@ -46,7 +49,9 @@ public sealed partial class PokemonState
     {
         result = SurvivalRules.Clamp(result);
         int score = SurvivalRules.Score(result);
-        int minutes = result.TimeSec / 60;
+        // 배고픔·피로와 훈련치는 10분까지만 셉니다. (무한 모드로 오래 버텨도 포켓몬이 바닥나지 않도록)
+        int minutes = Math.Min(result.TimeSec, SurvivalRules.RUN_SECONDS) / 60;
+        int extraMinutes = Math.Max(0, result.TimeSec - SurvivalRules.RUN_SECONDS) / 60;
         var rewards = new List<string>();
 
         // 예전 점수 방식(초 × 10 + KO)의 기록은 새 방식으로 바꿔서 비교합니다.
@@ -75,8 +80,10 @@ public sealed partial class PokemonState
         if (atk + def + spd > 0) rewards.Add(L.F("web.survival.reward.training", atk, def, spd));
         rewards.Add(L.F("web.survival.reward.bond", bond));
 
-        // 2분마다 상처약 상자 하나, 다 버티면 좋은 상처약과 메가스톤 조각 기회
-        for (int i = 0; i < result.TimeSec / 120; i++)
+        // 2분마다 상처약 상자 하나(10분까지), 무한 모드는 5분마다 하나 더, 저주를 걸고 클리어하면 단계마다 하나 더.
+        // 다 버티면 좋은 상처약과 메가스톤 조각 기회
+        int boxes = minutes / 2 + extraMinutes / 5 + (result.Cleared ? result.Curse : 0);
+        for (int i = 0; i < boxes; i++)
         {
             int roll = Random.Shared.Next(100);
             string item = roll < 55 ? ItemDex.Potion : roll < 80 ? ItemDex.MonsterBall : roll < 95 ? ItemDex.SuperPotion : ItemDex.HyperPotion;
@@ -87,7 +94,7 @@ public sealed partial class PokemonState
         {
             AddItem(ItemDex.HyperPotion, 1);
             rewards.Add(L.F("web.survival.reward.item", L.T($"item.{ItemDex.HyperPotion}.name")));
-            if (Random.Shared.Next(100) < 40 && GiveMegaShards(1) is { } shard) rewards.Add(shard);
+            if (Random.Shared.Next(100) < 40 + result.Curse * 10 && GiveMegaShards(1) is { } shard) rewards.Add(shard);
         }
 
         NeedsSave = true;

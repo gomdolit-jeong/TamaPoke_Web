@@ -2,19 +2,28 @@
 // C#(Components/SurvivalLayer.razor)이 내 포켓몬의 능력치와 기술(무기), 적 포켓몬을 넘겨 주고,
 // 레벨업 고르기·일시정지·결과 화면은 C#이 그 위에 보여 줍니다.
 
-const RUN_SECONDS = 600;
+const RUN_SECONDS = 600;       // 이만큼 버티면 클리어 (SurvivalRules.RUN_SECONDS)
+const MAX_RUN_SECONDS = 3600;  // 무한 모드는 여기서 끝 (SurvivalRules.MAX_RUN_SECONDS)
+// 무한 모드: 10분 뒤로는 시간 난이도를 10분 값에서 멈추고, 10분마다(1바퀴) 아래만큼 늘립니다. (뱀서 무한 모드: 체력 +100%, 수 +50%, 공격 +25%)
+const ENDLESS = { hp: 1.0, spawn: 0.5, damage: 0.25 };
 
 // 난이도 (m = 지난 시간(분), t = 지난 시간(초))
 const TUNE = {
-    // 세대별 스타팅 포켓몬 9마리와 잉어킹을 봇으로 돌려 맞춘 값: 잘 풀린 판은 체력 절반쯤까지 밀리며 10분, 안 풀린 판은 4~8분.
+    // 세대별 스타팅 포켓몬 9마리, 잉어킹, 전설 11마리를 봇으로 돌려 맞춘 값 (다시 뽑기·기술 진화를 넣은 뒤 다시 맞춤)
+    // 봇 기준 10분 클리어: 저주 0단계 87%, 3단계 60%, 5단계 37%. 무한 모드는 보통 16분쯤(12~21분)까지 버팀.
     spawnBase: 1.8, spawnPerSec: 1 / 40, spawnPerMin2: 0.18, spawnMax: 34, // 초당 나오는 적: min(spawnMax, spawnBase + t × spawnPerSec + m² × spawnPerMin2)
-    hpLinear: 0.45, hpSquare: 0.27,                      // 적 체력 배수: 1 + m × hpLinear + m² × hpSquare
-    damageBase: 1.5, damagePerMin: 0.42,                 // 적 공격 배수: damageBase + m × damagePerMin
+    hpLinear: 0.45, hpSquare: 0.33,                      // 적 체력 배수: 1 + m × hpLinear + m² × hpSquare
+    damageBase: 1.5, damagePerMin: 0.5,                  // 적 공격 배수: damageBase + m × damagePerMin
     speedBase: 1.15, speedPerMin: 0.07,                  // 적 속도 배수: speedBase + m × speedPerMin
     expBase: 4, expLinear: 2.5, expPow: 1.4,             // 레벨업에 필요한 사탕: expBase + Lv × expLinear + Lv^expPow
     expLateFrom: 15, expLate: 0.25,                      //   + (Lv - expLateFrom)² × expLate (후반 레벨업만 느리게)
     startLevel: 2,                                       // 처음부터 쓰는 기술의 레벨
     rushFrom: 240, rushChance: 0.32, rushSpeed: 1.8, rushHp: 0.6, // 돌격형 적: rushFrom초부터 rushChance 확률로 (빠르고 약함)
+    // 기술 진화
+    evolvePairLevel: 2,      // 짝 강화가 이 단계 이상이어야 진화
+    evolveEliteFrom: 360,    // 이 시간(초)부터 엘리트도 진화 상자를 떨어뜨림 (그 전에는 보스 상자로만)
+    evolvedLevelBonus: 1,    // 진화하면 Lv.5 + 이만큼처럼 (개수·범위·데미지). 2면 진화한 뒤가 너무 쉬웠음
+    evolvedCooldown: 0.85,   // 진화하면 재사용 시간 × 이만큼
 };
 const ELITE_EVERY = 45;
 const MAX_ENEMIES = 320;
@@ -43,9 +52,16 @@ function candyStage(value) {
 }
 const MAX_NUMBERS = 40;
 const MINIMAP_RANGE = 420; // 동그란 지도에 보이는 거리 (게임 좌표, 화면 반쯤 바깥까지)
+const COMBO_WINDOW = 1.5;  // 연속 처치가 끊기지 않는 시간 (초)
+const COMBO_SHOW = 10;     // 이만큼 이어지면 화면에 보입니다.
 const WEAPON_MAX = 5;
 const PASSIVE_MAX = 5;
 const OWNED_WEAPON_MAX = 4;
+// 기술 진화: 기술이 Lv.5이고 짝 강화를 TUNE.evolvePairLevel단계 이상 갖고 있을 때 보스 상자(또는 TUNE.evolveEliteFrom초 뒤의 엘리트 상자)를 열면 진화합니다.
+// 짝: 공격 모양마다 어울리는 강화 (SurvivalRules.EvolvePair와 같게)
+const EVOLVE_PAIR = { bolt: "haste", spray: "might", slash: "armor", nova: "vital", orbit: "swift", chain: "magnet", aura: "armor" };
+// 레벨업 카드를 다룰 수 있는 횟수 (한 판): 다시 뽑기, 건너뛰기, 지우기 (뱀서라이크의 Reroll/Skip/Banish)
+const REROLLS = 2, SKIPS = 2, BANISHES = 2;
 const PLAYER_RADIUS = 7;
 const INVULN_SECONDS = 0.8;
 const EVOLVE_SECONDS = 2.6;      // 진화 장면 길이 (그동안 게임이 멈춥니다)
@@ -100,6 +116,11 @@ export function stop() {
 }
 
 export function choose(id) { game?.choose(id); }
+export function reroll() { game?.reroll(); }
+export function skip() { game?.skip(); }
+export function banish(id) { game?.banish(id); }
+export function continueEndless() { game?.continueEndless(); }
+export function endRun() { game?.finish(true); }
 export function setPaused(paused) { game?.setPaused(paused, false); }
 export function quit() { game?.finish(false); }
 export function setMuted(muted) { if (game) game.muted = muted; }
@@ -113,6 +134,7 @@ export function getState() {
         hp: Math.ceil(p.hp), maxHp: Math.round(p.maxHp), level: g.level, exp: g.exp, expNext: g.expNext,
         timeSec: Math.floor(g.time), kills: g.kills,
         weapons: g.weapons.map(w => w.level),
+        weaponEvolved: g.weapons.map(w => !!w.evolved),
         weaponDamage: g.weapons.map(w => Math.round(w.dealt)),
         weaponKills: g.weapons.map(w => w.ko),
         passives: PASSIVES.map(name => ({ name, level: g.passives[name] })),
@@ -264,6 +286,17 @@ class Game {
         this.expNext = this.needFor(1);
         this.pendingLevels = 0;
         this.awaitingChoice = false;
+        // 레벨업 카드 다루기: 한 판에 쓸 수 있는 횟수
+        this.rerolls = REROLLS;
+        this.skips = SKIPS;
+        this.banishes = BANISHES;
+        this.banished = new Set();
+        this.combo = 0;
+        this.comboLeft = 0;
+        this.bestCombo = 0;
+        this.endless = false;     // 10분 클리어 뒤 계속하기를 골랐는지
+        this.endlessAsked = false;
+        this.eventCycle = 0;
         this.spawnAcc = 0;
         this.nextElite = ELITE_EVERY;
         this.nextSwarm = 0;
@@ -381,7 +414,8 @@ class Game {
     }
 
     setPaused(paused, notify) {
-        if (this.finished || this.paused === paused) return;
+        // 10분 클리어 뒤 계속할지 묻는 동안은 멈춘 채로 둡니다. (Esc로 풀리지 않도록)
+        if (this.finished || this.paused === paused || (this.endlessAsked && !this.endless)) return;
         this.paused = paused;
         this.keys.clear();
         this.stick = null;
@@ -410,10 +444,9 @@ class Game {
     offerEvolve() {
         const options = this.form.next.map(index => ({ id: `e${index}`, kind: "evolve", index, level: 0 }));
         this.awaitingChoice = true;
-        this.lastOptions = options;
         this.keys.clear();
         this.stick = null;
-        this.dotnet.invokeMethodAsync("OnLevelUp", JSON.stringify(options));
+        this.sendChoice(options);
     }
 
     // 진화 장면 시작: 게임이 멈추고, 포켓몬이 빛나며 원래 모습과 진화한 모습이 점점 빠르게 번갈아 보입니다.
@@ -474,12 +507,19 @@ class Game {
         }
 
         this.time += dt;
-        if (this.time >= RUN_SECONDS) {
+        // 10분을 버티면 클리어. 계속할지(무한 모드) C#에 묻고 그동안 멈춥니다.
+        if (!this.endless && this.time >= RUN_SECONDS) {
             this.time = RUN_SECONDS;
+            this.offerEndless();
+            return;
+        }
+        if (this.time >= MAX_RUN_SECONDS) {
+            this.time = MAX_RUN_SECONDS;
             this.finish(true);
             return;
         }
 
+        if (this.comboLeft > 0) this.comboLeft -= dt;
         this.movePlayer(dt);
         this.spawn(dt);
         this.buildGrid();
@@ -520,30 +560,51 @@ class Game {
         if (p.invuln > 0) p.invuln -= dt;
     }
 
+    // --- 난이도: 10분까지는 시간에 따라, 무한 모드(10분 뒤)는 10분 값에 ENDLESS 배수를 곱하고, 저주는 처음부터 곱합니다. ---
+
+    // 시간에 따른 난이도 계산에 쓰는 분 (10분에서 멈춤)
+    get diffMinutes() { return Math.min(this.time, RUN_SECONDS) / 60; }
+    // 무한 모드에서 10분 뒤로 몇 바퀴(10분 = 1) 지났는지
+    get endlessX() { return Math.max(0, this.time - RUN_SECONDS) / RUN_SECONDS; }
+    get curse() { return this.setup.curse ?? 0; }
+
+    // 이벤트(무리, 습격, 보스) 시계: 무한 모드에서는 10분마다 처음부터 다시
+    get eventTime() { return this.time - this.eventCycle * RUN_SECONDS; }
+
     spawn(dt) {
-        const t = this.time;
-        const m = t / 60;
-        this.spawnAcc += dt * Math.min(TUNE.spawnMax, Math.max(OPENING_RATE, TUNE.spawnBase + t * TUNE.spawnPerSec + m * m * TUNE.spawnPerMin2));
+        const m = this.diffMinutes, t = m * 60;
+        const more = (1 + this.curse * (this.setup.curseSpawn ?? 0)) * (1 + ENDLESS.spawn * this.endlessX);
+        this.spawnAcc += dt * Math.min(TUNE.spawnMax * more, Math.max(OPENING_RATE, (TUNE.spawnBase + t * TUNE.spawnPerSec + m * m * TUNE.spawnPerMin2) * more));
         while (this.spawnAcc >= 1) {
             this.spawnAcc -= 1;
             if (this.enemies.length < MAX_ENEMIES) this.spawnEnemy(this.pickTier(), "normal");
             else this.recycleFarthest();
         }
-        if (this.nextFlyby < FLYBY_AT.length && t >= FLYBY_AT[this.nextFlyby]) {
+
+        // 무한 모드: 10분마다 무리·습격·보스 일정을 처음부터 다시 (보스는 계속 다음 전설, 점점 단단하게)
+        const cycle = Math.floor(this.time / RUN_SECONDS);
+        if (this.endless && cycle > this.eventCycle) {
+            this.eventCycle = cycle;
+            this.nextFlyby = 0;
+            this.nextSwarm = 0;
+            this.nextBoss = 0;
+        }
+        const et = this.eventTime;
+        if (this.nextFlyby < FLYBY_AT.length && et >= FLYBY_AT[this.nextFlyby]) {
             this.nextFlyby++;
             this.spawnFlyby();
         }
-        if (this.nextSwarm < SWARM_AT.length && t >= SWARM_AT[this.nextSwarm]) {
+        if (this.nextSwarm < SWARM_AT.length && et >= SWARM_AT[this.nextSwarm]) {
             this.nextSwarm++;
             this.spawnSwarm();
         }
-        if (t >= this.nextElite) {
+        if (this.time >= this.nextElite) {
             this.nextElite += ELITE_EVERY;
             this.spawnEnemy(this.pickTier(), "elite");
         }
         // 정기 보스: 정해진 시간마다 전설 포켓몬이 하나씩
-        if (this.nextBoss < this.setup.bossTimes.length && t >= this.setup.bossTimes[this.nextBoss]) {
-            this.bossRef = this.spawnEnemy(-1 - this.nextBoss, "boss");
+        if (this.nextBoss < this.setup.bossTimes.length && et >= this.setup.bossTimes[this.nextBoss]) {
+            this.bossRef = this.spawnEnemy(-1 - (this.eventCycle * this.setup.bossTimes.length + this.nextBoss), "boss");
             this.nextBoss++;
             this.bossBanner = 2.5;
             this.sound([[220, 120], [0, 40], [196, 120], [0, 40], [165, 260]]);
@@ -640,10 +701,14 @@ class Game {
     }
 
     spawnEnemy(tier, rank) {
+        // 보스 번호는 무한 모드에서 계속 늘어납니다. (모습은 보스 목록을 돌아가며, 체력은 번호만큼 단단하게)
         const bossIndex = tier < 0 ? -1 - tier : 0;
-        const def = tier < 0 ? this.bosses[bossIndex] : this.roster[tier];
-        const minutes = this.time / 60;
-        const growth = 1 + minutes * TUNE.hpLinear + minutes * minutes * TUNE.hpSquare;
+        const def = tier < 0 ? this.bosses[bossIndex % this.bosses.length] : this.roster[tier];
+        const minutes = this.diffMinutes, x10 = this.endlessX, c = this.curse;
+        const growth = (1 + minutes * TUNE.hpLinear + minutes * minutes * TUNE.hpSquare)
+            * (1 + ENDLESS.hp * x10) * (1 + c * (this.setup.curseHp ?? 0));
+        const strength = (1 + ENDLESS.damage * x10) * (1 + c * (this.setup.curseDamage ?? 0));
+        const quick = 1 + c * (this.setup.curseSpeed ?? 0);
         const rush = rank === "normal" && this.time >= TUNE.rushFrom && Math.random() < TUNE.rushChance;
         const rankHp = rank === "boss" ? 25 + 15 * bossIndex : rank === "elite" ? 12 : 1;
         const [x, y] = this.spawnPoint();
@@ -651,8 +716,8 @@ class Game {
             def, rank, tier, x, y,
             hp: def.hp * growth * rankHp * (rush ? TUNE.rushHp : 1),
             maxHp: def.hp * growth * rankHp * (rush ? TUNE.rushHp : 1),
-            speed: def.speed * (TUNE.speedBase + minutes * TUNE.speedPerMin) * (rank === "boss" ? 0.85 : rank === "elite" ? 0.9 : 1) * (rush ? TUNE.rushSpeed : 1),
-            damage: def.damage * (TUNE.damageBase + minutes * TUNE.damagePerMin) * (rank === "boss" ? 2 : rank === "elite" ? 1.5 : 1),
+            speed: def.speed * quick * (TUNE.speedBase + minutes * TUNE.speedPerMin) * (rank === "boss" ? 0.85 : rank === "elite" ? 0.9 : 1) * (rush ? TUNE.rushSpeed : 1),
+            damage: def.damage * strength * (TUNE.damageBase + minutes * TUNE.damagePerMin) * (rank === "boss" ? 2 : rank === "elite" ? 1.5 : 1),
             rush,
             size: rank === "boss" ? 2.2 : rank === "elite" ? 1.5 : 1,
             animMs: Math.random() * 1000,
@@ -784,8 +849,25 @@ class Game {
 
     // --- 무기 ---
 
+    // 공격에 쓰는 레벨. 진화한 기술은 Lv.5보다 TUNE.evolvedLevelBonus만큼 더 높은 레벨로 계산합니다. (개수·범위·데미지가 모두 늘어남)
+    lv(w) { return w.level + (w.evolved ? TUNE.evolvedLevelBonus : 0); }
+
+    // --- 기술 진화: 기술 Lv.5 + 짝 강화(EVOLVE_PAIR)가 있을 때 상자를 열면 진화합니다. ---
+
+    canEvolveWeapon(w) {
+        return !w.evolved && w.level >= WEAPON_MAX && this.passives[EVOLVE_PAIR[w.kind]] >= TUNE.evolvePairLevel;
+    }
+
+    evolveWeapon(w) {
+        w.evolved = true;
+        const text = (this.setup.texts?.weaponEvolve ?? "{0}").replace("{0}", w.name ?? "");
+        this.showBanner(text, "#ffd54f");
+        this.addPfx("levelup", "levelup", this.player.x, this.player.y + 7, { scale: 1.6, speed: 0.8, follow: true });
+        this.sound([[523, 70], [784, 70], [1047, 70], [1568, 220]]);
+    }
+
     weaponDamage(w, e) {
-        const levelMul = 1 + 0.3 * (w.level - 1);
+        const levelMul = 1 + 0.3 * (this.lv(w) - 1);
         const eff = e.def.eff?.[w.index] ?? 1;
         return w.power / 4 * this.powerMul * levelMul * eff * (0.9 + Math.random() * 0.2);
     }
@@ -800,9 +882,9 @@ class Game {
 
             w.cd -= dt * 1000;
             if (w.cd > 0) continue;
-            const base = COOLDOWN[w.kind] * w.cooldown * this.cooldownMul;
+            const base = COOLDOWN[w.kind] * w.cooldown * this.cooldownMul * (w.evolved ? TUNE.evolvedCooldown : 1);
 
-            const target = this.nearest(p.x, p.y, w.kind === "slash" ? 46 + 7 * w.level : 220);
+            const target = this.nearest(p.x, p.y, w.kind === "slash" ? 46 + 7 * this.lv(w) : 220);
             if (!target && w.kind !== "nova") { w.cd = 120; continue; }
             w.cd = base;
             w.cdMax = base; // 화면 오른쪽 재사용 시간 표시용
@@ -820,8 +902,8 @@ class Game {
     }
 
     fireBolt(w, aim) {
-        const count = 1 + Math.floor((w.level - 1) / 2) + w.extra;
-        const pierce = w.level >= 4 ? 2 : w.level >= 2 ? 1 : 0;
+        const count = 1 + Math.floor((this.lv(w) - 1) / 2) + w.extra;
+        const pierce = (this.lv(w) >= 4 ? 2 : this.lv(w) >= 2 ? 1 : 0) + (w.evolved ? 2 : 0);
         for (let i = 0; i < count; i++) {
             const angle = aim + (i - (count - 1) / 2) * 0.16;
             this.shots.push({ w, x: this.player.x, y: this.player.y, vx: Math.cos(angle) * 230, vy: Math.sin(angle) * 230, life: 1.3, pierce, radius: 5, hit: new Set(), size: 16 });
@@ -829,15 +911,15 @@ class Game {
     }
 
     fireSpray(w, aim) {
-        const count = 3 + w.level + w.extra;
+        const count = 3 + this.lv(w) + w.extra;
         const spread = 0.9;
         for (let i = 0; i < count; i++) {
             const angle = aim + (i / (count - 1) - 0.5) * spread + (Math.random() - 0.5) * 0.1;
             const speed = 170 + Math.random() * 40;
             // 불꽃·물줄기는 앞의 적을 뚫고 지나갑니다. (Lv.3부터 2마리)
-            this.shots.push({ w, x: this.player.x, y: this.player.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0.42 + w.level * 0.04, pierce: w.level >= 3 ? 2 : 1, radius: 5, hit: new Set(), size: 12, hidden: true });
+            this.shots.push({ w, x: this.player.x, y: this.player.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0.42 + this.lv(w) * 0.04, pierce: this.lv(w) >= 3 ? 2 : 1, radius: 5, hit: new Set(), size: 12, hidden: true });
         }
-        const reach = 190 * (0.42 + w.level * 0.04);
+        const reach = 190 * (0.42 + this.lv(w) * 0.04);
         // 포켓몬 몸과 겹치지 않게, 쏘는 방향으로 몸 바깥(16px 앞)에서 시작합니다.
         const mouth = 16;
         this.addPfx("w_spray", "spray", this.player.x + Math.cos(aim) * mouth, this.player.y + Math.sin(aim) * mouth,
@@ -845,7 +927,7 @@ class Game {
     }
 
     fireSlash(w, aim) {
-        const radius = 42 + 7 * w.level;
+        const radius = 42 + 7 * this.lv(w);
         const half = 1.05;
         const swing = (angle) => {
             this.near(this.player.x, this.player.y, radius, (e) => {
@@ -859,13 +941,13 @@ class Game {
             });
         };
         swing(aim);
-        if (w.level >= 3) swing(aim + Math.PI);
+        if (this.lv(w) >= 3) swing(aim + Math.PI);
         for (let i = 0; i < w.extra; i++) setTimeout(() => this.running && !this.paused && swing(aim), 120 * (i + 1));
     }
 
     fireNova(w) {
         // 화면 전체를 쓸지 않도록 범위와 데미지를 조금 낮게 둡니다. (Lv.5 반경 98)
-        const radius = 53 + 9 * w.level;
+        const radius = 53 + 9 * this.lv(w);
         this.near(this.player.x, this.player.y, radius, (e) => this.damage(e, this.weaponDamage(w, e) * 0.8 * (1 + 0.3 * w.extra), w, 160));
         this.effects.push({ type: "nova", w, x: this.player.x, y: this.player.y, radius, life: 0.3, max: 0.3 });
         this.addPfx("nova", "nova", this.player.x, this.player.y + 7, { scale: radius / 70, speed: 2, tint: w.type, color: w.color, follow: true });
@@ -873,7 +955,7 @@ class Game {
 
     fireChain(w, first) {
         if (!first) return;
-        const jumps = 2 + w.level + w.extra;
+        const jumps = 2 + this.lv(w) + w.extra;
         const visited = new Set([first]);
         const points = [[this.player.x, this.player.y], [first.x, first.y]];
         this.damage(first, this.weaponDamage(w, first), w, 20);
@@ -892,10 +974,10 @@ class Game {
     }
 
     updateOrbit(w, dt) {
-        const count = 2 + Math.floor(w.level / 2) + w.extra;
+        const count = 2 + Math.floor(this.lv(w) / 2) + w.extra;
         // 회전 기술이 여러 개면 서로 다른 거리와 방향에서 돕니다.
-        const radius = 36 + 6 * w.level + (w.index % 2) * 12;
-        w.angle += dt * (2.6 + 0.15 * w.level) * (w.index % 2 ? -1 : 1);
+        const radius = 36 + 6 * this.lv(w) + (w.index % 2) * 12;
+        w.angle += dt * (2.6 + 0.15 * this.lv(w)) * (w.index % 2 ? -1 : 1);
         w.orbs = [];
         for (let i = 0; i < count; i++) {
             const angle = w.angle + w.index * 0.9 + i * Math.PI * 2 / count;
@@ -911,10 +993,10 @@ class Game {
     }
 
     updateAura(w, dt) {
-        w.radius = 30 + 7 * w.level;
+        w.radius = 30 + 7 * this.lv(w);
         w.tick -= dt;
         if (w.tick > 0) return;
-        w.tick = AURA_TICK * w.cooldown * this.cooldownMul;
+        w.tick = AURA_TICK * w.cooldown * this.cooldownMul * (w.evolved ? TUNE.evolvedCooldown : 1);
         const scale = AURA_SCALE * Math.min(1, AURA_MAX_POWER / w.power);
         this.near(this.player.x, this.player.y, w.radius, (e) => {
             this.damage(e, this.weaponDamage(w, e) * scale, w, 0);
@@ -922,7 +1004,7 @@ class Game {
         });
         // 때릴 때마다 바깥으로 퍼지는 고리와 위로 떠오르는 빛 알갱이
         this.effects.push({ type: "auraPulse", w, radius: w.radius, life: 0.45, max: 0.45 });
-        for (let i = 0; i < 3 + w.level; i++) {
+        for (let i = 0; i < 3 + this.lv(w); i++) {
             const angle = Math.random() * Math.PI * 2, distance = Math.sqrt(Math.random()) * w.radius;
             this.effects.push({
                 type: "mote", w, x: this.player.x + Math.cos(angle) * distance, y: this.player.y + Math.sin(angle) * distance * 0.8,
@@ -958,13 +1040,19 @@ class Game {
         e.dieMs = 220;
         this.kills++;
         if (w) w.ko = (w.ko ?? 0) + 1;
+        // 연속 처치: COMBO_WINDOW초 안에 다음 적을 쓰러뜨리면 이어집니다.
+        this.combo = this.comboLeft > 0 ? this.combo + 1 : 1;
+        this.comboLeft = COMBO_WINDOW;
+        this.bestCombo = Math.max(this.bestCombo, this.combo);
         this.addPfx("poof", "poof", e.x, e.y + 7 * e.size, { scale: 0.45 * e.size, speed: 1.8 });
 
         if (e.rank === "boss") {
-            this.dropGem(e.x, e.y, "chest", 0);
+            this.dropGem(e.x, e.y, "chest", 1); // value 1: 보스 상자 (레벨업 2번)
             this.bossRef = null;
             return;
         }
+        // 진화할 수 있는 기술이 있으면 엘리트도 상자를 떨어뜨립니다. (value 0: 진화만)
+        if (e.rank === "elite" && this.time >= TUNE.evolveEliteFrom && this.weapons.some(w => this.canEvolveWeapon(w))) this.dropGem(e.x, e.y - 8, "chest", 0);
         const value = e.rank === "elite" ? 20 : e.tier >= 6 ? 3 : e.tier >= 3 ? 2 : 1;
         this.dropGem(e.x, e.y, "candy", value);
         if (e.rank === "elite" || Math.random() < 0.006) this.dropGem(e.x + 6, e.y, "berry", 0);
@@ -1082,12 +1170,15 @@ class Game {
             return;
         }
         if (g.kind === "chest") {
-            p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.3);
-            this.pendingLevels += 2;
+            // 상자: 진화할 수 있는 기술이 있으면 하나 진화. 보스 상자는 회복과 레벨업 2번도.
+            const evolvable = this.weapons.find(w => this.canEvolveWeapon(w));
+            if (evolvable) this.evolveWeapon(evolvable);
+            p.hp = Math.min(p.maxHp, p.hp + p.maxHp * (g.value ? 0.3 : 0.1));
+            if (g.value) this.pendingLevels += 2;
             this.sound([[784, 60], [988, 60], [1175, 60], [1568, 160]]);
             return;
         }
-        this.exp += g.value;
+        this.exp += g.value * (1 + this.curse * (this.setup.curseExp ?? 0)); // 저주를 걸면 경험치도 더
         while (this.exp >= this.expNext) {
             this.exp -= this.expNext;
             this.level++;
@@ -1185,14 +1276,18 @@ class Game {
     // --- 레벨업 ---
 
     offerLevelUp() {
+        // 지운 카드(this.banished)는 이 판에서 다시 나오지 않습니다.
         const pool = [];
         const owned = this.weapons.filter(w => w.level > 0).length;
         for (const w of this.weapons) {
-            if (w.level === 0 && owned < OWNED_WEAPON_MAX) pool.push({ id: `w${w.index}`, kind: "new", index: w.index, level: 1, weight: 2.2 });
-            else if (w.level > 0 && w.level < WEAPON_MAX) pool.push({ id: `w${w.index}`, kind: "up", index: w.index, level: w.level + 1, weight: 3 });
+            const id = `w${w.index}`;
+            if (this.banished.has(id)) continue;
+            if (w.level === 0 && owned < OWNED_WEAPON_MAX) pool.push({ id, kind: "new", index: w.index, level: 1, weight: 2.2 });
+            else if (w.level > 0 && w.level < WEAPON_MAX) pool.push({ id, kind: "up", index: w.index, level: w.level + 1, weight: 3 });
         }
         for (const name of PASSIVES) {
-            if (this.passives[name] < PASSIVE_MAX) pool.push({ id: `p_${name}`, kind: "passive", name, level: this.passives[name] + 1, weight: 1.4 });
+            const id = `p_${name}`;
+            if (!this.banished.has(id) && this.passives[name] < PASSIVE_MAX) pool.push({ id, kind: "passive", name, level: this.passives[name] + 1, weight: 1.4 });
         }
 
         const options = [];
@@ -1203,11 +1298,49 @@ class Game {
         }
         if (options.length === 0) options.push({ id: "heal", kind: "heal", level: 0 });
 
+        if (!this.awaitingChoice) this.sound([[784, 60], [988, 60], [1319, 120]]);
         this.awaitingChoice = true;
         this.keys.clear();
         this.stick = null;
-        this.sound([[784, 60], [988, 60], [1319, 120]]);
-        this.dotnet.invokeMethodAsync("OnLevelUp", JSON.stringify(options.map(({ weight, ...o }) => o)));
+        this.sendChoice(options.map(({ weight, ...o }) => o));
+    }
+
+    // 고르는 화면을 C#에 띄웁니다. 진화 고르기에는 다시 뽑기·건너뛰기·지우기를 쓰지 않습니다.
+    sendChoice(options) {
+        this.lastOptions = options;
+        const tools = options[0]?.kind !== "evolve" && options[0]?.kind !== "heal";
+        this.dotnet.invokeMethodAsync("OnLevelUp", JSON.stringify({
+            options,
+            reroll: tools ? this.rerolls : -1,
+            skip: tools ? this.skips : -1,
+            banish: tools ? this.banishes : -1,
+        }));
+    }
+
+    // 다시 뽑기: 카드 3장을 새로 뽑습니다.
+    reroll() {
+        if (!this.awaitingChoice || this.rerolls <= 0 || this.lastOptions?.[0]?.kind === "evolve") return;
+        this.rerolls--;
+        this.sound([[660, 40], [880, 60]]);
+        this.offerLevelUp();
+    }
+
+    // 건너뛰기: 이번 레벨업은 고르지 않고 넘어갑니다.
+    skip() {
+        if (!this.awaitingChoice || this.skips <= 0 || this.lastOptions?.[0]?.kind === "evolve") return;
+        this.skips--;
+        this.pendingLevels = Math.max(0, this.pendingLevels - 1);
+        this.awaitingChoice = false;
+        this.last = performance.now();
+    }
+
+    // 지우기: 고른 카드를 이 판에서 다시 나오지 않게 하고, 카드를 새로 뽑습니다. (다시 뽑기 횟수는 쓰지 않음)
+    banish(id) {
+        if (!this.awaitingChoice || this.banishes <= 0 || id === "heal" || id.startsWith("e")) return;
+        this.banishes--;
+        this.banished.add(id);
+        this.sound([[330, 60], [220, 90]]);
+        this.offerLevelUp();
     }
 
     choose(id) {
@@ -1241,6 +1374,25 @@ class Game {
 
     // --- 끝 ---
 
+    // 10분 클리어: 게임을 멈추고 C#에 계속할지 묻습니다. (답은 continueEndless 또는 finish(true))
+    offerEndless() {
+        if (this.endlessAsked) return;
+        this.endlessAsked = true;
+        this.paused = true;
+        this.keys.clear();
+        this.stick = null;
+        this.sound([[784, 90], [988, 90], [1175, 90], [1568, 260]]);
+        this.dotnet.invokeMethodAsync("OnCleared");
+    }
+
+    continueEndless() {
+        if (this.finished || this.endless) return;
+        this.endless = true;
+        this.paused = false;
+        this.player.invuln = Math.max(this.player.invuln, 1.5);
+        this.last = performance.now();
+    }
+
     finish(cleared) {
         if (this.finished) return;
         if (cleared) {
@@ -1259,9 +1411,12 @@ class Game {
             timeSec: Math.floor(this.time), kills: this.kills, level: this.level, cleared, finalSpeciesId: this.form.speciesId,
             weaponSkills: this.weapons.map(w => w.skillId),
             weaponLevels: this.weapons.map(w => w.level),
+            weaponEvolved: this.weapons.map(w => !!w.evolved),
             weaponDamage: this.weapons.map(w => Math.round(w.dealt)),
             weaponKills: this.weapons.map(w => w.ko),
             itemDamage: Math.round(this.bombSource.dealt), itemKills: this.bombSource.ko,
+            bestCombo: this.bestCombo,
+            curse: this.curse,
         }));
     }
 
@@ -1877,9 +2032,16 @@ class Game {
         // 테두리: 쓸 수 있을 때 기술 색으로 밝게
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(x + 1, y + 1, size - 2, size - 2, r - 1); else ctx.rect(x + 1, y + 1, size - 2, size - 2);
-        ctx.strokeStyle = !owned ? "rgb(255 255 255 / 15%)" : left > 0 ? "rgb(255 255 255 / 35%)" : w.color;
-        ctx.lineWidth = owned && left === 0 ? 2.5 : 1.5;
+        ctx.strokeStyle = !owned ? "rgb(255 255 255 / 15%)" : w.evolved ? "#ffd54f" : left > 0 ? "rgb(255 255 255 / 35%)" : w.color;
+        ctx.lineWidth = w.evolved ? 3 : owned && left === 0 ? 2.5 : 1.5;
         ctx.stroke();
+
+        // 진화한 기술: 왼쪽 위에 금별
+        if (w.evolved) {
+            ctx.font = `bold ${Math.round(size * 0.36)}px sans-serif`;
+            ctx.textAlign = "left";
+            this.outlinedText("★", x + 1, y + size * 0.2, "#ffd54f", 2.5);
+        }
 
         // 계속 도는 기술은 테두리를 도는 빛으로 표시
         if (owned && left === null) {
@@ -1910,16 +2072,16 @@ class Game {
                 const tx = ix + size + 8, tw = x + w - 8 - tx;
                 ctx.textAlign = "left";
                 ctx.font = "bold 12px sans-serif";
-                ctx.fillStyle = owned ? "#ffffff" : "rgb(255 255 255 / 40%)";
-                ctx.fillText(this.fitText(wp.name ?? "", tw - 18), tx, iy + 10);
+                ctx.fillStyle = wp.evolved ? "#ffd54f" : owned ? "#ffffff" : "rgb(255 255 255 / 40%)";
+                ctx.fillText(this.fitText((wp.evolved ? "★" : "") + (wp.name ?? ""), tw - 18), tx, iy + 10);
                 ctx.font = "11px sans-serif";
                 ctx.textAlign = "right";
                 ctx.globalAlpha = owned ? 1 : 0.4;
                 ctx.fillText(KIND_ICONS[wp.kind] ?? "", tx + tw, iy + 10);
                 ctx.globalAlpha = 1;
-                // 레벨 칸 5개
+                // 레벨 칸 5개 (진화하면 금색)
                 for (let k = 0; k < WEAPON_MAX; k++) {
-                    ctx.fillStyle = k < wp.level ? wp.color : "rgb(255 255 255 / 14%)";
+                    ctx.fillStyle = k < wp.level ? (wp.evolved ? "#ffd54f" : wp.color) : "rgb(255 255 255 / 14%)";
                     ctx.fillRect(tx + k * 12, iy + size - 11, 9, 6);
                     if (k < wp.level) {
                         ctx.fillStyle = "rgb(255 255 255 / 35%)";
@@ -1927,10 +2089,19 @@ class Game {
                     }
                 }
                 if (wp.level >= WEAPON_MAX) {
+                    // 진화했으면 "진화", 아니면 MAX와 진화에 필요한 짝 강화 (가졌으면 밝게, 아니면 흐리게)
                     ctx.font = "bold 9px sans-serif";
                     ctx.textAlign = "left";
                     ctx.fillStyle = "#ffd54f";
-                    ctx.fillText("MAX", tx + WEAPON_MAX * 12 + 2, iy + size - 8);
+                    const tag = wp.evolved ? (this.setup.texts?.evolvedTag ?? "EVO") : "MAX";
+                    ctx.fillText(tag, tx + WEAPON_MAX * 12 + 2, iy + size - 8);
+                    if (!wp.evolved) {
+                        const pair = EVOLVE_PAIR[wp.kind];
+                        ctx.globalAlpha = this.passives[pair] >= TUNE.evolvePairLevel ? 1 : 0.35;
+                        ctx.font = "10px sans-serif";
+                        ctx.fillText(PASSIVE_ICONS[pair], tx + WEAPON_MAX * 12 + 4 + ctx.measureText("MAX ").width, iy + size - 8);
+                        ctx.globalAlpha = 1;
+                    }
                 }
             } else if (owned) {
                 ctx.font = "bold 10px sans-serif";
@@ -2071,6 +2242,57 @@ class Game {
         return { left: cx - r, bottom: cy + r };
     }
 
+    // 지도 아래: 지금 내 예상 순위와 바로 위 사람을 앞지르려면 무엇이 필요한지 (순위는 버틴 시간 → KO 순)
+    // 이번 주 순위표(setup.rivals)가 없으면(로그인 안 함) 그리지 않습니다. 돌려주는 값은 상자 아래 끝 y.
+    drawRival(mapLeft, top, wide) {
+        const rivals = this.setup.rivals ?? [];
+        if (rivals.length === 0) return top - 8;
+        const ctx = this.ctx, t = this.setup.texts ?? {};
+        const fill = (text, ...args) => args.reduce((s, a, i) => s.replace(`{${i}}`, a), text ?? "");
+        const score = (time, kills) => time * 100000 + kills;
+        const now = Math.floor(this.time), live = score(now, this.kills);
+        const ahead = rivals.filter(r => !r.me && score(r.timeSec, r.kills) > live);
+        const target = ahead.reduce((low, r) => !low || score(r.timeSec, r.kills) < score(low.timeSec, low.kills) ? r : low, null);
+
+        const right = this.viewW - 10;
+        const w = Math.max(wide ? 190 : 0, right - mapLeft), x = right - w;
+        const line = wide ? 15 : 13, h = line * 3 + 8;
+        this.panel(x, top, w, h, 10);
+        ctx.textAlign = "left";
+        ctx.font = `bold ${wide ? 12 : 11}px sans-serif`;
+        ctx.fillStyle = "#ffcf6e";
+        ctx.fillText(target ? fill(t.rivalNow ?? "#{0}", ahead.length + 1) : (t.rivalFirst ?? "#1"), x + 8, top + 4 + line / 2);
+        if (target) {
+            ctx.font = `bold ${wide ? 11 : 10}px sans-serif`;
+            ctx.fillStyle = "#ffffff";
+            ctx.fillText(this.fitText(fill(t.rivalNext ?? "#{0} {1}", target.rank, target.name), w - 16), x + 8, top + 4 + line * 1.5);
+            const need = target.timeSec > now
+                ? fill(t.rivalTime ?? "{0}", `${String(Math.floor(target.timeSec / 60)).padStart(2, "0")}:${String(target.timeSec % 60).padStart(2, "0")}`)
+                : fill(t.rivalKo ?? "{0}", (target.kills - this.kills + 1).toLocaleString());
+            ctx.font = `${wide ? 11 : 10}px sans-serif`;
+            ctx.fillStyle = "#9fd8ff";
+            ctx.fillText(this.fitText(need, w - 16), x + 8, top + 4 + line * 2.5);
+        }
+        return top + h;
+    }
+
+    // 연속 처치 (COMBO_SHOW 이상일 때). 쓰러뜨릴 때마다 살짝 커지고, 많을수록 색이 뜨거워집니다.
+    drawCombo(top, wide) {
+        if (this.combo < COMBO_SHOW || this.comboLeft <= 0) return;
+        const ctx = this.ctx;
+        const right = this.viewW - 14;
+        const pop = 1 + 0.18 * Math.max(0, (this.comboLeft - (COMBO_WINDOW - 0.12)) / 0.12);
+        const color = this.combo >= 500 ? "#ff4d4d" : this.combo >= 200 ? "#ff9b3d" : this.combo >= 50 ? "#ffd54f" : "#ffffff";
+        ctx.globalAlpha = Math.min(1, this.comboLeft / 0.4);
+        ctx.textAlign = "right";
+        ctx.font = `bold ${wide ? 11 : 10}px sans-serif`;
+        this.outlinedText(this.setup.texts?.combo ?? "Combo", right, top + 6, "#ffffff");
+        const size = (wide ? 28 : 21) * pop;
+        ctx.font = `italic 900 ${Math.round(size)}px sans-serif`;
+        this.outlinedText(`×${this.combo.toLocaleString()}`, right, top + 8 + size / 2 + 2, color, 5);
+        ctx.globalAlpha = 1;
+    }
+
     drawHud() {
         const ctx = this.ctx;
         const W = this.viewW, H = this.viewH;
@@ -2097,9 +2319,11 @@ class Game {
         const top = gap >= 96;
         const clockX = top ? (profile.right + map.left) / 2 : 14;
         const clockY = top ? (wide ? 26 : 22) : profile.bottom + 14;
+        // 무한 모드는 앞에 ♾, 붉은 시계. 저주를 걸었으면 시계 옆에 ☠단계
+        const clockText = (this.endless ? "♾ " : "") + clock + (this.curse > 0 ? ` ☠${this.curse}` : "");
         ctx.textAlign = top ? "center" : "left";
         ctx.font = `bold ${wide ? 22 : 18}px sans-serif`;
-        this.outlinedText(clock, clockX, clockY, remain < 60 ? "#ffcf3f" : "#ffffff", 4);
+        this.outlinedText(clockText, clockX, clockY, this.endless ? "#ff8a80" : remain < 60 ? "#ffcf3f" : "#ffffff", 4);
         if (!profile.koShown) {
             ctx.font = "bold 12px sans-serif";
             ctx.textAlign = "right";
@@ -2116,6 +2340,10 @@ class Game {
             ctx.fillStyle = "#ff4d4d";
             ctx.fillRect(bx, by + 2, barW * Math.max(0, boss.hp / boss.maxHp), 6);
         }
+
+        // 지도 아래: 이번 주 순위에서 다음 목표, 그 아래 연속 처치
+        const below = this.drawRival(map.left, map.bottom + 8, wide);
+        this.drawCombo(below + 6, wide);
 
         // 강화: 넓은 화면은 기술 목록 바로 위, 휴대폰은 왼쪽 아래 (기술 목록 왼쪽까지)
         this.drawPassives(wide ? skills.left : 8, wide ? skills.top - 6 : H - 8, wide ? skills.right - skills.left : skills.left - 16);

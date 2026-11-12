@@ -19,9 +19,26 @@ public sealed record SurvivalWeapon(int SkillId, string Kind, string Type, strin
 // 적 한 종류. Eff는 내 무기(순서대로)가 이 포켓몬에게 주는 타입 상성 배율입니다.
 public sealed record SurvivalEnemy(int SpeciesId, string Name, SurvivalSprite? Sprite, double Hp, double Speed, double Damage, double[] Eff);
 
+// 이번 주 순위표의 한 줄 (게임 중 "다음 순위" 표시용). Me는 내 기록.
+public sealed record SurvivalRival(int Rank, string Name, int TimeSec, int Kills, bool Me);
+
 public sealed record SurvivalSetup(List<SurvivalForm> Forms, List<SurvivalWeapon> Weapons, List<SurvivalEnemy> Enemies,
     List<SurvivalEnemy> Bosses, int[] BossTimes, bool Muted, string SwarmText, string EvolveText, string BossText,
-    Dictionary<string, string> Texts);
+    Dictionary<string, string> Texts)
+{
+    // 이번 주 순위표 (로그인하지 않았으면 비어 있음)
+    public List<SurvivalRival> Rivals { get; init; } = [];
+
+    // 저주 단계 (0~SurvivalRules.MAX_CURSE): 적이 강해지고 많아지는 대신 경험치를 더 받습니다.
+    public int Curse { get; init; }
+
+    // 저주 1단계마다 늘어나는 정도 (survival.js가 그대로 씀)
+    public double CurseHp { get; init; } = SurvivalRules.CURSE_HP;
+    public double CurseSpawn { get; init; } = SurvivalRules.CURSE_SPAWN;
+    public double CurseDamage { get; init; } = SurvivalRules.CURSE_DAMAGE;
+    public double CurseSpeed { get; init; } = SurvivalRules.CURSE_SPEED;
+    public double CurseExp { get; init; } = SurvivalRules.CURSE_EXP;
+}
 
 // 게임이 끝나면 돌려받는 값
 public sealed record SurvivalResult
@@ -37,8 +54,12 @@ public sealed record SurvivalResult
     public int[] WeaponLevels { get; init; } = [];
     public int[] WeaponDamage { get; init; } = [];
     public int[] WeaponKills { get; init; } = [];
+    public bool[] WeaponEvolved { get; init; } = []; // 기술 진화를 했는지
     public int ItemDamage { get; init; }
     public int ItemKills { get; init; }
+
+    public int BestCombo { get; init; } // 가장 길게 이어 간 연속 처치 (결과 화면에만 보임)
+    public int Curse { get; init; }     // 이 판의 저주 단계
 }
 
 // 일시정지 화면에 보여 줄 지금 상태. Power~Pickup은 처음 대비 % (받는 데미지와 재사용 시간은 낮을수록 좋음)
@@ -55,6 +76,7 @@ public sealed record SurvivalState
     public int TimeSec { get; init; }
     public int Kills { get; init; }
     public int[] Weapons { get; init; } = [];
+    public bool[] WeaponEvolved { get; init; } = [];
     public int[] WeaponDamage { get; init; } = [];
     public int[] WeaponKills { get; init; } = [];
     public List<SurvivalPassive> Passives { get; init; } = [];
@@ -73,6 +95,15 @@ public sealed record SurvivalOption
     public int Index { get; init; }
     public string? Name { get; init; }
     public int Level { get; init; }
+}
+
+// 레벨업 고르는 화면 하나: 카드와 남은 다시 뽑기·건너뛰기·지우기 횟수 (-1이면 그 버튼을 숨김, 진화 고르기 등)
+public sealed record SurvivalChoice
+{
+    public List<SurvivalOption> Options { get; init; } = [];
+    public int Reroll { get; init; } = -1;
+    public int Skip { get; init; } = -1;
+    public int Banish { get; init; } = -1;
 }
 
 // --- 랭킹 (Firestore survival/{시즌}/players/{uid}) ---
@@ -94,6 +125,9 @@ public sealed record SurvivalEntry
     // 그 판에서 배운 기술 (데미지가 많은 순서, 최대 4개)과 기술 레벨. 예전 기록에는 없습니다.
     public int[] Moves { get; init; } = [];
     public int[] MoveLevels { get; init; } = [];
+
+    // 그 판의 저주 단계 (예전 기록에는 없어서 0). 0이면 저장하지 않습니다. (Firestore 규칙을 배포하기 전에도 저주 없는 기록은 저장되도록)
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int Curse { get; init; }
 }
 
 public sealed class SurvivalBoardData
@@ -109,14 +143,25 @@ public sealed record SurvivalBoard(string Season, SurvivalEntry? Me, int? MyRank
 [JsonSerializable(typeof(SurvivalResult))]
 [JsonSerializable(typeof(SurvivalState))]
 [JsonSerializable(typeof(List<SurvivalOption>))]
+[JsonSerializable(typeof(SurvivalChoice))]
 [JsonSerializable(typeof(SurvivalEntry))]
 [JsonSerializable(typeof(SurvivalBoardData))]
 internal sealed partial class SurvivalJsonContext : JsonSerializerContext;
 
 public static class SurvivalRules
 {
-    public const int RUN_SECONDS = 600;
-    public const int MAX_KILLS_PER_SECOND = 20;
+    public const int RUN_SECONDS = 600;       // 이만큼 버티면 클리어
+    public const int MAX_RUN_SECONDS = 3600;  // 무한 모드(클리어 뒤 계속하기)는 60분에 끝납니다.
+    public const int MAX_KILLS_PER_SECOND = 40; // 저주를 올리면 적이 많아져서 넉넉하게 (Firestore 규칙과 같게)
+    public const int MAX_KILLS = SCORE_TIME_UNIT - 1; // 점수 식(시간 × 100000 + KO)이 겹치지 않도록
+
+    // 저주: 시작 전에 0~MAX_CURSE단계를 고릅니다. 1단계마다 적 체력·수·공격·속도가 늘고, 경험치도 더 받습니다.
+    public const int MAX_CURSE = 5;
+    public const double CURSE_HP = 0.20;
+    public const double CURSE_SPAWN = 0.12;
+    public const double CURSE_DAMAGE = 0.10;
+    public const double CURSE_SPEED = 0.03;
+    public const double CURSE_EXP = 0.10;
     public const int MIN_ENERGY = 20;
     public const int DEFAULT_SKILL_ID = 33; // 기술이 하나도 없으면 몸통박치기
 
@@ -153,17 +198,36 @@ public static class SurvivalRules
         return (rows.Select(i => result.WeaponSkills[i]).ToArray(), rows.Select(i => Math.Clamp(result.WeaponLevels[i], 1, MAX_MOVE_LEVEL)).ToArray());
     }
 
+    public static int ClampKills(int kills, int time) => Math.Clamp(kills, 0, Math.Min(time * MAX_KILLS_PER_SECOND, MAX_KILLS));
+
     public static SurvivalResult Clamp(SurvivalResult result)
     {
-        int time = Math.Clamp(result.TimeSec, 0, RUN_SECONDS);
+        int time = Math.Clamp(result.TimeSec, 0, MAX_RUN_SECONDS);
         return result with
         {
             TimeSec = time,
-            Kills = Math.Clamp(result.Kills, 0, time * MAX_KILLS_PER_SECOND),
+            Kills = ClampKills(result.Kills, time),
             Level = Math.Clamp(result.Level, 1, 999),
             Cleared = result.Cleared && time >= RUN_SECONDS,
+            Curse = Math.Clamp(result.Curse, 0, MAX_CURSE),
         };
     }
+
+    // 기술 진화의 짝 강화: 공격 모양마다 하나 (survival.js의 EVOLVE_PAIR와 같게)
+    // 기술 Lv.5 + 짝 강화 EVOLVE_PAIR_LEVEL단계 이상일 때 보스 상자(EVOLVE_ELITE_FROM_MINUTES분부터는 엘리트 상자도)를 열면 진화합니다.
+    // (survival.js TUNE.evolvePairLevel, TUNE.evolveEliteFrom과 같게)
+    public const int EVOLVE_PAIR_LEVEL = 2;
+    public const int EVOLVE_ELITE_FROM_MINUTES = 6;
+    public static string EvolvePair(string kind) => kind switch
+    {
+        "bolt" => "haste",
+        "spray" => "might",
+        "slash" => "armor",
+        "nova" => "vital",
+        "orbit" => "swift",
+        "chain" => "magnet",
+        _ => "armor",
+    };
 
     // 판마다 뽑는 기술 4개의 모양 제한: 같은 모양은 MAX_SAME_SHAPE개까지, 범위 공격(AREA_KINDS)은 적어도 하나.
     // 한 마리씩 맞히는 모양(bolt)이나 주변만 도는 모양(orbit, aura)만 있으면 적이 쌓여 4~7분에 쓰러지는 판이 많았습니다. (봇 시뮬레이션)
@@ -228,8 +292,8 @@ public static class SurvivalRules
     public static SurvivalEntry? Sanitize(SurvivalEntry entry, PokemonDex dex)
     {
         if (string.IsNullOrEmpty(entry.Uid) || dex.Get(entry.SpeciesId) is null) return null;
-        int time = Math.Clamp(entry.TimeSec, 0, RUN_SECONDS);
-        int kills = Math.Clamp(entry.Kills, 0, time * MAX_KILLS_PER_SECOND);
+        int time = Math.Clamp(entry.TimeSec, 0, MAX_RUN_SECONDS);
+        int kills = ClampKills(entry.Kills, time);
         bool cleared = entry.Cleared && time >= RUN_SECONDS;
         return entry with
         {
@@ -243,8 +307,13 @@ public static class SurvivalRules
             Nickname = ArenaNames.Check(entry.Nickname) == NicknameProblem.None ? entry.Nickname : null,
             Moves = (entry.Moves ?? []).Take(4).Where(id => id is > 0 and <= 2000).ToArray(),
             MoveLevels = (entry.MoveLevels ?? []).Take(4).Select(level => Math.Clamp(level, 1, MAX_MOVE_LEVEL)).ToArray(),
+            Curse = Math.Clamp(entry.Curse, 0, MAX_CURSE),
         };
     }
+
+    // 저주 설명 숫자: 적 체력 +%, 적 수 +%, 적 공격 +%, 경험치 +%
+    public static (int Hp, int Spawn, int Damage, int Exp) CursePercents(int curse) =>
+        ((int)Math.Round(curse * CURSE_HP * 100), (int)Math.Round(curse * CURSE_SPAWN * 100), (int)Math.Round(curse * CURSE_DAMAGE * 100), (int)Math.Round(curse * CURSE_EXP * 100));
 
     public static string Display(SurvivalEntry entry) =>
         string.IsNullOrEmpty(entry.Nickname) ? Utils.L.F("web.arena.trainer", entry.Tag) : entry.Nickname;

@@ -17,7 +17,7 @@
     {
         <p class="survival-loading" role="status">@Loc.T("web.survival.loading")</p>
     }
-    else if (_result is null && _options is null && !_isPaused)
+    else if (_result is null && _options is null && !_isPaused && !_clearPrompt)
     {
         <button type="button" class="survival-pause" aria-label="@Loc.T("web.survival.pause")" title="@Loc.T("web.survival.pause")" @onclick="PauseAsync">⏸</button>
         @if (_showHint)
@@ -26,19 +26,40 @@
         }
     }
 
-    @if (_options is { } options)
+    @if (_clearPrompt && _result is null)
     {
-        string heading = Loc.T(options.All(o => o.Kind == "evolve") ? "web.survival.evolve.choose" : "web.survival.levelUp");
+        @* 10분 클리어: 끝낼지, 무한 모드로 계속 버틸지 *@
+        <div class="survival-overlay" role="dialog" aria-label="@Loc.T("web.survival.endless.title")">
+            <h2>@Loc.T("web.survival.endless.title")</h2>
+            <p class="survival-endless-text">@Loc.T("web.survival.endless.text")</p>
+            <div class="survival-buttons">
+                <button type="button" class="pet-prompt-main" @onclick="ContinueEndlessAsync">@Loc.T("web.survival.endless.continue")</button>
+                <button type="button" @onclick="EndRunAsync">@Loc.T("web.survival.endless.end")</button>
+            </div>
+        </div>
+    }
+    else if (_options is { } options)
+    {
+        string heading = Loc.T(options.All(o => o.Kind == "evolve") ? "web.survival.evolve.choose" : _banishMode ? "web.survival.tool.banishPick" : "web.survival.levelUp");
         <div class="survival-overlay" role="dialog" aria-label="@heading">
             <h2>@heading</h2>
-            <div class="survival-cards">
+            <div class="survival-cards @(_banishMode ? "is-banishing" : "")">
                 @foreach (var option in options)
                 {
-                    <button type="button" class="survival-card" @onclick="() => ChooseAsync(option.Id)">
+                    <button type="button" class="survival-card" @onclick="() => _banishMode ? BanishAsync(option.Id) : ChooseAsync(option.Id)">
                         @OptionCard(option)
                     </button>
                 }
             </div>
+            @if (_choice is { Reroll: >= 0 } choice)
+            {
+                @* 다시 뽑기·건너뛰기·지우기 (한 판에 쓸 수 있는 횟수가 정해져 있음) *@
+                <div class="survival-tools">
+                    <button type="button" disabled="@(choice.Reroll == 0 || _banishMode)" @onclick="RerollAsync">🔄 @Loc.T("web.survival.tool.reroll") <small>@choice.Reroll</small></button>
+                    <button type="button" disabled="@(choice.Skip == 0 || _banishMode)" @onclick="SkipAsync">⏭️ @Loc.T("web.survival.tool.skip") <small>@choice.Skip</small></button>
+                    <button type="button" class="@(_banishMode ? "is-active" : "")" disabled="@(choice.Banish == 0)" @onclick="() => _banishMode = !_banishMode">🚫 @Loc.T(_banishMode ? "web.survival.tool.cancel" : "web.survival.tool.banish") <small>@choice.Banish</small></button>
+                </div>
+            }
         </div>
     }
     else if (_isPaused && _result is null)
@@ -64,12 +85,19 @@
                             var weapon = setup.Weapons[i];
                             var skill = Skills.GetSkill(weapon.SkillId);
                             int level = i < state.Weapons.Length ? state.Weapons[i] : 0;
+                            bool evolved = i < state.WeaponEvolved.Length && state.WeaponEvolved[i];
+                            string pair = SurvivalRules.EvolvePair(weapon.Kind);
                             <li class="@(level == 0 ? "is-locked" : "")">
                                 <span class="survival-weapon-name">
                                     <span class="battle-type battle-type-@weapon.Type">@(skill?.Type.ToString() ?? "")</span>
-                                    <strong>@(skill?.Name ?? "?")</strong>
-                                    <span class="survival-card-level">@(level == 0 ? Loc.T("web.survival.status.notYet") : $"Lv.{level}/5")</span>
+                                    <strong>@(evolved ? "★" : "")@(skill?.Name ?? "?")</strong>
+                                    <span class="survival-card-level">@(level == 0 ? Loc.T("web.survival.status.notYet") : evolved ? Loc.T("web.survival.evolvedTag") : $"Lv.{level}/5")</span>
                                 </span>
+                                @if (!evolved)
+                                {
+                                    @* 기술 진화 조건: Lv.5 + 짝 강화, 그리고 상자 *@
+                                    <span class="survival-weapon-kind">@string.Format(Loc.T("web.survival.status.evolveNeed"), $"{SurvivalRules.PassiveIcon(pair)} {Loc.T($"web.survival.passive.{pair}")}", SurvivalRules.EVOLVE_PAIR_LEVEL, SurvivalRules.EVOLVE_ELITE_FROM_MINUTES)</span>
+                                }
                                 <span class="survival-weapon-kind">@SurvivalRules.KindIcon(weapon.Kind) @Loc.T($"web.survival.kind.{weapon.Kind}") · @Loc.T($"web.survival.kind.{weapon.Kind}.desc")</span>
                                 <span class="survival-weapon-kind">@PowerText(weapon)@(level > 0 && i < state.WeaponDamage.Length ? string.Format(Loc.T("web.survival.status.record"), state.WeaponDamage[i].ToString("N0"), i < state.WeaponKills.Length ? state.WeaponKills[i] : 0) : "")</span>
                             </li>
@@ -113,12 +141,18 @@
                 <dt>@Loc.T("web.survival.time")</dt><dd>@SurvivalRules.Clock(result.TimeSec)</dd>
                 <dt>@Loc.T("web.survival.kills")</dt><dd>@result.Kills</dd>
                 <dt>@Loc.T("web.survival.level")</dt><dd>Lv.@result.Level</dd>
+                <dt>@Loc.T("web.survival.bestCombo")</dt><dd>×@result.BestCombo.ToString("N0")</dd>
+                @if (result.Curse > 0)
+                {
+                    <dt>☠️ @Loc.T("web.survival.curse")</dt><dd>@result.Curse</dd>
+                }
             </dl>
             @if (_setup is { } resultSetup)
             {
                 @* 기술별 기록: 데미지가 많은 순서. 배우지 않은 기술은 뺍니다. *@
                 var rows = resultSetup.Weapons.Select((weapon, i) => (Weapon: weapon,
                         Level: i < result.WeaponLevels.Length ? result.WeaponLevels[i] : 0,
+                        Evolved: i < result.WeaponEvolved.Length && result.WeaponEvolved[i],
                         Damage: i < result.WeaponDamage.Length ? result.WeaponDamage[i] : 0,
                         Kills: i < result.WeaponKills.Length ? result.WeaponKills[i] : 0))
                     .Where(r => r.Level > 0 || r.Damage > 0)
@@ -136,7 +170,7 @@
                             <tr>
                                 <td>
                                     <span class="survival-card-icon survival-icon-shot" style="border-color:@row.Weapon.Color;background-image:url('ui/fx_shot_@(row.Weapon.Type).png')"></span>
-                                    <span>@(skill?.Name ?? "?") <small>Lv.@row.Level</small></span>
+                                    <span>@(row.Evolved ? "★" : "")@(skill?.Name ?? "?") <small>@(row.Evolved ? Loc.T("web.survival.evolvedTag") : $"Lv.{row.Level}")</small></span>
                                 </td>
                                 <td>
                                     @row.Damage.ToString("N0")
@@ -210,11 +244,15 @@
         _isLoading = true;
         _result = null;
         _options = null;
+        _choice = null;
+        _clearPrompt = false;
         _isPaused = false;
         _showHint = true;
         StateHasChanged();
 
+        var rivals = Survival.LoadRivalsAsync();
         _setup = await Survival.BuildSetupAsync(Pet, Pet.SurvivalSpecies);
+        _setup = _setup with { Rivals = await rivals };
         string json = JsonSerializer.Serialize(_setup, SurvivalJsonContext.Default.SurvivalSetup);
         await _module!.InvokeVoidAsync("start", _canvas, json, _self);
         _isLoading = false;
@@ -225,12 +263,58 @@
         StateHasChanged();
     }
 
+    private SurvivalChoice? _choice;
+    private bool _banishMode;
+
     [JSInvokable]
     public void OnLevelUp(string json)
     {
-        _options = JsonSerializer.Deserialize(json, SurvivalJsonContext.Default.ListSurvivalOption);
+        _choice = JsonSerializer.Deserialize(json, SurvivalJsonContext.Default.SurvivalChoice);
+        _options = _choice?.Options;
+        _banishMode = false;
         _showHint = false;
         StateHasChanged();
+    }
+
+    private bool _clearPrompt;
+
+    [JSInvokable]
+    public void OnCleared()
+    {
+        _clearPrompt = true;
+        _options = null;
+        _choice = null;
+        StateHasChanged();
+    }
+
+    private async Task ContinueEndlessAsync()
+    {
+        _clearPrompt = false;
+        if (_module is not null) await _module.InvokeVoidAsync("continueEndless");
+    }
+
+    private async Task EndRunAsync()
+    {
+        _clearPrompt = false;
+        if (_module is not null) await _module.InvokeVoidAsync("endRun");
+    }
+
+    private async Task RerollAsync()
+    {
+        if (_module is not null) await _module.InvokeVoidAsync("reroll");
+    }
+
+    private async Task SkipAsync()
+    {
+        _options = null;
+        _choice = null;
+        if (_module is not null) await _module.InvokeVoidAsync("skip");
+    }
+
+    private async Task BanishAsync(string id)
+    {
+        _banishMode = false;
+        if (_module is not null) await _module.InvokeVoidAsync("banish", id);
     }
 
     [JSInvokable]
@@ -294,6 +378,7 @@
     private async Task ChooseAsync(string id)
     {
         _options = null;
+        _choice = null;
         if (_module is not null) await _module.InvokeVoidAsync("choose", id);
     }
 

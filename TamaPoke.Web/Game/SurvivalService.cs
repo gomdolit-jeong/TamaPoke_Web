@@ -221,7 +221,19 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
                 ["flyby"] = Utils.L.T("web.survival.flyby"),
                 ["hp"] = Utils.L.T("web.survival.hud.hp"),
                 ["exp"] = Utils.L.T("web.survival.hud.exp"),
-            });
+                ["combo"] = Utils.L.T("web.survival.hud.combo"),
+                ["weaponEvolve"] = Utils.L.T("web.survival.weaponEvolve"),
+                ["evolvedTag"] = Utils.L.T("web.survival.evolvedTag"),
+                ["rivalNext"] = Utils.L.T("web.survival.hud.rivalNext"),
+                ["rivalTime"] = Utils.L.T("web.survival.hud.rivalTime"),
+                ["rivalKo"] = Utils.L.T("web.survival.hud.rivalKo"),
+                ["rivalFirst"] = Utils.L.T("web.survival.hud.rivalFirst"),
+                ["rivalNow"] = Utils.L.T("web.survival.hud.rivalNow"),
+                ["endless"] = Utils.L.T("web.survival.hud.endless"),
+            })
+        {
+            Curse = Math.Clamp(pet.SurvivalCurse, 0, SurvivalRules.MAX_CURSE),
+        };
     }
 
     private async Task<SurvivalEnemy> BuildEnemyAsync(int speciesId, List<SurvivalWeapon> weapons, bool isBoss)
@@ -286,6 +298,51 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
         }
     }
 
+    // 게임 화면 오른쪽 위 "다음 순위" 표시용: 이번 주 순위표 (로그인 안 했으면 디버그 빌드에서만 가짜 순위표)
+    public async Task<List<SurvivalRival>> LoadRivalsAsync()
+    {
+        var board = cloud.UserId is null ? SampleBoard() : await LoadAsync();
+        if (board is null) return [];
+        string? uid = cloud.UserId;
+        return board.Top.Select((entry, i) => new SurvivalRival(i + 1, SurvivalRules.Display(entry), entry.TimeSec, entry.Kills, entry.Uid == uid && uid is not null)).ToList();
+    }
+
+#if DEBUG
+    private static readonly int[] SampleMoves = [53, 85, 94, 89, 58, 247, 399, 126, 188, 370];
+
+    private static readonly string[] SampleNames = ["AshKetchum", "MistyWater", "Speedy", "TankMode", "Lucky7", "NightOwl", "Volt", "LeafStorm"];
+
+    // 로컬 테스트: 로그인 없이 가짜 트레이너 30명으로 랭킹 화면(과 게임 중 다음 순위 표시)을 미리 봅니다.
+    public SurvivalBoard? SampleBoard()
+    {
+        var random = new Random(17);
+        var top = Enumerable.Range(0, 30).Select(i =>
+        {
+            int time = Math.Min(SurvivalRules.RUN_SECONDS, random.Next(60, SurvivalRules.RUN_SECONDS + 100));
+            int kills = time * random.Next(2, 16);
+            bool cleared = time >= SurvivalRules.RUN_SECONDS;
+            return new SurvivalEntry
+            {
+                Uid = $"sample{i}",
+                Tag = $"#S{i:D3}",
+                Nickname = random.Next(4) == 0 ? null : SampleNames[random.Next(SampleNames.Length)],
+                SpeciesId = dex.PickWildSpecies([1, 2, 3, 4, 5, 6, 7, 8, 9]),
+                Level = random.Next(1, 101),
+                Shiny = random.Next(20) == 0,
+                TimeSec = time,
+                Kills = kills,
+                Cleared = cleared,
+                Score = SurvivalRules.Score(time, kills, cleared),
+                Moves = SampleMoves.OrderBy(_ => random.Next()).Take(random.Next(1, 5)).ToArray(),
+                MoveLevels = Enumerable.Range(0, 4).Select(_ => random.Next(1, SurvivalRules.MAX_MOVE_LEVEL + 1)).ToArray(),
+            };
+        }).OrderByDescending(e => e.Score).ToList();
+        return new SurvivalBoard("sample", null, null, top);
+    }
+#else
+    public SurvivalBoard? SampleBoard() => null;
+#endif
+
     public enum SubmitOutcome { NotSignedIn, NotBetter, Saved, Failed }
 
     // 이번 주 내 기록보다 좋으면 저장합니다. 저장한 뒤의 순위표도 돌려줍니다.
@@ -317,6 +374,7 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
             Cleared = result.Cleared,
             Moves = moves,
             MoveLevels = moveLevels,
+            Curse = result.Curse,
         };
 
         try

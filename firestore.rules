@@ -31,9 +31,11 @@ service cloud.firestore {
         && request.time > resource.data.updatedAt + duration.value(request.resource.data.timeSec, 's');
     }
 
+    // 10분(600초)이면 클리어, 클리어 뒤 계속하기(무한 모드)는 60분(3600초)까지.
+    // KO는 초당 40 이하, 점수 식이 겹치지 않게 99999 이하. 저주는 0~5단계 (없으면 0).
     function validSurvival() {
       let d = request.resource.data;
-      return d.keys().hasOnly(['tag', 'nickname', 'speciesId', 'level', 'form', 'shiny', 'score', 'timeSec', 'kills', 'cleared', 'moves', 'moveLevels', 'updatedAt'])
+      return d.keys().hasOnly(['tag', 'nickname', 'speciesId', 'level', 'form', 'shiny', 'score', 'timeSec', 'kills', 'cleared', 'moves', 'moveLevels', 'curse', 'updatedAt'])
         && d.keys().hasAll(['tag', 'speciesId', 'level', 'form', 'shiny', 'score', 'timeSec', 'kills', 'cleared', 'updatedAt'])
         && d.tag is string && d.tag.size() <= 12
         && (!('nickname' in d) || (d.nickname is string && d.nickname.matches('^[A-Za-z0-9]{3,12}$')))
@@ -41,9 +43,11 @@ service cloud.firestore {
         && inRange(d.level, 1, 100)
         && d.form is string && d.form.size() <= 40
         && d.shiny is bool && d.cleared is bool
-        && inRange(d.timeSec, 0, 600)
-        && inRange(d.kills, 0, d.timeSec * 20)
-        && (d.cleared == false || d.timeSec == 600)
+        && inRange(d.timeSec, 0, 3600)
+        && inRange(d.kills, 0, d.timeSec * 40)
+        && d.kills <= 99999
+        && (d.cleared == false || d.timeSec >= 600)
+        && (!('curse' in d) || inRange(d.curse, 0, 5))
         && d.score == d.timeSec * 100000 + d.kills
         && (!('moves' in d) || validMoveList(d.moves, 2000))
         && (!('moveLevels' in d) || validMoveList(d.moveLevels, 5))

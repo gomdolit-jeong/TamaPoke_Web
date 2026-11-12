@@ -3599,6 +3599,64 @@ nav.pet-menu .menu-arena {
     font-size: 12px;
 }
 
+/* 10분 클리어 뒤 계속할지 묻는 글 */
+.survival-endless-text {
+    max-width: 420px;
+    margin: 0;
+    color: #fff;
+    font-size: 14px;
+    text-align: center;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+/* 레벨업 카드 아래: 다시 뽑기·건너뛰기·지우기 */
+.survival-tools {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+    .survival-tools button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.4rem 0.75rem;
+        border: 2px solid rgb(255 255 255 / 55%);
+        border-radius: 999px;
+        background: rgb(20 24 44 / 80%);
+        color: #fff;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+    }
+
+        .survival-tools button small {
+            min-width: 1.3em;
+            padding: 0 0.3em;
+            border-radius: 999px;
+            background: var(--tp-gold);
+            color: var(--tp-ink);
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .survival-tools button.is-active {
+            border-color: #ff6b6b;
+            background: #b3261e;
+        }
+
+        .survival-tools button:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+/* 지울 카드를 고르는 중: 카드에 붉은 테두리 */
+.survival-cards.is-banishing .survival-card {
+    outline: 3px dashed #ff6b6b;
+    outline-offset: 2px;
+}
+
 .survival-buttons {
     display: flex;
     gap: 0.5rem;
@@ -3821,6 +3879,45 @@ nav.pet-menu .menu-arena {
         background: #fb8c00;
         font-size: 14px;
     }
+
+/* 저주 단계 고르기 (0~5): 단계가 높을수록 붉게 */
+.survival-curse {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.survival-curse-label {
+    margin-right: auto;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.survival-curse button {
+    width: 2rem;
+    height: 1.75rem;
+    border: 2px solid var(--tp-line);
+    border-radius: 0.375rem;
+    background: var(--tp-cream);
+    color: var(--tp-ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+    .survival-curse button.is-selected {
+        border-color: #7a1010;
+        background: #c62828;
+        color: #fff;
+    }
+
+.survival-curse-desc {
+    margin: 0 0 0.375rem;
+    font-size: 11px;
+    color: var(--tp-ink-soft, #6b5a48);
+}
 
         .survival-start .arena-random:disabled {
             opacity: 0.5;
