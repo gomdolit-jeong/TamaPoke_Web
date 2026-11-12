@@ -92,6 +92,7 @@ public sealed class SkillDex(HttpClient http)
 
     private Dictionary<int, SkillInfo> _moves = [];
     private Dictionary<int, LearnMove[]> _learnsets = [];
+    private Dictionary<int, (int MoveId, int Weight)[]> _famous = [];
 
     public async Task InitializeAsync()
     {
@@ -105,7 +106,21 @@ public sealed class SkillDex(HttpClient http)
 
         var learnsets = await http.GetFromJsonAsync(BuildInfo.Versioned("data/learnsets.json"), SkillJsonContext.Default.Learnsets) ?? [];
         _learnsets = learnsets.ToDictionary(p => p.Key, p => p.Value.Select(m => new LearnMove(m[0], m[1])).ToArray());
+
+        // 서바이벌 대표 기술 (tools/make_survival_moves.py). 없어도 게임은 레벨업 기술만으로 돌아갑니다.
+        try
+        {
+            var famous = await http.GetFromJsonAsync(BuildInfo.Versioned("data/survival_moves.json"), SkillJsonContext.Default.Learnsets) ?? [];
+            _famous = famous.ToDictionary(p => p.Key, p => p.Value.Select(m => (m[0], m[1])).ToArray());
+        }
+        catch (Exception error) when (error is HttpRequestException or System.Text.Json.JsonException)
+        {
+            _famous = [];
+        }
     }
+
+    // 실전(Pokémon Showdown 랜덤 배틀)에서 이 포켓몬이 자주 쓰는 기술과 그 무게. 무게가 큰 순서입니다.
+    public IReadOnlyList<(int MoveId, int Weight)> GetFamousMoves(int speciesId) => _famous.GetValueOrDefault(speciesId) ?? [];
 
     public IReadOnlyList<LearnMove> GetActiveLearnset(int speciesId) => _learnsets.GetValueOrDefault(speciesId) ?? [];
 

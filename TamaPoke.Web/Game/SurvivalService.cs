@@ -68,42 +68,76 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
             weapons, hp, attack, defense, speed, StagesOf(speciesId));
     }
 
-    // Lv.50까지 레벨업으로 배우는 기술 중에서 4개: 공격 모양이 겹치지 않게 센 공격 기술 3개, 변화 기술 1개, 모자라면 남은 공격 기술.
-    // 가장 센 공격 기술이 맨 앞(처음부터 쓰는 기술)입니다.
+    // 기술 4개 고르기 (대표 기술 우선)
+    // 1) 진화 계열 전체(갈래 포함)가 실전(Pokémon Showdown 랜덤 배틀)에서 자주 쓰는 기술을 많이 쓰는 순서대로 4개.
+    //    공격 모양이 겹쳐도 그대로 씁니다. 변화 기술은 모두 오라가 되므로 1개까지만, 가장 자주 쓰는 기술의 1/4 미만으로 나온 기술은 뺍니다.
+    // 2) 모자라면 Lv.50까지 레벨업으로 배우는 기술로 채웁니다. (위력 + 내 타입 30, 공격 모양이 다른 기술 먼저)
+    // 처음부터 쓰는 기술(맨 앞)은 오라가 아닌 내 타입 공격 기술 중 가장 앞의 것입니다.
+    private const int FAMOUS_MIN_SHARE = 4;
+
     private List<SkillInfo> PickMoves(int speciesId, PokemonType type1, PokemonType type2)
     {
-        var learnable = skills.GetActiveLearnset(speciesId)
+        var line = StagesOf(speciesId).SelectMany(stage => stage).Distinct().ToList();
+        bool SameType(SkillInfo s) => s.Type == type1 || s.Type == type2;
+        bool IsStatus(SkillInfo s) => s.Category == SkillCategory.Status;
+
+        var fame = new Dictionary<int, int>();
+        foreach (int id in line)
+            foreach (var (moveId, weight) in skills.GetFamousMoves(id))
+                fame[moveId] = fame.GetValueOrDefault(moveId) + weight;
+        int topFame = fame.Count > 0 ? fame.Values.Max() : 0;
+
+        var picked = new List<SkillInfo>();
+        foreach (var skill in fame
+            .Where(p => p.Value * FAMOUS_MIN_SHARE >= topFame)
+            .OrderByDescending(p => p.Value).ThenBy(p => p.Key)
+            .Select(p => skills.GetSkill(p.Key))
+            .OfType<SkillInfo>()
+            .Where(s => s.IsSupported))
+        {
+            if (picked.Count >= 4) break;
+            if (IsStatus(skill) && picked.Any(IsStatus)) continue;
+            picked.Add(skill);
+        }
+
+        // 모자라면 레벨업 기술: 공격 모양이 다른 공격 기술 → 변화 기술 1개 → 남은 공격 기술
+        var learnable = line
+            .SelectMany(id => skills.GetActiveLearnset(id))
             .Where(m => m.Level is > 0 and <= SKILL_LEVEL)
             .Select(m => skills.GetSkill(m.MoveId))
             .OfType<SkillInfo>()
-            .Where(s => s.IsSupported)
+            .Where(s => s.IsSupported && picked.All(p => p.Id != s.Id))
             .DistinctBy(s => s.Id)
             .ToList();
-
-        int Score(SkillInfo s) => s.Power + (s.Type == type1 || s.Type == type2 ? 30 : 0);
-        var attacks = learnable.Where(s => s.Category != SkillCategory.Status).OrderByDescending(Score).ToList();
-        var statuses = learnable.Where(s => s.Category == SkillCategory.Status).ToList();
-
-        var picked = new List<SkillInfo>();
+        int Score(SkillInfo s) => Math.Clamp(s.Power, 30, 120) + (SameType(s) ? 30 : 0);
+        var attacks = learnable.Where(s => !IsStatus(s)).OrderByDescending(Score).ThenBy(s => s.Id).ToList();
         foreach (var skill in attacks)
         {
-            if (picked.Count >= 3) break;
+            if (picked.Count >= 4) break;
             if (picked.All(p => SurvivalRules.KindFor(p) != SurvivalRules.KindFor(skill))) picked.Add(skill);
         }
-        if (statuses.Count > 0 && picked.All(p => SurvivalRules.KindFor(p) != "aura"))
-            picked.Add(statuses.OrderByDescending(s => s.Ailment != SkillAilment.None).First());
+        if (picked.Count < 4 && !picked.Any(IsStatus) && learnable.Where(IsStatus).OrderByDescending(s => s.Ailment != SkillAilment.None).ThenBy(s => s.Id).FirstOrDefault() is { } status)
+            picked.Add(status);
         foreach (var skill in attacks)
         {
             if (picked.Count >= 4) break;
             if (!picked.Contains(skill)) picked.Add(skill);
         }
 
-        if (picked.All(s => s.Category == SkillCategory.Status))
+        if (picked.All(IsStatus))
         {
             if (skills.GetSkill(skills.GetFallbackMove(type1)) is { } typed) picked.Insert(0, typed);
             else if (skills.GetSkill(SurvivalRules.DEFAULT_SKILL_ID) is { } tackle) picked.Insert(0, tackle);
         }
-        return picked.Take(4).ToList();
+        picked = picked.Take(4).ToList();
+        var first = picked.FirstOrDefault(s => SameType(s) && SurvivalRules.KindFor(s) != "aura")
+            ?? picked.FirstOrDefault(s => SurvivalRules.KindFor(s) != "aura");
+        if (first is not null)
+        {
+            picked.Remove(first);
+            picked.Insert(0, first);
+        }
+        return picked;
     }
 
     // --- 게임 준비 ---

@@ -33,6 +33,11 @@ const PFX = {"w_bolt":{"fw":114,"fh":51,"frames":16,"fps":20,"ox":91,"oy":25},"w
 const MAX_PFX = { hit: 24, poof: 40, nova: 8, levelup: 2, spray: 6, slash: 8, chain: 24 };
 
 // 기술 모양별 효과 시트 (회색, 게임에서 기술 타입 색을 곱함). 충격파는 nova를 씁니다.
+// 오라: 범위 안의 모든 적을 계속 때리므로 한 번의 데미지는 작게 둡니다.
+const AURA_TICK = 0.8;      // 몇 초마다 때리는지
+const AURA_SCALE = 0.3;     // 기술 데미지의 몇 배인지
+const AURA_MAX_POWER = 60;  // 독 공격 기술처럼 위력이 큰 기술도 이 이상은 세지지 않습니다.
+
 const WEAPON_PFX = { bolt: "w_bolt", spray: "w_spray", slash: "w_slash", orbit: "w_orbit", chain: "w_chain", aura: "w_aura" };
 
 const PASSIVES = ["might", "swift", "vital", "haste", "magnet", "armor"];
@@ -825,11 +830,21 @@ class Game {
         w.radius = 30 + 7 * w.level;
         w.tick -= dt;
         if (w.tick > 0) return;
-        w.tick = 0.6 * w.cooldown * this.cooldownMul;
+        w.tick = AURA_TICK * w.cooldown * this.cooldownMul;
+        const scale = AURA_SCALE * Math.min(1, AURA_MAX_POWER / w.power);
         this.near(this.player.x, this.player.y, w.radius, (e) => {
-            this.damage(e, this.weaponDamage(w, e) * 0.5, w, 0);
+            this.damage(e, this.weaponDamage(w, e) * scale, w, 0);
             e.slow = Math.max(e.slow, w.slow ? 1.2 : 0.4);
         });
+        // 때릴 때마다 바깥으로 퍼지는 고리와 위로 떠오르는 빛 알갱이
+        this.effects.push({ type: "auraPulse", w, radius: w.radius, life: 0.45, max: 0.45 });
+        for (let i = 0; i < 3 + w.level; i++) {
+            const angle = Math.random() * Math.PI * 2, distance = Math.sqrt(Math.random()) * w.radius;
+            this.effects.push({
+                type: "mote", w, x: this.player.x + Math.cos(angle) * distance, y: this.player.y + Math.sin(angle) * distance * 0.8,
+                size: Math.random() < 0.3 ? 3 : 2, rise: 18 + Math.random() * 22, life: 0.7 + Math.random() * 0.4, max: 1.1,
+            });
+        }
     }
 
     damage(e, amount, w, knockback, fromX, fromY) {
@@ -1286,6 +1301,22 @@ class Game {
         for (const w of this.weapons) {
             if (w.level === 0 || w.kind !== "aura" || !w.radius) continue;
             const image = this.tinted("w_aura", w.type, w.color);
+            const glow = ctx.createRadialGradient(this.player.x, this.player.y, 0, this.player.x, this.player.y, w.radius);
+            glow.addColorStop(0, w.color + "00");
+            glow.addColorStop(0.7, w.color + "18");
+            glow.addColorStop(1, w.color + "40");
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.ellipse(this.player.x, this.player.y + 4, w.radius, w.radius * 0.8, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 0.35 + 0.25 * Math.sin(this.time * 5);
+            ctx.strokeStyle = w.color;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.lineDashOffset = -this.time * 12;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
             const s = w.radius / (info.fw / 2);
             const frame = Math.floor(this.time * info.fps) % info.frames;
             if (image) ctx.drawImage(image, frame * info.fw, 0, info.fw, info.fh, this.player.x - info.ox * s, this.player.y + 7 - info.oy * s, info.fw * s, info.fh * s);
@@ -1349,6 +1380,25 @@ class Game {
                     ctx.beginPath();
                     ctx.arc(fx.x, fx.y, fx.radius * (0.7 + 0.3 * t), fx.angle - fx.half * (1 - t), fx.angle + fx.half * (1 - t));
                     ctx.stroke();
+                    break;
+                }
+                case "auraPulse": {
+                    ctx.globalAlpha = 0.8 * (1 - t);
+                    ctx.strokeStyle = fx.w.color;
+                    ctx.lineWidth = 3 * (1 - t) + 1;
+                    ctx.beginPath();
+                    ctx.ellipse(this.player.x, this.player.y + 4, fx.radius * (0.5 + 0.5 * t), fx.radius * 0.8 * (0.5 + 0.5 * t), 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                    break;
+                }
+                case "mote": {
+                    // 도트 느낌이 나도록 네모난 빛 알갱이 (가운데는 흰색)
+                    const y = fx.y - fx.rise * t;
+                    ctx.globalAlpha = Math.min(1, fx.life * 3);
+                    ctx.fillStyle = fx.w.color;
+                    ctx.fillRect(Math.round(fx.x - fx.size), Math.round(y - fx.size), fx.size * 2, fx.size * 2);
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(Math.round(fx.x - 1), Math.round(y - 1), 2, 2);
                     break;
                 }
                 case "nova": {
