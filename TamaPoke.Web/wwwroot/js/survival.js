@@ -106,6 +106,9 @@ const AURA_MAX_POWER = 60;  // 독 공격 기술처럼 위력이 큰 기술도 �
 
 const WEAPON_PFX = { bolt: "w_bolt", spray: "w_spray", slash: "w_slash", nova: "nova", orbit: "w_orbit", chain: "w_chain", aura: "w_aura" };
 
+// 기술 합체한 기술의 효과: 크기 배수, 같은 그림을 빛나게(가산 혼합) 한 번 더 겹치는 진하기
+const UNION_FX = { scale: 1.3, glow: 0.6 };
+
 // 옆에서 본 납작한 땅 효과는 세로로 늘려서 내 주변 범위(둥근 원)에 맞춥니다.
 const PFX_TALL = { n_slam: 2, a_puddle: 1.5 };
 
@@ -1058,7 +1061,7 @@ class Game {
         const mouth = 16;
         const name = fxOf(w), info = PFX[name];
         this.addPfx(name, "spray", this.player.x + Math.cos(aim) * mouth, this.player.y + Math.sin(aim) * mouth,
-            { angle: aim, scale: (reach - mouth) * 1.12 / (info.fw - info.ox), speed: 2, tint: w.type, color: w.color, follow: true });
+            { angle: aim, scale: (reach - mouth) * 1.12 / (info.fw - info.ox), speed: 2, tint: w.type, color: w.color, follow: true, glow: w.united });
     }
 
     fireSlash(w, aim) {
@@ -1073,7 +1076,7 @@ class Game {
             const left = Math.cos(angle) < 0;
             const name = fxOf(w), info = PFX[name];
             this.addPfx(name, "slash", this.player.x, this.player.y + 4, {
-                angle: left ? angle - Math.PI : angle, flip: left, scale: radius * 1.17 / Math.max(40, info.fw - info.ox), speed: 1.4, tint: w.type, color: w.color, follow: true,
+                angle: left ? angle - Math.PI : angle, flip: left, scale: radius * 1.17 / Math.max(40, info.fw - info.ox), speed: 1.4, tint: w.type, color: w.color, follow: true, glow: w.united,
             });
         };
         swing(aim);
@@ -1087,7 +1090,7 @@ class Game {
         this.near(this.player.x, this.player.y, radius, (e) => this.damage(e, this.weaponDamage(w, e) * 0.8 * (1 + 0.3 * w.extra), w, 160));
         this.effects.push({ type: "nova", w, x: this.player.x, y: this.player.y, radius, life: 0.3, max: 0.3 });
         const name = fxOf(w);
-        this.addPfx(name, "nova", this.player.x, this.player.y + 7, { scale: radius * 2.26 / PFX[name].fw, speed: 2, tint: w.type, color: w.color, follow: true });
+        this.addPfx(name, "nova", this.player.x, this.player.y + 7, { scale: radius * 2.26 / PFX[name].fw, speed: 2, tint: w.type, color: w.color, follow: true, glow: w.united });
     }
 
     fireChain(w, first) {
@@ -1097,7 +1100,7 @@ class Game {
         const points = [[this.player.x, this.player.y], [first.x, first.y]];
         this.damage(first, this.weaponDamage(w, first), w, 20);
         const name = fxOf(w), scale = 51 / PFX[name].fw;
-        this.addPfx(name, "chain", first.x, first.y, { scale, speed: 1.5, tint: w.type, color: w.color });
+        this.addPfx(name, "chain", first.x, first.y, { scale, speed: 1.5, tint: w.type, color: w.color, glow: w.united });
         let current = first;
         for (let i = 0; i < jumps; i++) {
             const next = this.nearest(current.x, current.y, 85, visited);
@@ -1105,7 +1108,7 @@ class Game {
             visited.add(next);
             points.push([next.x, next.y]);
             this.damage(next, this.weaponDamage(w, next) * 0.85, w, 20);
-            this.addPfx(name, "chain", next.x, next.y, { scale, speed: 1.5, tint: w.type, color: w.color });
+            this.addPfx(name, "chain", next.x, next.y, { scale, speed: 1.5, tint: w.type, color: w.color, glow: w.united });
             current = next;
         }
         this.effects.push({ type: "chain", w, points, life: 0.16, max: 0.16 });
@@ -1356,7 +1359,8 @@ class Game {
         if (count >= (MAX_PFX[group] ?? 20)) return;
         const p = this.player;
         this.pfx.push({ name, group, x, y, dx: x - p.x, dy: y - p.y, t: 0, angle: o.angle ?? 0, scale: o.scale ?? 1, speed: o.speed ?? 1,
-            tint: o.tint, color: o.color, follow: !!o.follow, flip: !!o.flip, tall: PFX_TALL[name] ?? 1 });
+            tint: o.tint, color: o.color, follow: !!o.follow, flip: !!o.flip, tall: PFX_TALL[name] ?? 1, glow: !!o.glow });
+        if (o.glow) this.pfx[this.pfx.length - 1].scale *= UNION_FX.scale;
     }
 
     // 회색 효과 시트에 기술 타입 색을 곱한 그림 (효과·타입마다 한 번만 만듭니다)
@@ -1409,8 +1413,20 @@ class Game {
             if (fx.angle) ctx.rotate(fx.angle);
             ctx.scale(fx.flip ? -fx.scale : fx.scale, fx.scale * fx.tall);
             ctx.drawImage(image, frame * info.fw, 0, info.fw, info.fh, -info.ox, -info.oy, info.fw, info.fh);
+            if (fx.glow) this.glowAgain(() => ctx.drawImage(image, frame * info.fw, 0, info.fw, info.fh, -info.ox, -info.oy, info.fw, info.fh));
             ctx.restore();
         }
+    }
+
+    // 합체한 기술: 같은 그림을 가산 혼합으로 한 번 더 그려 빛나게 합니다.
+    glowAgain(draw) {
+        const ctx = this.ctx;
+        const op = ctx.globalCompositeOperation, alpha = ctx.globalAlpha;
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = alpha * UNION_FX.glow;
+        draw();
+        ctx.globalCompositeOperation = op;
+        ctx.globalAlpha = alpha;
     }
 
     addNumber(x, y, value, color, big = false) {
@@ -1847,10 +1863,14 @@ class Game {
             if (w.kind === "orbit" && w.orbs) {
                 // 구슬: 그림의 가운데가 궤도 위에 오도록 그립니다. (물 구슬은 기준점에서 52px 위가 가운데)
                 const name = fxOf(w), info = PFX[name], image = this.tinted(name, w.type, w.color);
-                const frame = Math.floor(this.time * info.fps) % info.frames, s = 38 / Math.max(info.fw, info.fh);
+                const frame = Math.floor(this.time * info.fps) % info.frames, s = 38 / Math.max(info.fw, info.fh) * (w.united ? UNION_FX.scale : 1);
                 const cx = name === "w_orbit" ? info.ox : info.fw / 2, cy = name === "w_orbit" ? info.oy - 52 : info.fh / 2;
                 for (const [x, y] of w.orbs) {
-                    if (image) ctx.drawImage(image, frame * info.fw, 0, info.fw, info.fh, x - cx * s, y - cy * s, info.fw * s, info.fh * s);
+                    if (image) {
+                        const draw = () => ctx.drawImage(image, frame * info.fw, 0, info.fw, info.fh, x - cx * s, y - cy * s, info.fw * s, info.fh * s);
+                        draw();
+                        if (w.united) this.glowAgain(draw);
+                    }
                     else { ctx.fillStyle = w.color; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); }
                 }
             }
@@ -1883,7 +1903,11 @@ class Game {
             const s = w.radius / (info.fw / 2);
             const frame = Math.floor(this.time * info.fps) % info.frames;
             const t = PFX_TALL[name] ?? 1;
-            if (image) ctx.drawImage(image, frame * info.fw, 0, info.fw, info.fh, this.player.x - info.ox * s, this.player.y + 7 - info.oy * s * t, info.fw * s, info.fh * s * t);
+            if (image) {
+                const draw = () => ctx.drawImage(image, frame * info.fw, 0, info.fw, info.fh, this.player.x - info.ox * s, this.player.y + 7 - info.oy * s * t, info.fw * s, info.fh * s * t);
+                draw();
+                if (w.united) this.glowAgain(draw);
+            }
             else {
                 ctx.fillStyle = w.color + "2e";
                 ctx.beginPath();
@@ -1906,12 +1930,16 @@ class Game {
                 ctx.save();
                 ctx.translate(s.x, s.y);
                 if (name === "w_orbit") {
-                    const k = 0.3;
-                    ctx.drawImage(plasma, f * bolt.fw, 0, bolt.fw, bolt.fh, -bolt.ox * k, -(bolt.oy - 52) * k, bolt.fw * k, bolt.fh * k);
+                    const k = 0.3 * (s.w.united ? UNION_FX.scale : 1);
+                    const draw = () => ctx.drawImage(plasma, f * bolt.fw, 0, bolt.fw, bolt.fh, -bolt.ox * k, -(bolt.oy - 52) * k, bolt.fw * k, bolt.fh * k);
+                    draw();
+                    if (s.w.united) this.glowAgain(draw);
                 } else {
-                    const k = 48 / bolt.fw;
+                    const k = 48 / bolt.fw * (s.w.united ? UNION_FX.scale : 1);
                     ctx.rotate(Math.atan2(s.vy, s.vx));
-                    ctx.drawImage(plasma, f * bolt.fw, 0, bolt.fw, bolt.fh, -bolt.ox * k, -bolt.oy * k, bolt.fw * k, bolt.fh * k);
+                    const draw = () => ctx.drawImage(plasma, f * bolt.fw, 0, bolt.fw, bolt.fh, -bolt.ox * k, -bolt.oy * k, bolt.fw * k, bolt.fh * k);
+                    draw();
+                    if (s.w.united) this.glowAgain(draw);
                 }
                 ctx.restore();
                 continue;
