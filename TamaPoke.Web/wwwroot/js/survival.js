@@ -91,7 +91,7 @@ const COOLDOWN = { bolt: 1100, spray: 1300, slash: 950, nova: 2400, orbit: 0, ch
 
 // pixelfx(MIT, https://github.com/patch-gg/pixelfx)로 미리 그려 둔 효과 시트 (wwwroot/pfx).
 // fw x fh 프레임이 가로로 이어져 있고, (ox, oy)가 효과의 기준점입니다.
-const PFX = {"w_bolt":{"fw":114,"fh":51,"frames":16,"fps":20,"ox":91,"oy":25},"w_spray":{"fw":146,"fh":101,"frames":23,"fps":15,"ox":12,"oy":66},"w_slash":{"fw":66,"fh":56,"frames":18,"fps":20,"ox":5,"oy":46},"w_orbit":{"fw":78,"fh":100,"frames":36,"fps":12,"ox":39,"oy":92},"w_chain":{"fw":114,"fh":76,"frames":18,"fps":20,"ox":76,"oy":38},"w_aura":{"fw":112,"fh":81,"frames":48,"fps":12,"ox":56,"oy":61},"nova":{"fw":158,"fh":144,"frames":27,"fps":15,"ox":83,"oy":118},"poof":{"fw":82,"fh":74,"frames":24,"fps":15,"ox":37,"oy":62},"levelup":{"fw":73,"fh":81,"frames":27,"fps":20,"ox":34,"oy":78},"hit_normal":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_fire":{"fw":102,"fh":51,"frames":15,"fps":30,"ox":26,"oy":35},"hit_water":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_electric":{"fw":102,"fh":51,"frames":15,"fps":30,"ox":26,"oy":35},"hit_grass":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ice":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_fighting":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_poison":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ground":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_flying":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_psychic":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_bug":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_rock":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ghost":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_dragon":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_dark":{"fw":99,"fh":51,"frames":15,"fps":30,"ox":23,"oy":35},"hit_steel":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_fairy":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35}};
+const PFX = {"w_bolt":{"fw":114,"fh":51,"frames":16,"fps":20,"ox":91,"oy":25},"w_spray":{"fw":146,"fh":101,"frames":23,"fps":15,"ox":12,"oy":66},"w_slash":{"fw":66,"fh":56,"frames":18,"fps":20,"ox":5,"oy":46},"w_orbit":{"fw":78,"fh":100,"frames":36,"fps":12,"ox":39,"oy":92},"w_chain":{"fw":114,"fh":76,"frames":18,"fps":20,"ox":76,"oy":38},"w_aura":{"fw":112,"fh":81,"frames":48,"fps":12,"ox":56,"oy":61},"nova":{"fw":158,"fh":144,"frames":27,"fps":15,"ox":83,"oy":118},"poof":{"fw":82,"fh":74,"frames":24,"fps":15,"ox":37,"oy":62},"levelup":{"fw":73,"fh":81,"frames":27,"fps":20,"ox":34,"oy":78},"hit_normal":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_fire":{"fw":102,"fh":51,"frames":15,"fps":30,"ox":26,"oy":35},"hit_water":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_electric":{"fw":102,"fh":51,"frames":15,"fps":30,"ox":26,"oy":35},"hit_grass":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ice":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_fighting":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_poison":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ground":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_flying":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_psychic":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_bug":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_rock":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ghost":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_dragon":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_dark":{"fw":99,"fh":51,"frames":15,"fps":30,"ox":23,"oy":35},"hit_steel":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_fairy":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"a_poison":{"fw":212,"fh":63,"frames":40,"fps":10,"ox":106,"oy":49},"a_sun":{"fw":102,"fh":101,"frames":40,"fps":10,"ox":51,"oy":50},"a_whirl":{"fw":116,"fh":70,"frames":36,"fps":12,"ox":58,"oy":35},"b_arrow":{"fw":92,"fh":14,"frames":12,"fps":20,"ox":88,"oy":7},"b_disc":{"fw":92,"fh":48,"frames":10,"fps":20,"ox":72,"oy":24},"b_fireball":{"fw":122,"fh":56,"frames":18,"fps":15,"ox":98,"oy":28},"b_ice":{"fw":148,"fh":33,"frames":16,"fps":20,"ox":137,"oy":12},"b_laser":{"fw":95,"fh":27,"frames":10,"fps":20,"ox":83,"oy":13},"c_strike":{"fw":223,"fh":262,"frames":36,"fps":12,"ox":111,"oy":226},"n_dark":{"fw":246,"fh":240,"frames":38,"fps":10,"ox":123,"oy":201},"n_fire":{"fw":202,"fh":105,"frames":39,"fps":10,"ox":101,"oy":69},"n_frost":{"fw":248,"fh":122,"frames":41,"fps":12,"ox":125,"oy":90},"n_plasma":{"fw":199,"fh":186,"frames":26,"fps":15,"ox":101,"oy":93},"n_quake":{"fw":250,"fh":74,"frames":37,"fps":12,"ox":128,"oy":58},"n_splash":{"fw":135,"fh":100,"frames":30,"fps":12,"ox":62,"oy":78},"n_thunder":{"fw":251,"fh":135,"frames":29,"fps":15,"ox":124,"oy":103},"o_arcane":{"fw":78,"fh":101,"frames":29,"fps":12,"ox":39,"oy":93},"o_flame":{"fw":74,"fh":96,"frames":29,"fps":12,"ox":37,"oy":86},"o_leaf":{"fw":97,"fh":90,"frames":29,"fps":12,"ox":48,"oy":83},"s_flame":{"fw":177,"fh":93,"frames":24,"fps":15,"ox":30,"oy":58},"s_frost":{"fw":166,"fh":52,"frames":18,"fps":15,"ox":12,"oy":25},"s_jet":{"fw":182,"fh":58,"frames":15,"fps":15,"ox":14,"oy":18},"sl_double":{"fw":85,"fh":105,"frames":16,"fps":20,"ox":2,"oy":89},"sl_hammer":{"fw":161,"fh":100,"frames":24,"fps":12,"ox":58,"oy":80},"sl_punch":{"fw":117,"fh":107,"frames":17,"fps":20,"ox":46,"oy":106},"sl_scythe":{"fw":122,"fh":63,"frames":25,"fps":12,"ox":54,"oy":58},"sl_sword":{"fw":121,"fh":79,"frames":15,"fps":20,"ox":44,"oy":70},"sl_thrust":{"fw":137,"fh":64,"frames":15,"fps":20,"ox":4,"oy":52},"sl_whip":{"fw":153,"fh":60,"frames":17,"fps":20,"ox":-3,"oy":52}};
 const MAX_PFX = { hit: 24, poof: 40, nova: 8, levelup: 2, spray: 6, slash: 8, chain: 24 };
 
 // 기술 모양별 효과 시트 (회색, 게임에서 기술 타입 색을 곱함). 충격파는 nova를 씁니다.
@@ -100,7 +100,10 @@ const AURA_TICK = 0.8;      // 몇 초마다 때리는지
 const AURA_SCALE = 0.3;     // 기술 데미지의 몇 배인지
 const AURA_MAX_POWER = 60;  // 독 공격 기술처럼 위력이 큰 기술도 이 이상은 세지지 않습니다.
 
-const WEAPON_PFX = { bolt: "w_bolt", spray: "w_spray", slash: "w_slash", orbit: "w_orbit", chain: "w_chain", aura: "w_aura" };
+const WEAPON_PFX = { bolt: "w_bolt", spray: "w_spray", slash: "w_slash", nova: "nova", orbit: "w_orbit", chain: "w_chain", aura: "w_aura" };
+
+// 기술마다 고른 효과 그림 (SurvivalRules.FxFor). 없으면 공격 모양의 기본 그림을 씁니다.
+function fxOf(w) { return PFX[w.fx] ? w.fx : WEAPON_PFX[w.kind]; }
 
 const PASSIVES = ["might", "swift", "vital", "haste", "magnet", "armor"];
 
@@ -254,7 +257,7 @@ class Game {
         }
         for (const name of new Set(DECOR)) files.add(`walk/${name}.png`);
         for (const name of ["nova", "poof", "levelup"]) files.add(`pfx/${name}.png`);
-        for (const weapon of setup.weapons) if (WEAPON_PFX[weapon.kind]) files.add(`pfx/${WEAPON_PFX[weapon.kind]}.png`);
+        for (const weapon of setup.weapons) if (fxOf(weapon)) files.add(`pfx/${fxOf(weapon)}.png`);
         for (const weapon of setup.weapons) files.add(`pfx/hit_${weapon.type}.png`);
         for (const file of files) jobs.push(loadImage(file).then(image => { this.images[file] = image; }));
 
@@ -1002,8 +1005,9 @@ class Game {
         const reach = 190 * (0.42 + this.lv(w) * 0.04);
         // 포켓몬 몸과 겹치지 않게, 쏘는 방향으로 몸 바깥(16px 앞)에서 시작합니다.
         const mouth = 16;
-        this.addPfx("w_spray", "spray", this.player.x + Math.cos(aim) * mouth, this.player.y + Math.sin(aim) * mouth,
-            { angle: aim, scale: (reach - mouth) / 120, speed: 2, tint: w.type, color: w.color, follow: true });
+        const name = fxOf(w), info = PFX[name];
+        this.addPfx(name, "spray", this.player.x + Math.cos(aim) * mouth, this.player.y + Math.sin(aim) * mouth,
+            { angle: aim, scale: (reach - mouth) * 1.12 / (info.fw - info.ox), speed: 2, tint: w.type, color: w.color, follow: true });
     }
 
     fireSlash(w, aim) {
@@ -1016,8 +1020,9 @@ class Game {
                 if (Math.abs(diff) <= half) this.damage(e, this.weaponDamage(w, e), w, 70);
             });
             const left = Math.cos(angle) < 0;
-            this.addPfx("w_slash", "slash", this.player.x, this.player.y + 4, {
-                angle: left ? angle - Math.PI : angle, flip: left, scale: radius / 52, speed: 1.4, tint: w.type, color: w.color, follow: true,
+            const name = fxOf(w), info = PFX[name];
+            this.addPfx(name, "slash", this.player.x, this.player.y + 4, {
+                angle: left ? angle - Math.PI : angle, flip: left, scale: radius * 1.17 / Math.max(40, info.fw - info.ox), speed: 1.4, tint: w.type, color: w.color, follow: true,
             });
         };
         swing(aim);
@@ -1030,7 +1035,8 @@ class Game {
         const radius = 53 + 9 * this.lv(w);
         this.near(this.player.x, this.player.y, radius, (e) => this.damage(e, this.weaponDamage(w, e) * 0.8 * (1 + 0.3 * w.extra), w, 160));
         this.effects.push({ type: "nova", w, x: this.player.x, y: this.player.y, radius, life: 0.3, max: 0.3 });
-        this.addPfx("nova", "nova", this.player.x, this.player.y + 7, { scale: radius / 70, speed: 2, tint: w.type, color: w.color, follow: true });
+        const name = fxOf(w);
+        this.addPfx(name, "nova", this.player.x, this.player.y + 7, { scale: radius * 2.26 / PFX[name].fw, speed: 2, tint: w.type, color: w.color, follow: true });
     }
 
     fireChain(w, first) {
@@ -1039,7 +1045,8 @@ class Game {
         const visited = new Set([first]);
         const points = [[this.player.x, this.player.y], [first.x, first.y]];
         this.damage(first, this.weaponDamage(w, first), w, 20);
-        this.addPfx("w_chain", "chain", first.x, first.y, { scale: 0.45, speed: 1.5, tint: w.type, color: w.color });
+        const name = fxOf(w), scale = 51 / PFX[name].fw;
+        this.addPfx(name, "chain", first.x, first.y, { scale, speed: 1.5, tint: w.type, color: w.color });
         let current = first;
         for (let i = 0; i < jumps; i++) {
             const next = this.nearest(current.x, current.y, 85, visited);
@@ -1047,7 +1054,7 @@ class Game {
             visited.add(next);
             points.push([next.x, next.y]);
             this.damage(next, this.weaponDamage(w, next) * 0.85, w, 20);
-            this.addPfx("w_chain", "chain", next.x, next.y, { scale: 0.45, speed: 1.5, tint: w.type, color: w.color });
+            this.addPfx(name, "chain", next.x, next.y, { scale, speed: 1.5, tint: w.type, color: w.color });
             current = next;
         }
         this.effects.push({ type: "chain", w, points, life: 0.16, max: 0.16 });
@@ -1771,11 +1778,12 @@ class Game {
         for (const w of this.weapons) {
             if (w.level === 0) continue;
             if (w.kind === "orbit" && w.orbs) {
-                // 물 구슬: 시트의 구슬 중심(기준점에서 52px 위)이 궤도 위에 오도록 그립니다.
-                const info = PFX.w_orbit, image = this.tinted("w_orbit", w.type, w.color);
-                const frame = Math.floor(this.time * info.fps) % info.frames, s = 0.38;
+                // 구슬: 그림의 가운데가 궤도 위에 오도록 그립니다. (물 구슬은 기준점에서 52px 위가 가운데)
+                const name = fxOf(w), info = PFX[name], image = this.tinted(name, w.type, w.color);
+                const frame = Math.floor(this.time * info.fps) % info.frames, s = 38 / Math.max(info.fw, info.fh);
+                const cx = name === "w_orbit" ? info.ox : info.fw / 2, cy = name === "w_orbit" ? info.oy - 52 : info.fh / 2;
                 for (const [x, y] of w.orbs) {
-                    if (image) ctx.drawImage(image, frame * info.fw, 0, info.fw, info.fh, x - info.ox * s, y - (info.oy - 52) * s, info.fw * s, info.fh * s);
+                    if (image) ctx.drawImage(image, frame * info.fw, 0, info.fw, info.fh, x - cx * s, y - cy * s, info.fw * s, info.fh * s);
                     else { ctx.fillStyle = w.color; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); }
                 }
             }
@@ -1785,10 +1793,10 @@ class Game {
     // 오라: 내 발밑에 기술 색 마법진이 오라 범위만큼 돕니다.
     drawAuras() {
         const ctx = this.ctx;
-        const info = PFX.w_aura;
         for (const w of this.weapons) {
             if (w.level === 0 || w.kind !== "aura" || !w.radius) continue;
-            const image = this.tinted("w_aura", w.type, w.color);
+            const name = fxOf(w), info = PFX[name];
+            const image = this.tinted(name, w.type, w.color);
             const glow = ctx.createRadialGradient(this.player.x, this.player.y, 0, this.player.x, this.player.y, w.radius);
             glow.addColorStop(0, w.color + "00");
             glow.addColorStop(0.7, w.color + "18");
@@ -1820,17 +1828,23 @@ class Game {
     drawShots() {
         const ctx = this.ctx;
         const frame = Math.floor(this.time * 10) % 2;
-        const bolt = PFX.w_bolt;
         for (const s of this.shots) {
             if (s.hidden) continue;
-            // 탄환: 플라스마 탄 (머리가 날아가는 방향)
-            const plasma = s.w.kind === "bolt" ? this.tinted("w_bolt", s.w.type, s.w.color) : null;
+            // 탄환: 기술마다 고른 탄 그림 (머리가 날아가는 방향). 거품은 물 구슬을 돌리지 않고 작게 그립니다.
+            const name = s.w.kind === "bolt" ? fxOf(s.w) : null;
+            const plasma = name ? this.tinted(name, s.w.type, s.w.color) : null;
             if (plasma) {
-                const f = Math.floor(this.time * bolt.fps) % bolt.frames, k = 0.42;
+                const bolt = PFX[name], f = Math.floor(this.time * bolt.fps) % bolt.frames;
                 ctx.save();
                 ctx.translate(s.x, s.y);
-                ctx.rotate(Math.atan2(s.vy, s.vx));
-                ctx.drawImage(plasma, f * bolt.fw, 0, bolt.fw, bolt.fh, -bolt.ox * k, -bolt.oy * k, bolt.fw * k, bolt.fh * k);
+                if (name === "w_orbit") {
+                    const k = 0.3;
+                    ctx.drawImage(plasma, f * bolt.fw, 0, bolt.fw, bolt.fh, -bolt.ox * k, -(bolt.oy - 52) * k, bolt.fw * k, bolt.fh * k);
+                } else {
+                    const k = 48 / bolt.fw;
+                    ctx.rotate(Math.atan2(s.vy, s.vx));
+                    ctx.drawImage(plasma, f * bolt.fw, 0, bolt.fw, bolt.fh, -bolt.ox * k, -bolt.oy * k, bolt.fw * k, bolt.fh * k);
+                }
                 ctx.restore();
                 continue;
             }

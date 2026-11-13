@@ -15,8 +15,9 @@ public sealed record SurvivalForm(int SpeciesId, string Name, SurvivalSprite? Wa
 // 기술 하나 = 무기 하나. Kind는 공격 모양(bolt, spray, slash, nova, orbit, chain, aura), Type은 효과 그림(fx_shot_{type}.png)입니다.
 // Name은 화면 오른쪽 기술 목록에 보일 기술 이름입니다.
 // SameType: 내 타입 기술인지, MovePower: 원래 기술 위력 (특성 효과 적응력·테크니션에 씀)
+// Fx: 기술 효과 그림 (wwwroot/pfx, SurvivalRules.FxFor). 같은 모양이라도 기술마다 다르게 보입니다.
 public sealed record SurvivalWeapon(int SkillId, string Kind, string Type, string Color, double Power, double Cooldown, int Extra, bool Slow, string Name,
-    bool SameType = false, int MovePower = 0);
+    bool SameType = false, int MovePower = 0, string Fx = "");
 
 // 이번 판의 특성. Key는 서바이벌 효과(SurvivalRules.TraitOf), Ability는 원래 특성, Type은 효과가 걸리는 타입(소문자, 없으면 "")
 public sealed record SurvivalTrait(string Key, string Ability, string Name, string Type);
@@ -302,8 +303,87 @@ public static class SurvivalRules
     public const int MAX_SAME_SHAPE = 2;
     public static readonly string[] AREA_KINDS = ["spray", "nova", "slash", "chain"];
 
-    // 기술 타입에 따라 공격 모양이 달라집니다. 변화 기술은 주변에 머무는 오라가 됩니다.
-    public static string KindFor(SkillInfo skill) => skill.Category == SkillCategory.Status ? "aura" : skill.Type switch
+    // 공격 모양: 변화 기술은 오라, 그 밖에는 영어 이름(빔·펀치·지진 등)을 먼저 보고, 없으면 타입으로 정합니다.
+    // 같은 타입 기술(거품광선과 파도타기 등)이 같은 효과로 겹쳐 보이지 않게 합니다.
+    public static string KindFor(SkillInfo skill)
+    {
+        if (skill.Category == SkillCategory.Status) return "aura";
+        string name = skill.NameEn ?? "";
+        if (SLASH_WORDS.IsMatch(name)) return "slash";
+        if (BOLT_WORDS.IsMatch(name)) return "bolt";
+        if (NOVA_WORDS.IsMatch(name)) return "nova";
+        return KindForType(skill.Type);
+    }
+
+    static readonly System.Text.RegularExpressions.Regex SLASH_WORDS = new(
+        @"\b(Punch|Kick|Claw|Claws|Fang|Bite|Slash|Cutter|Blade|Chop|Tail|Whip|Crunch|Jab|Uppercut|Scratch|Smash|Hammer|Axe|Horn|Fist|Wing)\b");
+    static readonly System.Text.RegularExpressions.Regex BOLT_WORDS = new(
+        @"\b(Beam|Pulse|Ball|Shot|Gun|Bullet|Cannon|Sphere|Bomb|Missile|Needle|Dart|Arrow|Shuriken|Spike|Spikes|Ray|Orb)\b");
+    static readonly System.Text.RegularExpressions.Regex NOVA_WORDS = new(
+        @"\b(Quake|Earthquake|Explosion|Eruption|Burst|Shockwave)\b");
+
+    // 효과 그림: 기술 이름에 맞는 그림을 먼저 고르고, 없으면 모양과 타입으로 고릅니다.
+    // 그림은 회색이고 게임에서 기술 타입 색을 곱합니다. (tools/make_pfx_sheets.js)
+    public static string FxFor(SkillInfo skill, string kind)
+    {
+        string name = skill.NameEn ?? "";
+        bool Has(string words) => System.Text.RegularExpressions.Regex.IsMatch(name, $@"\b({words})\b");
+        PokemonType type = skill.Type;
+        return kind switch
+        {
+            "spray" when Has("Flamethrower|Flame|Blaze|Inferno|Burn") => "s_flame",
+            "spray" when type is PokemonType.Water => "s_jet",
+            "spray" when type is PokemonType.Ice => "s_frost",
+            "spray" => "w_spray",
+
+            "bolt" when Has("Bubble|Bubbles") => "w_orbit",
+            "bolt" when Has("Needle|Dart|Arrow|Spike|Spikes|Pin|Shuriken|Sting") => "b_arrow",
+            "bolt" when type is PokemonType.Fire => "b_fireball",
+            "bolt" when type is PokemonType.Ice => "b_ice",
+            "bolt" when Has("Beam|Ray|Laser|Cannon|Charge") || type is PokemonType.Electric or PokemonType.Steel => "b_laser",
+            "bolt" when type is PokemonType.Psychic or PokemonType.Fairy or PokemonType.Flying or PokemonType.Dragon => "b_disc",
+            "bolt" => "w_bolt",
+
+            "slash" when Has("Claw|Claws|Scratch|Fury") => "w_slash",
+            "slash" when Has("Fang|Bite|Crunch|Jaw") => "sl_double",
+            "slash" when Has("Punch|Fist|Uppercut|Jab|Chop|Kick|Hit") => "sl_punch",
+            "slash" when Has("Whip|Tail|Vine|Lash|Slap") => "sl_whip",
+            "slash" when Has("Horn|Drill|Peck|Spear|Megahorn|Lunge") => "sl_thrust",
+            "slash" when Has("Hammer|Smash|Slam|Crash|Wood|Body|Heavy") => "sl_hammer",
+            "slash" when Has("Blade|Slash|Cutter|Cut|Sword|Edge|Axe|Wing") => "sl_sword",
+            "slash" when type is PokemonType.Dark or PokemonType.Ghost => "sl_scythe",
+            "slash" when type is PokemonType.Fighting => "sl_punch",
+            "slash" when type is PokemonType.Steel => "sl_sword",
+            "slash" when type is PokemonType.Grass => "sl_whip",
+            "slash" when type is PokemonType.Dragon or PokemonType.Bug => "sl_double",
+            "slash" => "w_slash",
+
+            "nova" when Has("Quake|Earthquake|Magnitude|Bulldoze|Stomp|Fissure") => "n_quake",
+            "nova" when type is PokemonType.Fire => "n_fire",
+            "nova" when type is PokemonType.Ice => "n_frost",
+            "nova" when type is PokemonType.Electric => "n_thunder",
+            "nova" when type is PokemonType.Water => "n_splash",
+            "nova" when type is PokemonType.Dark or PokemonType.Ghost => "n_dark",
+            "nova" when Has("Explosion|Burst") || type is PokemonType.Normal or PokemonType.Dragon or PokemonType.Steel => "n_plasma",
+            "nova" when type is PokemonType.Ground or PokemonType.Rock => "n_quake",
+            "nova" => "nova",
+
+            "chain" when Has("Thunder|Bolt|Strike|Wild") => "c_strike",
+            "chain" => "w_chain",
+
+            "orbit" when type is PokemonType.Grass or PokemonType.Bug => "o_leaf",
+            "orbit" when type is PokemonType.Ghost or PokemonType.Fire => "o_flame",
+            "orbit" when type is PokemonType.Fairy or PokemonType.Psychic => "o_arcane",
+            "orbit" => "w_orbit",
+
+            "aura" when type is PokemonType.Poison or PokemonType.Bug => "a_poison",
+            "aura" when type is PokemonType.Fairy || Has("Sunny|Light|Wish|Moon|Morning|Sun") => "a_sun",
+            "aura" when type is PokemonType.Water or PokemonType.Ice => "a_whirl",
+            _ => "w_aura",
+        };
+    }
+
+    static string KindForType(PokemonType type) => type switch
     {
         PokemonType.Fire or PokemonType.Water => "spray",
         PokemonType.Electric => "chain",
@@ -354,7 +434,7 @@ public static class SurvivalRules
         if (extra > 0) power *= 0.7;
         bool slow = skill.Type == PokemonType.Ice || skill.Ailment is SkillAilment.Paralysis or SkillAilment.Freeze or SkillAilment.Sleep;
         return new SurvivalWeapon(skill.Id, kind, skill.Type.ToString().ToLowerInvariant(), ColorFor(skill.Type), power, cooldown, extra, slow, skill.Name,
-            sameType, skill.Category == SkillCategory.Status ? 0 : skill.Power);
+            sameType, skill.Category == SkillCategory.Status ? 0 : skill.Power, FxFor(skill, kind));
     }
 
     // 다른 사람이 올린 값은 믿지 않고 게임 안의 범위로 맞춥니다.

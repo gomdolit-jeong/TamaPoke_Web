@@ -3,6 +3,7 @@
 //   (await import("/tools/make_pfx_sheets.js")).run()   ← 이 파일을 그 서버에서 열 수 있는 곳에 두고 실행
 // tools/fx_out 에 pfx_*.png/json 이 생깁니다. png는 wwwroot/pfx 로(앞의 pfx_ 빼고) 옮기고,
 // json 값들은 wwwroot/js/survival.js 의 PFX 상수에 넣습니다.
+// 기술별 효과(VARIANTS)만 다시 뽑을 때는 run() 대신 runVariants()를 부릅니다.
 const REV = "044e12a45dc9cc312cec50ee606dfc98afe5adc2";
 const BASE = `https://cdn.jsdelivr.net/gh/patch-gg/pixelfx@${REV}/src`;
 
@@ -69,6 +70,37 @@ async function save(name, sheet, info) {
     const blob = await new Promise(r => sheet.toBlob(r, "image/png"));
     await fetch(`http://127.0.0.1:5192/${name}.png`, { method: "POST", body: blob });
     await fetch(`http://127.0.0.1:5192/${name}.json`, { method: "POST", body: JSON.stringify(info) });
+}
+
+// 같은 공격 모양이라도 기술마다 다른 효과를 쓰도록 더 뽑는 회색 효과 시트 (게임에서 타입 색을 곱함)
+// [시트 이름, pixelfx 경로, fps]. 시트를 어떤 기술에 쓰는지는 SurvivalRules.FxFor에서 정합니다.
+export const VARIANTS = [
+    ["s_flame", "fire/flamethrower", 15], ["s_jet", "water/water-jet", 15], ["s_frost", "ice/frost-breath", 15],
+    ["b_fireball", "fire/fireball", 15], ["b_ice", "ice/ice-lance", 20], ["b_disc", "projectiles/energy-disc", 20],
+    ["b_laser", "projectiles/laser-bolt", 20], ["b_arrow", "projectiles/arrow", 20],
+    ["sl_sword", "melee/sword-slash", 20], ["sl_double", "melee/double-slash", 20], ["sl_punch", "melee/uppercut", 20],
+    ["sl_whip", "melee/whip-crack", 20], ["sl_thrust", "melee/thrust", 20], ["sl_hammer", "melee/hammer-smash", 12],
+    ["sl_scythe", "melee/scythe-reap", 12],
+    ["n_quake", "nature/quake", 12], ["n_frost", "ice/frost-nova", 12], ["n_thunder", "lightning/thunderclap", 15],
+    ["n_fire", "fire/fire-ring", 10], ["n_dark", "shadow/dark-explosion", 10], ["n_plasma", "explosions/plasma-explosion", 15],
+    ["n_splash", "water/splash", 12],
+    ["c_strike", "lightning/lightning-strike", 12],
+    ["o_leaf", "nature/leaf-storm", 12], ["o_flame", "shadow/shadow-flames", 12], ["o_arcane", "arcane/arcane-orb", 12],
+    ["a_poison", "nature/poison-cloud", 10], ["a_sun", "holy/sunburst", 10], ["a_whirl", "water/whirlpool", 12]
+];
+
+export async function runVariants(only) {
+    const core = await import(`${BASE}/core/index.js`);
+    const GRAY = ["#3a3a3a", "#5a5a5a", "#7c7c7c", "#a0a0a0", "#c4c4c4", "#e0e0e0", "#f4f4f4", "#ffffff"];
+    const log = [];
+    for (const [name, path, fps] of VARIANTS) {
+        if (only && !only.includes(name)) continue;
+        const mod = await import(`${BASE}/fx/${path}.js`);
+        const r = await render(core, mod, { palette: GRAY, sparks: ["#ffffff", "#e0e0e0", "#c4c4c4", "#7c7c7c"], seed: 7 }, fps);
+        await save(`pfx_${name}`, r.sheet, r.info);
+        log.push(`${name} ${JSON.stringify(r.info)}`);
+    }
+    return log.join("\n");
 }
 
 export async function run() {
