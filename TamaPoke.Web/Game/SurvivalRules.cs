@@ -16,8 +16,9 @@ public sealed record SurvivalForm(int SpeciesId, string Name, SurvivalSprite? Wa
 // Name은 화면 오른쪽 기술 목록에 보일 기술 이름입니다.
 // SameType: 내 타입 기술인지, MovePower: 원래 기술 위력 (특성 효과 적응력·테크니션에 씀)
 // Fx: 기술 효과 그림 (wwwroot/pfx, SurvivalRules.FxFor). 같은 모양이라도 기술마다 다르게 보입니다.
+// Crit: 원작 급소 랭크 (0 보통, 1 급소에 잘 맞는 기술, 3 이상 반드시 급소)
 public sealed record SurvivalWeapon(int SkillId, string Kind, string Type, string Color, double Power, double Cooldown, int Extra, bool Slow, string Name,
-    bool SameType = false, int MovePower = 0, string Fx = "");
+    bool SameType = false, int MovePower = 0, string Fx = "", int Crit = 0);
 
 // 이번 판의 특성. Key는 서바이벌 효과(SurvivalRules.TraitOf), Ability는 원래 특성, Type은 효과가 걸리는 타입(소문자, 없으면 "")
 public sealed record SurvivalTrait(string Key, string Ability, string Name, string Type);
@@ -253,7 +254,7 @@ public static class SurvivalRules
         ["guts"] = ("guts", ""), ["flareboost"] = ("guts", ""), ["toxicboost"] = ("guts", ""), ["marvelscale"] = ("guts", ""),
         ["moxie"] = ("moxie", ""), ["beastboost"] = ("moxie", ""), ["chillingneigh"] = ("moxie", ""), ["grimneigh"] = ("moxie", ""),
         ["asone"] = ("moxie", ""), ["battlebond"] = ("moxie", ""), ["supremeoverlord"] = ("moxie", ""),
-        ["keeneye"] = ("crit", ""), ["compoundeyes"] = ("crit", ""), ["sniper"] = ("crit", ""), ["superluck"] = ("crit", ""),
+        ["keeneye"] = ("crit", ""), ["compoundeyes"] = ("crit", ""), ["sniper"] = ("sniper", ""), ["superluck"] = ("crit", ""),
         // 날씨·필드: 그 타입 기술 위력 ↑
         ["drought"] = ("weather", "fire"), ["orichalcumpulse"] = ("weather", "fire"), ["desolateland"] = ("weather", "fire"),
         ["drizzle"] = ("weather", "water"), ["primordialsea"] = ("weather", "water"),
@@ -434,7 +435,8 @@ public static class SurvivalRules
         if (extra > 0) power *= 0.7;
         bool slow = skill.Type == PokemonType.Ice || skill.Ailment is SkillAilment.Paralysis or SkillAilment.Freeze or SkillAilment.Sleep;
         return new SurvivalWeapon(skill.Id, kind, skill.Type.ToString().ToLowerInvariant(), ColorFor(skill.Type), power, cooldown, extra, slow, skill.Name,
-            sameType, skill.Category == SkillCategory.Status ? 0 : skill.Power, FxFor(skill, kind));
+            sameType, skill.Category == SkillCategory.Status ? 0 : skill.Power, FxFor(skill, kind),
+            skill.Category == SkillCategory.Status ? 0 : Math.Clamp(skill.CritRate, 0, 3));
     }
 
     // 다른 사람이 올린 값은 믿지 않고 게임 안의 범위로 맞춥니다.

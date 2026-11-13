@@ -71,11 +71,14 @@ const TRAIT = {
     adaptability: 1.2, protean: 1.2, technician: 1.5, // 기술 위력
     brute: 1.3, bruteHp: 0.85, power: 1.15, guts: 1.3,
     moxieStep: 0.01, moxieKills: 200, moxieMax: 0.3, // moxieKills KO마다 moxieStep
-    critChance: 0.15, weather: 1.25,
+    weather: 1.25,
     speed: 1.15, speedBoostStep: 0.02, speedBoostMax: 0.2,
     contact: 0.2, contactBoss: 0.02,      // 반격: 닿은 적 최대 체력 대비
     pickup: 1.4, pressure: 0.85, serene: 2,
 };
+// 급소: 원작처럼 급소 랭크(0~3)마다 확률이 1/24, 1/8, 1/2, 반드시. 급소 데미지는 1.5배.
+// 급소에 잘 맞는 기술은 랭크 1, 특성 대운·날카로운눈·복안(crit)과 스나이퍼(sniper)는 랭크 +1, 스나이퍼는 급소 데미지 2.25배.
+const CRIT = { chances: [1 / 24, 1 / 8, 1 / 2, 1], mult: 1.5, sniperMult: 2.25 };
 // 기술·강화를 다 올린 뒤의 레벨업 회복량 (최대 체력 대비). 후반 생존에 크게 걸려 있어서 줄이면 난이도를 다시 맞춰야 합니다. (봇: 0이면 저주 3 클리어 60% → 24%)
 const HEAL_ON_LEVEL = 0.35;
 const PLAYER_RADIUS = 7;
@@ -91,8 +94,8 @@ const COOLDOWN = { bolt: 1100, spray: 1300, slash: 950, nova: 2400, orbit: 0, ch
 
 // pixelfx(MIT, https://github.com/patch-gg/pixelfx)로 미리 그려 둔 효과 시트 (wwwroot/pfx).
 // fw x fh 프레임이 가로로 이어져 있고, (ox, oy)가 효과의 기준점입니다.
-const PFX = {"w_bolt":{"fw":114,"fh":51,"frames":16,"fps":20,"ox":91,"oy":25},"w_spray":{"fw":146,"fh":101,"frames":23,"fps":15,"ox":12,"oy":66},"w_slash":{"fw":66,"fh":56,"frames":18,"fps":20,"ox":5,"oy":46},"w_orbit":{"fw":78,"fh":100,"frames":36,"fps":12,"ox":39,"oy":92},"w_chain":{"fw":114,"fh":76,"frames":18,"fps":20,"ox":76,"oy":38},"w_aura":{"fw":112,"fh":81,"frames":48,"fps":12,"ox":56,"oy":61},"nova":{"fw":158,"fh":144,"frames":27,"fps":15,"ox":83,"oy":118},"poof":{"fw":82,"fh":74,"frames":24,"fps":15,"ox":37,"oy":62},"levelup":{"fw":73,"fh":81,"frames":27,"fps":20,"ox":34,"oy":78},"hit_normal":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_fire":{"fw":102,"fh":51,"frames":15,"fps":30,"ox":26,"oy":35},"hit_water":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_electric":{"fw":102,"fh":51,"frames":15,"fps":30,"ox":26,"oy":35},"hit_grass":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ice":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_fighting":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_poison":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ground":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_flying":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_psychic":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_bug":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_rock":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ghost":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_dragon":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_dark":{"fw":99,"fh":51,"frames":15,"fps":30,"ox":23,"oy":35},"hit_steel":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_fairy":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"a_poison":{"fw":212,"fh":63,"frames":40,"fps":10,"ox":106,"oy":49},"a_sun":{"fw":102,"fh":101,"frames":40,"fps":10,"ox":51,"oy":50},"a_whirl":{"fw":116,"fh":70,"frames":36,"fps":12,"ox":58,"oy":35},"b_arrow":{"fw":92,"fh":14,"frames":12,"fps":20,"ox":88,"oy":7},"b_disc":{"fw":92,"fh":48,"frames":10,"fps":20,"ox":72,"oy":24},"b_fireball":{"fw":122,"fh":56,"frames":18,"fps":15,"ox":98,"oy":28},"b_ice":{"fw":148,"fh":33,"frames":16,"fps":20,"ox":137,"oy":12},"b_laser":{"fw":95,"fh":27,"frames":10,"fps":20,"ox":83,"oy":13},"c_strike":{"fw":223,"fh":262,"frames":36,"fps":12,"ox":111,"oy":226},"n_dark":{"fw":246,"fh":240,"frames":38,"fps":10,"ox":123,"oy":201},"n_fire":{"fw":202,"fh":105,"frames":39,"fps":10,"ox":101,"oy":69},"n_frost":{"fw":248,"fh":122,"frames":41,"fps":12,"ox":125,"oy":90},"n_plasma":{"fw":199,"fh":186,"frames":26,"fps":15,"ox":101,"oy":93},"n_quake":{"fw":250,"fh":74,"frames":37,"fps":12,"ox":128,"oy":58},"n_splash":{"fw":135,"fh":100,"frames":30,"fps":12,"ox":62,"oy":78},"n_thunder":{"fw":251,"fh":135,"frames":29,"fps":15,"ox":124,"oy":103},"o_arcane":{"fw":78,"fh":101,"frames":29,"fps":12,"ox":39,"oy":93},"o_flame":{"fw":74,"fh":96,"frames":29,"fps":12,"ox":37,"oy":86},"o_leaf":{"fw":97,"fh":90,"frames":29,"fps":12,"ox":48,"oy":83},"s_flame":{"fw":177,"fh":93,"frames":24,"fps":15,"ox":30,"oy":58},"s_frost":{"fw":166,"fh":52,"frames":18,"fps":15,"ox":12,"oy":25},"s_jet":{"fw":182,"fh":58,"frames":15,"fps":15,"ox":14,"oy":18},"sl_double":{"fw":85,"fh":105,"frames":16,"fps":20,"ox":2,"oy":89},"sl_hammer":{"fw":161,"fh":100,"frames":24,"fps":12,"ox":58,"oy":80},"sl_punch":{"fw":117,"fh":107,"frames":17,"fps":20,"ox":46,"oy":106},"sl_scythe":{"fw":122,"fh":63,"frames":25,"fps":12,"ox":54,"oy":58},"sl_sword":{"fw":121,"fh":79,"frames":15,"fps":20,"ox":44,"oy":70},"sl_thrust":{"fw":137,"fh":64,"frames":15,"fps":20,"ox":4,"oy":52},"sl_whip":{"fw":153,"fh":60,"frames":17,"fps":20,"ox":-3,"oy":52}};
-const MAX_PFX = { hit: 24, poof: 40, nova: 8, levelup: 2, spray: 6, slash: 8, chain: 24 };
+const PFX = {"w_bolt":{"fw":114,"fh":51,"frames":16,"fps":20,"ox":91,"oy":25},"w_spray":{"fw":146,"fh":101,"frames":23,"fps":15,"ox":12,"oy":66},"w_slash":{"fw":66,"fh":56,"frames":18,"fps":20,"ox":5,"oy":46},"w_orbit":{"fw":78,"fh":100,"frames":36,"fps":12,"ox":39,"oy":92},"w_chain":{"fw":114,"fh":76,"frames":18,"fps":20,"ox":76,"oy":38},"w_aura":{"fw":112,"fh":81,"frames":48,"fps":12,"ox":56,"oy":61},"nova":{"fw":158,"fh":144,"frames":27,"fps":15,"ox":83,"oy":118},"poof":{"fw":82,"fh":74,"frames":24,"fps":15,"ox":37,"oy":62},"crit":{"fw":160,"fh":94,"frames":27,"fps":30,"ox":64,"oy":64},"levelup":{"fw":73,"fh":81,"frames":27,"fps":20,"ox":34,"oy":78},"hit_normal":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_fire":{"fw":102,"fh":51,"frames":15,"fps":30,"ox":26,"oy":35},"hit_water":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_electric":{"fw":102,"fh":51,"frames":15,"fps":30,"ox":26,"oy":35},"hit_grass":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ice":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_fighting":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_poison":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ground":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_flying":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_psychic":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_bug":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_rock":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_ghost":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_dragon":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"hit_dark":{"fw":99,"fh":51,"frames":15,"fps":30,"ox":23,"oy":35},"hit_steel":{"fw":100,"fh":51,"frames":15,"fps":30,"ox":24,"oy":35},"hit_fairy":{"fw":101,"fh":51,"frames":15,"fps":30,"ox":25,"oy":35},"a_poison":{"fw":212,"fh":63,"frames":40,"fps":10,"ox":106,"oy":49},"a_sun":{"fw":102,"fh":101,"frames":40,"fps":10,"ox":51,"oy":50},"a_whirl":{"fw":116,"fh":70,"frames":36,"fps":12,"ox":58,"oy":35},"b_arrow":{"fw":92,"fh":14,"frames":12,"fps":20,"ox":88,"oy":7},"b_disc":{"fw":92,"fh":48,"frames":10,"fps":20,"ox":72,"oy":24},"b_fireball":{"fw":122,"fh":56,"frames":18,"fps":15,"ox":98,"oy":28},"b_ice":{"fw":148,"fh":33,"frames":16,"fps":20,"ox":137,"oy":12},"b_laser":{"fw":95,"fh":27,"frames":10,"fps":20,"ox":83,"oy":13},"c_strike":{"fw":223,"fh":262,"frames":36,"fps":12,"ox":111,"oy":226},"n_dark":{"fw":246,"fh":240,"frames":38,"fps":10,"ox":123,"oy":201},"n_fire":{"fw":202,"fh":105,"frames":39,"fps":10,"ox":101,"oy":69},"n_frost":{"fw":248,"fh":122,"frames":41,"fps":12,"ox":125,"oy":90},"n_plasma":{"fw":199,"fh":186,"frames":26,"fps":15,"ox":101,"oy":93},"n_quake":{"fw":250,"fh":74,"frames":37,"fps":12,"ox":128,"oy":58},"n_splash":{"fw":135,"fh":100,"frames":30,"fps":12,"ox":62,"oy":78},"n_thunder":{"fw":251,"fh":135,"frames":29,"fps":15,"ox":124,"oy":103},"o_arcane":{"fw":78,"fh":101,"frames":29,"fps":12,"ox":39,"oy":93},"o_flame":{"fw":74,"fh":96,"frames":29,"fps":12,"ox":37,"oy":86},"o_leaf":{"fw":97,"fh":90,"frames":29,"fps":12,"ox":48,"oy":83},"s_flame":{"fw":177,"fh":93,"frames":24,"fps":15,"ox":30,"oy":58},"s_frost":{"fw":166,"fh":52,"frames":18,"fps":15,"ox":12,"oy":25},"s_jet":{"fw":182,"fh":58,"frames":15,"fps":15,"ox":14,"oy":18},"sl_double":{"fw":85,"fh":105,"frames":16,"fps":20,"ox":2,"oy":89},"sl_hammer":{"fw":161,"fh":100,"frames":24,"fps":12,"ox":58,"oy":80},"sl_punch":{"fw":117,"fh":107,"frames":17,"fps":20,"ox":46,"oy":106},"sl_scythe":{"fw":122,"fh":63,"frames":25,"fps":12,"ox":54,"oy":58},"sl_sword":{"fw":121,"fh":79,"frames":15,"fps":20,"ox":44,"oy":70},"sl_thrust":{"fw":137,"fh":64,"frames":15,"fps":20,"ox":4,"oy":52},"sl_whip":{"fw":153,"fh":60,"frames":17,"fps":20,"ox":-3,"oy":52}};
+const MAX_PFX = { crit: 8, hit: 24, poof: 40, nova: 8, levelup: 2, spray: 6, slash: 8, chain: 24 };
 
 // 기술 모양별 효과 시트 (회색, 게임에서 기술 타입 색을 곱함). 충격파는 nova를 씁니다.
 // 오라: 범위 안의 모든 적을 계속 때리므로 한 번의 데미지는 작게 둡니다.
@@ -256,7 +259,7 @@ class Game {
             files.add(`ui/fx_skill_${weapon.type}.png`);
         }
         for (const name of new Set(DECOR)) files.add(`walk/${name}.png`);
-        for (const name of ["nova", "poof", "levelup"]) files.add(`pfx/${name}.png`);
+        for (const name of ["nova", "poof", "levelup", "crit"]) files.add(`pfx/${name}.png`);
         for (const weapon of setup.weapons) if (fxOf(weapon)) files.add(`pfx/${fxOf(weapon)}.png`);
         for (const weapon of setup.weapons) files.add(`pfx/hit_${weapon.type}.png`);
         for (const file of files) jobs.push(loadImage(file).then(image => { this.images[file] = image; }));
@@ -951,7 +954,10 @@ class Game {
     weaponDamage(w, e) {
         const levelMul = 1 + 0.3 * (this.lv(w) - 1);
         const eff = e.def.eff?.[w.index] ?? 1;
-        const crit = this.traitKey === "crit" && Math.random() < TRAIT.critChance ? 2 : 1;
+        // 급소면 바로 뒤의 damage()가 숫자와 효과를 다르게 보여 줍니다.
+        const stage = Math.min(3, (w.crit ?? 0) + (this.traitKey === "crit" || this.traitKey === "sniper" ? 1 : 0));
+        this.critHit = Math.random() < CRIT.chances[stage];
+        const crit = this.critHit ? (this.traitKey === "sniper" ? CRIT.sniperMult : CRIT.mult) : 1;
         return w.power / 4 * this.powerMul * levelMul * eff * this.traitPower(w) * crit * (0.9 + Math.random() * 0.2);
     }
 
@@ -1113,7 +1119,10 @@ class Game {
             e.kbx += dx / d * k;
             e.kby += dy / d * k;
         }
-        this.addNumber(e.x, e.y - 10 * e.size, Math.max(1, Math.round(amount)), "#ffffff");
+        const crit = this.critHit;
+        this.critHit = false;
+        this.addNumber(e.x, e.y - 10 * e.size, Math.max(1, Math.round(amount)), crit ? "#ffd23c" : "#ffffff", crit);
+        if (crit) this.addPfx("crit", "crit", e.x, e.y - 6 * e.size, { scale: 0.32 * Math.sqrt(e.size), speed: 1.4 });
         if (!(e.sparkUntil > this.time)) {
             e.sparkUntil = this.time + 0.15;
             const sx = fromX ?? this.player.x, sy = fromY ?? this.player.y;
@@ -1357,9 +1366,9 @@ class Game {
         }
     }
 
-    addNumber(x, y, value, color) {
+    addNumber(x, y, value, color, big = false) {
         if (this.numbers.length >= MAX_NUMBERS) this.numbers.shift();
-        this.numbers.push({ x: x + (Math.random() - 0.5) * 6, y, value, color, life: 0.6 });
+        this.numbers.push({ x: x + (Math.random() - 0.5) * 6, y, value, color, big, life: big ? 0.8 : 0.6 });
     }
 
     // --- 레벨업 ---
@@ -1950,6 +1959,15 @@ class Game {
         ctx.strokeStyle = "rgb(0 0 0 / 70%)";
         for (const n of this.numbers) {
             ctx.globalAlpha = Math.min(1, n.life * 3);
+            // 급소: 크게, 노랗게, 느낌표
+            ctx.font = n.big ? "bold 11px sans-serif" : "bold 7px sans-serif";
+            if (n.big) {
+                const text = `${n.value}!`;
+                ctx.strokeText(text, n.x, n.y);
+                ctx.fillStyle = n.color;
+                ctx.fillText(text, n.x, n.y);
+                continue;
+            }
             ctx.strokeText(n.value, n.x, n.y);
             ctx.fillStyle = n.color;
             ctx.fillText(n.value, n.x, n.y);
