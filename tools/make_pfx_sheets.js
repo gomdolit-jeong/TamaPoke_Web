@@ -81,12 +81,12 @@ export const VARIANTS = [
     ["sl_sword", "melee/sword-slash", 20], ["sl_double", "melee/double-slash", 20], ["sl_punch", "melee/uppercut", 20],
     ["sl_whip", "melee/whip-crack", 20], ["sl_thrust", "melee/thrust", 20], ["sl_hammer", "melee/hammer-smash", 12],
     ["sl_scythe", "melee/scythe-reap", 12],
-    ["n_quake", "nature/quake", 12], ["n_frost", "ice/frost-nova", 12], ["n_thunder", "lightning/thunderclap", 15],
+    ["n_slam", "impacts/ground-slam", 12], ["n_frost", "ice/frost-nova", 12], ["n_thunder", "lightning/thunderclap", 15],
     ["n_fire", "fire/fire-ring", 10], ["n_dark", "shadow/dark-explosion", 10], ["n_plasma", "explosions/plasma-explosion", 15],
     ["n_splash", "water/splash", 12],
     ["c_strike", "lightning/lightning-strike", 12],
     ["o_leaf", "nature/leaf-storm", 12], ["o_flame", "shadow/shadow-flames", 12], ["o_arcane", "arcane/arcane-orb", 12],
-    ["a_poison", "nature/poison-cloud", 10], ["a_sun", "holy/sunburst", 10], ["a_whirl", "water/whirlpool", 12]
+    ["a_puddle", "nature/toxic-puddle", 10], ["a_sun", "holy/sunburst", 10], ["a_whirl", "water/whirlpool", 12]
 ];
 
 export async function runVariants(only) {

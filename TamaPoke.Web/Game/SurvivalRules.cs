@@ -359,14 +359,14 @@ public static class SurvivalRules
             "slash" when type is PokemonType.Dragon or PokemonType.Bug => "sl_double",
             "slash" => "w_slash",
 
-            "nova" when Has("Quake|Earthquake|Magnitude|Bulldoze|Stomp|Fissure") => "n_quake",
+            "nova" when Has("Quake|Earthquake|Magnitude|Bulldoze|Stomp|Fissure") => "n_slam",
             "nova" when type is PokemonType.Fire => "n_fire",
             "nova" when type is PokemonType.Ice => "n_frost",
             "nova" when type is PokemonType.Electric => "n_thunder",
             "nova" when type is PokemonType.Water => "n_splash",
             "nova" when type is PokemonType.Dark or PokemonType.Ghost => "n_dark",
             "nova" when Has("Explosion|Burst") || type is PokemonType.Normal or PokemonType.Dragon or PokemonType.Steel => "n_plasma",
-            "nova" when type is PokemonType.Ground or PokemonType.Rock => "n_quake",
+            "nova" when type is PokemonType.Ground or PokemonType.Rock => "n_slam",
             "nova" => "nova",
 
             "chain" when Has("Thunder|Bolt|Strike|Wild") => "c_strike",
@@ -377,7 +377,7 @@ public static class SurvivalRules
             "orbit" when type is PokemonType.Fairy or PokemonType.Psychic => "o_arcane",
             "orbit" => "w_orbit",
 
-            "aura" when type is PokemonType.Poison or PokemonType.Bug => "a_poison",
+            "aura" when type is PokemonType.Poison or PokemonType.Bug => "a_puddle",
             "aura" when type is PokemonType.Fairy || Has("Sunny|Light|Wish|Moon|Morning|Sun") => "a_sun",
             "aura" when type is PokemonType.Water or PokemonType.Ice => "a_whirl",
             _ => "w_aura",
