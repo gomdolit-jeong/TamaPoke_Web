@@ -341,6 +341,8 @@ public static class SurvivalRules
         PokemonType type = skill.Type;
         return kind switch
         {
+            // 부채꼴은 모양 세 가지: 파도(앞쪽을 넓게 덮침), 한 줄기(곧게 뻗음), 세 갈래(불길이 넓게 퍼짐, w_spray)
+            "spray" when type is PokemonType.Water && Has("Surf|Wave|Muddy|Tide|Sparkling|Wash|Flood|Tsunami|Whirlpool|Origin") => "s_wave",
             "spray" when Has("Flamethrower|Flame|Blaze|Inferno|Burn") => "s_flame",
             "spray" when type is PokemonType.Water => "s_jet",
             "spray" when type is PokemonType.Ice => "s_frost",
@@ -360,7 +362,10 @@ public static class SurvivalRules
             "slash" when Has("Whip|Tail|Vine|Lash|Slap") => "sl_whip",
             "slash" when Has("Horn|Drill|Peck|Spear|Megahorn|Lunge") => "sl_thrust",
             "slash" when Has("Hammer|Smash|Slam|Crash|Wood|Body|Heavy") => "sl_hammer",
+            "slash" when Has("Spin|Rapid|Twister|Whirl|Roll|Rollout") => "sl_spin",
             "slash" when Has("Blade|Slash|Cutter|Cut|Sword|Edge|Axe|Wing") => "sl_sword",
+            "slash" when skill.MaxHits > 1 => "sl_flurry",
+            "slash" when skill.Power >= 120 => "sl_cleave",
             "slash" when type is PokemonType.Dark or PokemonType.Ghost => "sl_scythe",
             "slash" when type is PokemonType.Fighting => "sl_punch",
             "slash" when type is PokemonType.Steel => "sl_sword",
@@ -386,9 +391,45 @@ public static class SurvivalRules
             "orbit" when type is PokemonType.Fairy or PokemonType.Psychic => "o_arcane",
             "orbit" => "w_orbit",
 
-            "aura" when type is PokemonType.Poison or PokemonType.Bug => "a_puddle",
-            "aura" when type is PokemonType.Fairy || Has("Sunny|Light|Wish|Moon|Morning|Sun") => "a_sun",
-            "aura" when type is PokemonType.Water or PokemonType.Ice => "a_whirl",
+            "aura" => AuraFx(skill, Has),
+            _ => "w_aura",
+        };
+    }
+
+    // 변화 기술(오라) 효과: 회복·방어막·상태 이상·능력 올리기/내리기에 맞춰 고릅니다.
+    // st_로 시작하는 그림은 머리 위에 원래 색 그대로 보이는 상태 표시입니다. (분노, 가속, 잠, 혼란 등)
+    static string AuraFx(SkillInfo skill, Func<string, bool> has)
+    {
+        PokemonType type = skill.Type;
+        var self = skill.StatTarget == StatTarget.User ? skill.StatChanges ?? [] : [];
+        bool lowers = skill.StatTarget == StatTarget.Opponent && skill.StatChanges is { Count: > 0 };
+        if (has("Recover|Roost|Synthesis|Moonlight|Morning Sun|Wish|Rest|Slack Off|Soft-Boiled|Milk Drink|Heal|Shore Up|Life Dew|Healing|Aqua Ring|Ingrain")) return "a_heal";
+        if (has("Protect|Detect|Screen|Reflect|Veil|Guard|Shield|Barrier|Endure|Substitute")) return "a_field";
+        if (has("Powder|Spore")) return "a_spore";
+        if (has("Confuse|Supersonic|Swagger|Flatter|Teeter")) return "st_confused";
+        if (has("Attract|Charm|Sweet Kiss|Captivate|Baby-Doll")) return "st_charmed";
+        if (has("Growth|Leech Seed|Aromatherapy|Grassy")) return "st_bloom";
+        switch (skill.Ailment)
+        {
+            case SkillAilment.Sleep: return "st_sleep";
+            case SkillAilment.Paralysis: return "st_stunned";
+            case SkillAilment.Burn: return "st_burning";
+            case SkillAilment.Poison or SkillAilment.BadPoison: return "a_puddle";
+            case SkillAilment.Freeze: return "a_whirl";
+        }
+        if (self.Any(c => c.Change > 0 && c.Stat is BattleStat.Speed or BattleStat.Evasion)) return "st_haste";
+        if (self.Any(c => c.Change > 0 && c.Stat is BattleStat.Attack or BattleStat.SpAttack)) return "st_rage";
+        if (self.Any(c => c.Change > 0 && c.Stat is BattleStat.Defense or BattleStat.SpDefense)) return "a_shield";
+        if (lowers) return "a_hex";
+        if (has("Sunny|Sun|Light|Wish|Moon|Morning")) return "a_sun";
+        if (has("Rain|Water|Aqua|Hail|Snow|Haze|Mist")) return "a_whirl";
+        return type switch
+        {
+            PokemonType.Poison or PokemonType.Bug => "a_puddle",
+            PokemonType.Fairy => "a_sun",
+            PokemonType.Water or PokemonType.Ice => "a_whirl",
+            PokemonType.Ghost or PokemonType.Dark => "a_hex",
+            PokemonType.Grass => "st_bloom",
             _ => "w_aura",
         };
     }

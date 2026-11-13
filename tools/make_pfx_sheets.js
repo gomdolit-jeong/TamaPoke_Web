@@ -86,17 +86,32 @@ export const VARIANTS = [
     ["n_splash", "water/splash", 12],
     ["c_strike", "lightning/lightning-strike", 12],
     ["o_leaf", "nature/leaf-storm", 12], ["o_flame", "shadow/shadow-flames", 12], ["o_arcane", "arcane/arcane-orb", 12],
-    ["a_puddle", "nature/toxic-puddle", 10], ["a_sun", "holy/sunburst", 10], ["a_whirl", "water/whirlpool", 12]
+    ["a_puddle", "nature/toxic-puddle", 10], ["a_sun", "holy/sunburst", 10], ["a_whirl", "water/whirlpool", 12],
+    // 베기 더: 여러 번 베기, 회전 베기, 큰 내려베기
+    ["sl_flurry", "melee/dagger-flurry", 20], ["sl_spin", "melee/spin-slash", 20], ["sl_cleave", "melee/heavy-cleave", 12],
+    // 맞을 때 효과 (공격 모양마다): 불꽃 튀김, 작은 폭발, 둔탁한 충격, 반짝임
+    ["h_spark", "impacts/hit-spark", 30], ["h_burst", "explosions/plasma-explosion", 20], ["h_blunt", "impacts/blunt-hit", 20],
+    ["h_parry", "impacts/parry", 20],
+    // 쏘는 순간 (탄환만, 게임에서는 앞부분 번쩍임만)
+    ["c_muzzle", "projectiles/muzzle-pistol", 15],
+    // 변화 기술 오라 (발밑): 회복, 방어막, 보호막, 저주 문양, 포자
+    ["a_heal", "holy/heal-aoe", 10], ["a_shield", "holy/divine-shield", 12], ["a_field", "scifi/force-field", 12],
+    ["a_hex", "shadow/hex-sigil", 10], ["a_spore", "nature/spore-burst", 10],
+    // 변화 기술 오라 (머리 위, 원래 색 그대로): 분노, 가속, 잠, 혼란, 마비, 헤롱헤롱, 화상, 자라기
+    ["st_rage", "status/rage", 12, true], ["st_haste", "status/haste", 12, true], ["st_sleep", "status/sleep", 10, true],
+    ["st_confused", "status/confused", 10, true], ["st_stunned", "status/stunned", 10, true], ["st_charmed", "status/charmed", 10, true],
+    ["st_burning", "status/burning", 12, true], ["st_bloom", "nature/healing-bloom", 10, true],
 ];
 
 export async function runVariants(only) {
     const core = await import(`${BASE}/core/index.js`);
     const GRAY = ["#3a3a3a", "#5a5a5a", "#7c7c7c", "#a0a0a0", "#c4c4c4", "#e0e0e0", "#f4f4f4", "#ffffff"];
     const log = [];
-    for (const [name, path, fps] of VARIANTS) {
+    for (const [name, path, fps, native] of VARIANTS) {
         if (only && !only.includes(name)) continue;
         const mod = await import(`${BASE}/fx/${path}.js`);
-        const r = await render(core, mod, { palette: GRAY, sparks: ["#ffffff", "#e0e0e0", "#c4c4c4", "#7c7c7c"], seed: 7 }, fps);
+        // native: 원래 색 그대로 (머리 위 상태 표시). 나머지는 회색으로 뽑고 게임에서 타입 색 단계를 입힙니다.
+        const r = await render(core, mod, native ? { seed: 7 } : { palette: GRAY, sparks: ["#ffffff", "#e0e0e0", "#c4c4c4", "#7c7c7c"], seed: 7 }, fps);
         await save(`pfx_${name}`, r.sheet, r.info);
         log.push(`${name} ${JSON.stringify(r.info)}`);
     }
