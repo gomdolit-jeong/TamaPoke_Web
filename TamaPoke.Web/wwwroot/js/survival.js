@@ -2824,3 +2824,6 @@ class Game {
         }
     }
 }
+
+// 배틀 화면(wwwroot/js/battle-fx.js)도 같은 효과 시트와 타입 색을 씁니다.
+export { PFX, rampHex };

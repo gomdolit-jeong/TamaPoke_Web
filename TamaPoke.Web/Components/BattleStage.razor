@@ -1,6 +1,7 @@
 @using TamaPoke.Web.Game
 @using TamaPoke.Web.Utils
 @inject Loc Loc
+@inject IJSRuntime JS
 
 @* 게임판 좌표는 PC판 BattleView와 같은 288x288입니다. *@
 <div class="game-arena battle-arena @(Pet.IsDefeatedFadeOut ? "is-defeated" : "")">
@@ -42,7 +43,7 @@
             int frame = pfx.FrameAt(Pet.BattleClockMs);
             if (frame < 0) continue;
             var s = pfx.Sheet;
-            <div class="battle-pfx" style="@PfxStyle(pfx, frame)"></div>
+            <div class="battle-pfx" style="@PfxStyle(pfx, frame, Pet.BattleClockMs)"></div>
         }
         @if (Pet.IsBallVisible)
         {
@@ -197,14 +198,37 @@
         _ => Loc.T($"ailment.badge.{ailment.ToString().ToLowerInvariant()}"),
     };
 
-    // 기준점(Ox, Oy)이 (X, Y)에 오도록 놓고, 그 점을 중심으로 돌리거나 뒤집습니다.
-    private static string PfxStyle(BattlePfx pfx, int frame)
+    // 기술 효과 시트 (wwwroot/js/battle-fx.js): 배틀이 열리면 양쪽 기술 효과를 타입 색으로 미리 그려 둡니다.
+    private static Task<IJSObjectReference>? _fxModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _fxModule ??= JS.InvokeAsync<IJSObjectReference>("import", BuildInfo.Versioned("./js/battle-fx.js")).AsTask();
+            var module = await _fxModule;
+            Pet.BattleFxSheet = (name, type, color) => module.InvokeAsync<string?>("sheet", name, type, color).AsTask();
+            Pet.BattleFxHead = enemy => module.InvokeAsync<double[]?>("head", enemy ? "enemy" : "player").AsTask();
+            var needed = Pet.BattleFxNeeded().Select(n => new[] { n.Name, n.Type, n.Color }).ToArray();
+            _ = module.InvokeVoidAsync("preload", (object)needed).AsTask();
+        }
+        catch (JSException)
+        {
+            _fxModule = null; // 효과 시트 없이 예전 이펙트로 진행합니다.
+        }
+    }
+
+    // 기준점(Ox, Oy)이 (X, Y)에 오도록 놓고, 그 점을 중심으로 돌리거나 뒤집습니다. 움직이는 효과는 지금 위치에 그립니다.
+    private static string PfxStyle(BattlePfx pfx, int frame, double clockMs)
     {
         var s = pfx.Sheet;
         double k = pfx.Scale;
+        var (x, y) = pfx.PositionAt(clockMs);
+        string image = pfx.Image ?? $"pfx/{pfx.Name}.png";
         string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
-        return $"left:{F(pfx.X - s.Ox * k)}px;top:{F(pfx.Y - s.Oy * k)}px;width:{F(s.Fw * k)}px;height:{F(s.Fh * k)}px;"
-            + $"background-image:url('pfx/{pfx.Name}.png');background-size:{F(s.Fw * s.Frames * k)}px {F(s.Fh * k)}px;background-position:-{F(frame * s.Fw * k)}px 0;"
+        return $"left:{F(x - s.Ox * k)}px;top:{F(y - s.Oy * k)}px;width:{F(s.Fw * k)}px;height:{F(s.Fh * k)}px;"
+            + $"background-image:url('{image}');background-size:{F(s.Fw * s.Frames * k)}px {F(s.Fh * k)}px;background-position:-{F(frame * s.Fw * k)}px 0;"
             + $"transform-origin:{F(s.Ox * k)}px {F(s.Oy * k)}px;transform:rotate({F(pfx.AngleDeg)}deg) scaleX({(pfx.Flip ? -1 : 1)})";
     }
 }

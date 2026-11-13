@@ -10,7 +10,9 @@
 else if (_strip is not null)
 {
     @* 시트 전체를 img 하나로 두고 위치만 옮겨서, 프레임이 바뀌어도 이미지를 다시 디코딩하지 않습니다. *@
-    <div class="sprite" style="width:@(Px(_strip.FrameWidth));height:@(Px(_strip.FrameHeight));transform:scaleX(@(Flipped ? -1 : 1))">
+    @* data-*: 배틀 효과가 지금 프레임의 머리 위치를 찾을 때 씁니다. (wwwroot/js/battle-fx.js) *@
+    <div class="sprite" style="width:@(Px(_strip.FrameWidth));height:@(Px(_strip.FrameHeight));transform:scaleX(@(Flipped ? -1 : 1))"
+         data-offsets="@_strip.OffsetsUrl" data-frame="@_frameIndex" data-row="@SafeRow" data-fw="@_strip.FrameWidth" data-fh="@_strip.FrameHeight" data-flip="@(Flipped ? 1 : 0)">
         <img src="@_stripUrl" alt="@Alt" draggable="false"
              style="width:@(Px(_strip.SheetWidth));height:@(Px(_strip.SheetHeight));transform:translate(@(Px(-_frameIndex * _strip.FrameWidth)),@(Px(-SafeRow * _strip.FrameHeight)))" />
     </div>

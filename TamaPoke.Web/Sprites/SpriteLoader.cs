@@ -15,6 +15,9 @@ public sealed class SpriteStrip
     // 프레임별 재생 시간 (단위: 1/60초, AnimData.xml의 Durations)
     public required int[] Durations { get; init; }
 
+    // 프레임마다 머리·몸 가운데·양손 위치를 점으로 찍어 둔 그림 (SpriteCollab의 *-Offsets.png, 검은 점이 머리)
+    public string? OffsetsUrl { get; init; }
+
     public int Columns => SheetWidth / FrameWidth;
     public int Rows => SheetHeight / FrameHeight;
 }
@@ -52,6 +55,7 @@ public sealed class SpriteLoader(HttpClient http)
             SheetWidth = sheetWidth,
             SheetHeight = sheetHeight,
             Durations = anim.Durations,
+            OffsetsUrl = $"{BaseUrl}/{path}/{anim.FileName.Replace("-Anim.png", "-Offsets.png")}",
         };
     }
 

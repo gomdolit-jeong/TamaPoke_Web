@@ -277,8 +277,15 @@ public sealed partial class PokemonState
         NeedsSave = true;
     }
 
-    // 기술 이펙트: 특수 기술은 쓴 쪽에서 날아가서 터지고, 나머지는 맞는 쪽에서 바로 터집니다.
+    // 기술 이펙트: 서바이벌과 같은 기술별 효과(PokemonState.BattleFx.cs). 효과 시트를 못 그리면 예전 이펙트로 대신합니다.
     private async Task PlaySkillFxAsync(SkillInfo skill, bool targetIsEnemy)
+    {
+        if (await PlayMoveFxAsync(skill, targetIsEnemy)) return;
+        await PlayLegacySkillFxAsync(skill, targetIsEnemy);
+    }
+
+    // 예전 이펙트: 특수 기술은 쓴 쪽에서 날아가서 터지고, 나머지는 맞는 쪽에서 바로 터집니다.
+    private async Task PlayLegacySkillFxAsync(SkillInfo skill, bool targetIsEnemy)
     {
         string type = skill.Type.ToString().ToLowerInvariant();
         if (skill.Category == SkillCategory.Special)
@@ -303,10 +310,13 @@ public sealed partial class PokemonState
         BattlePfxList.RemoveAll(fx => fx.IsDone(BattleClockMs));
     }
 
-    private void AddBattlePfx(string name, double x, double y, double scale, bool flip = false, double angleDeg = 0, double speed = 1, double delayMs = 0)
+    private const int MAX_BATTLE_PFX = 12;
+
+    private void AddBattlePfx(string name, double x, double y, double scale, bool flip = false, double angleDeg = 0, double speed = 1, double delayMs = 0,
+        string? image = null, double vx = 0, double vy = 0, double lifeMs = 0, double cut = 1)
     {
-        if (!PfxSheets.All.ContainsKey(name) || BattlePfxList.Count >= 8) return;
-        BattlePfxList.Add(new BattlePfx(name, x, y, scale, flip, angleDeg, speed, BattleClockMs + delayMs));
+        if (!PfxSheets.All.ContainsKey(name) || BattlePfxList.Count >= MAX_BATTLE_PFX) return;
+        BattlePfxList.Add(new BattlePfx(name, x, y, scale, flip, angleDeg, speed, BattleClockMs + delayMs, image, vx, vy, lifeMs, cut));
     }
 
     // 맞았을 때: 타입 색 타격 불꽃이 공격 방향으로 튀고, 급소면 급소 효과, 급소나 효과가 굉장하면 화면이 흔들립니다.

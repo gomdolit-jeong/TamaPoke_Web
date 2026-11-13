@@ -1044,8 +1044,9 @@ public sealed partial class PokemonState
     // 위력 0 변화 기술: 능력치 변화 / 상태이상 (둘 다 없는 기술은 "아무 일도 일어나지 않았다")
     private async Task UseStatusMoveAsync(SkillInfo skill, bool userIsPlayer)
     {
+        bool shown = await PlayStatusMoveFxAsync(skill, userIsPlayer);
         if (skill.HasStatChanges) await ApplyStatChangesAsync(skill, userIsPlayer, isStatusMove: true);
-        if (skill.Ailment != SkillAilment.None) await PlaySkillFxAsync(skill, targetIsEnemy: userIsPlayer);
+        if (skill.Ailment != SkillAilment.None && !shown) await PlayLegacySkillFxAsync(skill, targetIsEnemy: userIsPlayer);
         if (skill.Ailment != SkillAilment.None || !skill.HasStatChanges)
             await TryInflictAilmentAsync(skill, targetIsEnemy: userIsPlayer, isStatusMove: true);
     }
