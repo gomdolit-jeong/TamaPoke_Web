@@ -2423,9 +2423,10 @@ class Game {
         ctx.textAlign = "right";
         ctx.font = `bold ${wide ? 11 : 10}px sans-serif`;
         this.outlinedText(this.setup.texts?.combo ?? "Combo", right, top + 6, "#ffffff");
-        const size = (wide ? 28 : 21) * pop;
+        // 숫자는 "연속" 글자 아래로 띄우고, 커질 때도 위치(가운데)는 그대로 둡니다.
+        const base = wide ? 28 : 21, size = base * pop;
         ctx.font = `italic 900 ${Math.round(size)}px sans-serif`;
-        this.outlinedText(`×${this.combo.toLocaleString()}`, right, top + 8 + size / 2 + 2, color, 5);
+        this.outlinedText(`×${this.combo.toLocaleString()}`, right, top + (wide ? 18 : 16) + base / 2, color, 5);
         ctx.globalAlpha = 1;
     }
 
