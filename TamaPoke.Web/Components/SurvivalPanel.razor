@@ -148,7 +148,8 @@
                 <h3>@Loc.T("web.survival.weapons")</h3>
                 <p class="survival-weapons-note">@Loc.T("web.survival.weaponsRandom")</p>
                 <ul class="survival-weapons">
-                    @for (int i = 0; i < pick.Weapons.Count; i++)
+                    @* 처음 칸 기술만 보여 줍니다. 여분 기술은 판에서 기술 합체로 칸이 비면 나옵니다. *@
+                    @for (int i = 0; i < Math.Min(pick.Weapons.Count, SurvivalRules.START_MOVES); i++)
                     {
                         var weapon = pick.Weapons[i];
                         var skill = Skills.GetSkill(weapon.SkillId);

@@ -23,7 +23,8 @@ const TUNE = {
     evolvePairLevel: 2,      // 짝 강화가 이 단계 이상이어야 진화
     evolveEliteFrom: 360,    // 이 시간(초)부터 엘리트도 진화 상자를 떨어뜨림 (그 전에는 보스 상자로만)
     evolvedLevelBonus: 1,    // 진화하면 Lv.5 + 이만큼처럼 (개수·범위·데미지). 2면 진화한 뒤가 너무 쉬웠음
-    evolvedCooldown: 0.85,   // 진화하면 재사용 시간 × 이만큼
+    evolvedCooldown: 0.85,
+    unionPower: 1.2,         // 기술 합체한 두 기술의 위력 배수 (SurvivalRules.UNION_POWER_PERCENT와 같게)   // 진화하면 재사용 시간 × 이만큼
 };
 const ELITE_EVERY = 45;
 const MAX_ENEMIES = 320;
@@ -162,6 +163,7 @@ export function getState() {
         weaponEvolved: g.weapons.map(w => !!w.evolved),
         weaponDamage: g.weapons.map(w => Math.round(w.dealt)),
         weaponKills: g.weapons.map(w => w.ko),
+        weaponUnion: g.weapons.map(w => w.partner ?? (w.absorbedInto != null ? -2 : -1)),
         passives: PASSIVES.map(name => ({ name, level: g.passives[name] })),
         power: Math.round(g.powerMul / base.power * 100),
         speed: Math.round(g.speed / base.speed * 100),
@@ -954,6 +956,45 @@ class Game {
         this.sound([[523, 70], [784, 70], [1047, 70], [1568, 220]]);
     }
 
+    // --- 기술 합체: 진화한 같은 타입 기술 두 개를 상자에서 합칩니다. 둘 다 계속 공격하고 한 칸만 차지합니다. ---
+
+    // 칸을 차지한 기술 (합체로 짝에게 들어간 기술은 빼고)
+    get ownedCount() { return this.weapons.filter(w => w.level > 0 && w.absorbedInto == null).length; }
+
+    unionPairs() {
+        const ready = this.weapons.filter(w => w.evolved && !w.united);
+        const pairs = [];
+        for (let i = 0; i < ready.length; i++)
+            for (let j = i + 1; j < ready.length; j++)
+                if (ready[i].type === ready[j].type) pairs.push([ready[i], ready[j]]);
+        return pairs;
+    }
+
+    offerUnion() {
+        // 데미지를 많이 준 기술을 앞(주 기술)에 둡니다.
+        const options = this.unionPairs().slice(0, 3).map(([a, b]) => {
+            const [main, other] = a.dealt >= b.dealt ? [a, b] : [b, a];
+            return { id: `u${main.index}_${other.index}`, kind: "union", index: main.index, partner: other.index, level: 0 };
+        });
+        if (options.length === 0) return;
+        this.awaitingChoice = true;
+        this.keys.clear();
+        this.stick = null;
+        this.sound([[784, 60], [988, 60], [1319, 120]]);
+        this.sendChoice(options);
+    }
+
+    uniteWeapons(main, other) {
+        if (!main || !other || main.united || other.united) return;
+        main.united = other.united = true;
+        main.partner = other.index;
+        other.absorbedInto = main.index;
+        const text = (this.setup.texts?.weaponUnion ?? "{0} + {1}").replace("{0}", main.name ?? "").replace("{1}", other.name ?? "");
+        this.showBanner(text, "#80deea");
+        this.addPfx("levelup", "levelup", this.player.x, this.player.y + 7, { scale: 1.8, speed: 0.7, follow: true });
+        this.sound([[523, 70], [659, 70], [784, 70], [1047, 70], [1568, 260]]);
+    }
+
     weaponDamage(w, e) {
         const levelMul = 1 + 0.3 * (this.lv(w) - 1);
         const eff = e.def.eff?.[w.index] ?? 1;
@@ -961,7 +1002,8 @@ class Game {
         const stage = Math.min(3, (w.crit ?? 0) + (this.traitKey === "crit" || this.traitKey === "sniper" ? 1 : 0));
         this.critHit = Math.random() < CRIT.chances[stage];
         const crit = this.critHit ? (this.traitKey === "sniper" ? CRIT.sniperMult : CRIT.mult) : 1;
-        return w.power / 4 * this.powerMul * levelMul * eff * this.traitPower(w) * crit * (0.9 + Math.random() * 0.2);
+        const union = w.united ? TUNE.unionPower : 1;
+        return w.power / 4 * this.powerMul * levelMul * eff * this.traitPower(w) * crit * union * (0.9 + Math.random() * 0.2);
     }
 
     fireWeapons(dt) {
@@ -1153,7 +1195,7 @@ class Game {
             return;
         }
         // 진화할 수 있는 기술이 있으면 엘리트도 상자를 떨어뜨립니다. (value 0: 진화만)
-        if (e.rank === "elite" && this.time >= TUNE.evolveEliteFrom && this.weapons.some(w => this.canEvolveWeapon(w))) this.dropGem(e.x, e.y - 8, "chest", 0);
+        if (e.rank === "elite" && this.time >= TUNE.evolveEliteFrom && (this.weapons.some(w => this.canEvolveWeapon(w)) || this.unionPairs().length > 0)) this.dropGem(e.x, e.y - 8, "chest", 0);
         const value = e.rank === "elite" ? 20 : e.tier >= 6 ? 3 : e.tier >= 3 ? 2 : 1;
         this.dropGem(e.x, e.y, "candy", value);
         if (e.rank === "elite" || Math.random() < 0.006) this.dropGem(e.x + 6, e.y, "berry", 0);
@@ -1272,8 +1314,10 @@ class Game {
         }
         if (g.kind === "chest") {
             // 상자: 진화할 수 있는 기술이 있으면 하나 진화. 보스 상자는 회복과 레벨업 2번도.
+            // 진화할 기술이 없으면 기술 합체를 고르게 합니다.
             const evolvable = this.weapons.find(w => this.canEvolveWeapon(w));
             if (evolvable) this.evolveWeapon(evolvable);
+            else if (!this.awaitingChoice && this.unionPairs().length > 0) this.offerUnion();
             p.hp = Math.min(p.maxHp, p.hp + p.maxHp * (g.value ? 0.3 : 0.1));
             if (g.value) this.pendingLevels += 2;
             this.sound([[784, 60], [988, 60], [1175, 60], [1568, 160]]);
@@ -1379,11 +1423,13 @@ class Game {
     offerLevelUp() {
         // 지운 카드(this.banished)는 이 판에서 다시 나오지 않습니다.
         const pool = [];
-        const owned = this.weapons.filter(w => w.level > 0).length;
+        const owned = this.ownedCount;
+        // 여분 기술(OWNED_WEAPON_MAX번째부터)은 처음 칸 기술을 다 배우거나 지운 뒤, 합체로 칸이 비었을 때 나옵니다.
+        const firstLeft = this.weapons.some(w => w.index < OWNED_WEAPON_MAX && w.level === 0 && !this.banished.has(`w${w.index}`));
         for (const w of this.weapons) {
             const id = `w${w.index}`;
             if (this.banished.has(id)) continue;
-            if (w.level === 0 && owned < OWNED_WEAPON_MAX) pool.push({ id, kind: "new", index: w.index, level: 1, weight: 2.2 });
+            if (w.level === 0 && owned < OWNED_WEAPON_MAX && (w.index < OWNED_WEAPON_MAX || !firstLeft)) pool.push({ id, kind: "new", index: w.index, level: 1, weight: 2.2 });
             else if (w.level > 0 && w.level < WEAPON_MAX) pool.push({ id, kind: "up", index: w.index, level: w.level + 1, weight: 3 });
         }
         for (const name of PASSIVES) {
@@ -1427,7 +1473,7 @@ class Game {
     // 고르는 화면을 C#에 띄웁니다. 진화 고르기에는 다시 뽑기·건너뛰기·지우기를 쓰지 않습니다.
     sendChoice(options) {
         this.lastOptions = options;
-        const tools = options[0]?.kind !== "evolve" && options[0]?.kind !== "heal";
+        const tools = !["evolve", "heal", "union"].includes(options[0]?.kind);
         this.dotnet.invokeMethodAsync("OnLevelUp", JSON.stringify({
             options,
             reroll: tools ? this.rerolls : -1,
@@ -1438,7 +1484,7 @@ class Game {
 
     // 다시 뽑기: 카드 3장을 새로 뽑습니다.
     reroll() {
-        if (!this.awaitingChoice || this.rerolls <= 0 || this.lastOptions?.[0]?.kind === "evolve") return;
+        if (!this.awaitingChoice || this.rerolls <= 0 || ["evolve", "union"].includes(this.lastOptions?.[0]?.kind)) return;
         this.rerolls--;
         this.sound([[660, 40], [880, 60]]);
         this.offerLevelUp();
@@ -1446,7 +1492,7 @@ class Game {
 
     // 건너뛰기: 이번 레벨업은 고르지 않고 넘어갑니다.
     skip() {
-        if (!this.awaitingChoice || this.skips <= 0 || this.lastOptions?.[0]?.kind === "evolve") return;
+        if (!this.awaitingChoice || this.skips <= 0 || ["evolve", "union"].includes(this.lastOptions?.[0]?.kind)) return;
         this.skips--;
         this.pendingLevels = Math.max(0, this.pendingLevels - 1);
         this.awaitingChoice = false;
@@ -1455,7 +1501,7 @@ class Game {
 
     // 지우기: 고른 카드를 이 판에서 다시 나오지 않게 하고, 카드를 새로 뽑습니다. (다시 뽑기 횟수는 쓰지 않음)
     banish(id) {
-        if (!this.awaitingChoice || this.banishes <= 0 || id === "heal" || id.startsWith("e")) return;
+        if (!this.awaitingChoice || this.banishes <= 0 || id === "heal" || id.startsWith("e") || id.startsWith("u")) return;
         this.banishes--;
         this.banished.add(id);
         this.sound([[330, 60], [220, 90]]);
@@ -1467,6 +1513,14 @@ class Game {
         if (id.startsWith("e")) {
             this.awaitingChoice = false;
             this.evolve(Number(id.slice(1)));
+            this.last = performance.now();
+            return;
+        }
+        if (id.startsWith("u")) {
+            // 기술 합체는 레벨업이 아니라 상자에서 고릅니다.
+            const [a, b] = id.slice(1).split("_").map(Number);
+            this.uniteWeapons(this.weapons[a], this.weapons[b]);
+            this.awaitingChoice = false;
             this.last = performance.now();
             return;
         }
@@ -1533,6 +1587,7 @@ class Game {
             weaponEvolved: this.weapons.map(w => !!w.evolved),
             weaponDamage: this.weapons.map(w => Math.round(w.dealt)),
             weaponKills: this.weapons.map(w => w.ko),
+            weaponUnion: this.weapons.map(w => w.partner ?? (w.absorbedInto != null ? -2 : -1)),
             itemDamage: Math.round(this.bombSource.dealt), itemKills: this.bombSource.ko,
             bestCombo: this.bestCombo,
             curse: this.curse,
@@ -2194,14 +2249,17 @@ class Game {
     drawSkills(wide, row) {
         const ctx = this.ctx;
         const size = wide ? 36 : row ? 34 : 30, gap = wide ? 8 : 6;
-        const count = this.weapons.length;
+        // 칸 기준: 짝에게 합체한 기술과 아직 안 나온 여분 기술은 빼고, 합친 기술은 짝 이름을 붙입니다.
+        const slots = this.weapons.filter(w => w.absorbedInto == null && (w.index < OWNED_WEAPON_MAX || w.level > 0));
+        const count = slots.length;
         const span = 6 + (count - 1) * (size + gap) + size + 6;
         const w = wide ? 196 : row ? span : size + 12;
         const h = row ? size + 12 : span;
         const x = this.viewW - w - 8, y = this.viewH - h - 8;
         this.panel(x, y, w, h, 12);
-        this.weapons.forEach((wp, i) => {
+        slots.forEach((wp, i) => {
             const ix = row ? x + 6 + i * (size + gap) : x + 6, iy = row ? y + 6 : y + 6 + i * (size + gap);
+            const partner = wp.partner != null ? this.weapons[wp.partner] : null;
             this.drawSkillIcon(wp, ix, iy, size);
             const owned = wp.level > 0;
             if (wide) {
@@ -2209,7 +2267,7 @@ class Game {
                 ctx.textAlign = "left";
                 ctx.font = "bold 12px sans-serif";
                 ctx.fillStyle = wp.evolved ? "#ffd54f" : owned ? "#ffffff" : "rgb(255 255 255 / 40%)";
-                ctx.fillText(this.fitText((wp.evolved ? "★" : "") + (wp.name ?? ""), tw - 18), tx, iy + 10);
+                ctx.fillText(this.fitText((wp.evolved ? "★" : "") + (wp.name ?? "") + (partner ? `+★${partner.name ?? ""}` : ""), tw - 18), tx, iy + 10);
                 ctx.font = "11px sans-serif";
                 ctx.textAlign = "right";
                 ctx.globalAlpha = owned ? 1 : 0.4;
@@ -2229,7 +2287,7 @@ class Game {
                     ctx.font = "bold 9px sans-serif";
                     ctx.textAlign = "left";
                     ctx.fillStyle = "#ffd54f";
-                    const tag = wp.evolved ? (this.setup.texts?.evolvedTag ?? "EVO") : "MAX";
+                    const tag = partner ? `🔗${this.setup.texts?.unionTag ?? "UNION"}` : wp.evolved ? (this.setup.texts?.evolvedTag ?? "EVO") : "MAX";
                     ctx.fillText(tag, tx + WEAPON_MAX * 12 + 2, iy + size - 8);
                     if (!wp.evolved) {
                         const pair = EVOLVE_PAIR[wp.kind];

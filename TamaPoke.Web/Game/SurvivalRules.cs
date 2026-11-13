@@ -65,6 +65,7 @@ public sealed record SurvivalResult
     public int[] WeaponDamage { get; init; } = [];
     public int[] WeaponKills { get; init; } = [];
     public bool[] WeaponEvolved { get; init; } = []; // 기술 진화를 했는지
+    public int[] WeaponUnion { get; init; } = [];    // 합체: 합친 기술이면 짝의 번호, 짝에게 흡수됐으면 -2, 아니면 -1
     public int ItemDamage { get; init; }
     public int ItemKills { get; init; }
 
@@ -89,6 +90,7 @@ public sealed record SurvivalState
     public bool[] WeaponEvolved { get; init; } = [];
     public int[] WeaponDamage { get; init; } = [];
     public int[] WeaponKills { get; init; } = [];
+    public int[] WeaponUnion { get; init; } = [];
     public List<SurvivalPassive> Passives { get; init; } = [];
     public int Power { get; init; }
     public int Speed { get; init; }
@@ -105,6 +107,7 @@ public sealed record SurvivalOption
     public int Index { get; init; }
     public string? Name { get; init; }
     public int Level { get; init; }
+    public int Partner { get; init; } = -1; // union(기술 합체): Index와 합칠 기술 번호
 }
 
 // 레벨업 고르는 화면 하나: 카드와 남은 다시 뽑기·건너뛰기·지우기 횟수 (-1이면 그 버튼을 숨김, 진화 고르기 등)
@@ -302,6 +305,12 @@ public static class SurvivalRules
     // 판마다 뽑는 기술 4개의 모양 제한: 같은 모양은 MAX_SAME_SHAPE개까지, 범위 공격(AREA_KINDS)은 적어도 하나.
     // 한 마리씩 맞히는 모양(bolt)이나 주변만 도는 모양(orbit, aura)만 있으면 적이 쌓여 4~7분에 쓰러지는 판이 많았습니다. (봇 시뮬레이션)
     public const int MAX_SAME_SHAPE = 2;
+
+    // 판마다 기술: 처음 칸 START_MOVES개 + 기술 합체로 빈 칸에 나올 여분 SPARE_MOVES개
+    // 기술 합체: 진화한 같은 타입 기술 두 개를 상자에서 합치면 둘 다 계속 쓰면서 한 칸만 차지하고, 위력이 UNION_POWER_PERCENT% 오릅니다.
+    public const int START_MOVES = 4;
+    public const int SPARE_MOVES = 3;
+    public const int UNION_POWER_PERCENT = 20;
     public static readonly string[] AREA_KINDS = ["spray", "nova", "slash", "chain"];
 
     // 공격 모양: 변화 기술은 오라, 그 밖에는 영어 이름(빔·펀치·지진 등)을 먼저 보고, 없으면 타입으로 정합니다.

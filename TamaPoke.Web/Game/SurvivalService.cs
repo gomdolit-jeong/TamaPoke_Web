@@ -172,7 +172,7 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
         // 처음 기술은 한동안 혼자 싸우므로 범위 공격이 잘 나오게 합니다. (한 마리씩 맞히는 기술로 시작하면 클리어율이 크게 낮았습니다)
         if (Draw(starters.Count > 0 ? starters : attacks, s => IsArea(s) ? FIRST_AREA_WEIGHT : 1) is { } first)
             picked.Add(first);
-        while (picked.Count < 4)
+        while (picked.Count < SurvivalRules.START_MOVES)
         {
             var candidates = pool.Where(s => !picked.Contains(s) && !(IsStatus(s) && picked.Any(IsStatus)) && SameShape(s) < SurvivalRules.MAX_SAME_SHAPE).ToList();
             // 마지막 칸까지 범위 공격이 없으면, 마지막 칸은 범위 공격 중에서 뽑습니다. (몰려오는 적을 쓸어낼 수단이 없으면 4~7분에 쓰러집니다)
@@ -187,7 +187,16 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
             if (skills.GetSkill(skills.GetFallbackMove(type1)) is { } typed) picked.Insert(0, typed);
             else if (skills.GetSkill(SurvivalRules.DEFAULT_SKILL_ID) is { } tackle) picked.Insert(0, tackle);
         }
-        return picked.Take(4).ToList();
+        // 합체로 빈 칸에 나올 여분 기술: 남은 기술 중에서 같은 무게로 더 뽑습니다. (변화 기술은 1개까지 그대로)
+        picked = [.. picked.Take(SurvivalRules.START_MOVES)];
+        while (picked.Count < SurvivalRules.START_MOVES + SurvivalRules.SPARE_MOVES)
+        {
+            var candidates = pool.Where(s => !picked.Contains(s) && !(IsStatus(s) && picked.Any(IsStatus))).ToList();
+            var next = Draw(candidates, s => SameShape(s) > 0 ? SAME_SHAPE_WEIGHT : 1);
+            if (next is null) break;
+            picked.Add(next);
+        }
+        return picked;
     }
 
     // --- 게임 준비 ---
@@ -248,7 +257,9 @@ public sealed class SurvivalService(CloudSave cloud, PokemonDex dex, SkillDex sk
                 ["exp"] = Utils.L.T("web.survival.hud.exp"),
                 ["combo"] = Utils.L.T("web.survival.hud.combo"),
                 ["weaponEvolve"] = Utils.L.T("web.survival.weaponEvolve"),
+                ["weaponUnion"] = Utils.L.T("web.survival.weaponUnion"),
                 ["evolvedTag"] = Utils.L.T("web.survival.evolvedTag"),
+                ["unionTag"] = Utils.L.T("web.survival.unionTag"),
                 ["rivalNext"] = Utils.L.T("web.survival.hud.rivalNext"),
                 ["rivalTime"] = Utils.L.T("web.survival.hud.rivalTime"),
                 ["rivalKo"] = Utils.L.T("web.survival.hud.rivalKo"),

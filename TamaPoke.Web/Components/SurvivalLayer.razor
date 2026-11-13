@@ -40,7 +40,7 @@
     }
     else if (_options is { } options)
     {
-        string heading = Loc.T(options.All(o => o.Kind == "evolve") ? "web.survival.evolve.choose" : _banishMode ? "web.survival.tool.banishPick" : "web.survival.levelUp");
+        string heading = Loc.T(options.All(o => o.Kind == "union") ? "web.survival.union.choose" : options.All(o => o.Kind == "evolve") ? "web.survival.evolve.choose" : _banishMode ? "web.survival.tool.banishPick" : "web.survival.levelUp");
         <div class="survival-overlay" role="dialog" aria-label="@heading">
             <h2>@heading</h2>
             <div class="survival-cards @(_banishMode ? "is-banishing" : "")">
@@ -91,12 +91,16 @@
                             var skill = Skills.GetSkill(weapon.SkillId);
                             int level = i < state.Weapons.Length ? state.Weapons[i] : 0;
                             bool evolved = i < state.WeaponEvolved.Length && state.WeaponEvolved[i];
+                            int union = i < state.WeaponUnion.Length ? state.WeaponUnion[i] : -1;
+                            // 합체로 짝에게 들어간 기술, 아직 나오지 않은 여분 기술은 숨깁니다.
+                            if (union == -2 || (i >= SurvivalRules.START_MOVES && level == 0)) continue;
+                            var partnerSkill = union >= 0 && union < setup.Weapons.Count ? Skills.GetSkill(setup.Weapons[union].SkillId) : null;
                             string pair = SurvivalRules.EvolvePair(weapon.Kind);
                             <li class="@(level == 0 ? "is-locked" : "")">
                                 <span class="survival-weapon-name">
                                     <span class="battle-type battle-type-@weapon.Type">@(skill?.Type.ToString() ?? "")</span>
-                                    <strong>@(evolved ? "★" : "")@(skill?.Name ?? "?")</strong>
-                                    <span class="survival-card-level">@(level == 0 ? Loc.T("web.survival.status.notYet") : evolved ? Loc.T("web.survival.evolvedTag") : $"Lv.{level}/5")</span>
+                                    <strong>@(evolved ? "★" : "")@(skill?.Name ?? "?")@(partnerSkill is null ? "" : $" + ★{partnerSkill.Name}")</strong>
+                                    <span class="survival-card-level">@(level == 0 ? Loc.T("web.survival.status.notYet") : partnerSkill is not null ? Loc.T("web.survival.unionTag") : evolved ? Loc.T("web.survival.evolvedTag") : $"Lv.{level}/5")</span>
                                 </span>
                                 @if (!evolved)
                                 {
@@ -104,7 +108,15 @@
                                     <span class="survival-weapon-kind">@string.Format(Loc.T("web.survival.status.evolveNeed"), $"{SurvivalRules.PassiveIcon(pair)} {Loc.T($"web.survival.passive.{pair}")}", SurvivalRules.EVOLVE_PAIR_LEVEL, SurvivalRules.EVOLVE_ELITE_FROM_MINUTES)</span>
                                 }
                                 <span class="survival-weapon-kind">@SurvivalRules.KindIcon(weapon.Kind) @Loc.T($"web.survival.kind.{weapon.Kind}") · @Loc.T($"web.survival.kind.{weapon.Kind}.desc")</span>
-                                <span class="survival-weapon-kind">@PowerText(weapon)@(level > 0 && i < state.WeaponDamage.Length ? string.Format(Loc.T("web.survival.status.record"), state.WeaponDamage[i].ToString("N0"), i < state.WeaponKills.Length ? state.WeaponKills[i] : 0) : "")</span>
+                                @if (partnerSkill is not null)
+                                {
+                                    <span class="survival-weapon-kind">@SurvivalRules.KindIcon(setup.Weapons[union].Kind) @Loc.T($"web.survival.kind.{setup.Weapons[union].Kind}") · @string.Format(Loc.T("web.survival.union.bonus"), SurvivalRules.UNION_POWER_PERCENT)</span>
+                                }
+                                @{
+                                    int damage = (i < state.WeaponDamage.Length ? state.WeaponDamage[i] : 0) + (union >= 0 && union < state.WeaponDamage.Length ? state.WeaponDamage[union] : 0);
+                                    int kills = (i < state.WeaponKills.Length ? state.WeaponKills[i] : 0) + (union >= 0 && union < state.WeaponKills.Length ? state.WeaponKills[union] : 0);
+                                }
+                                <span class="survival-weapon-kind">@PowerText(weapon)@(level > 0 ? string.Format(Loc.T("web.survival.status.record"), damage.ToString("N0"), kills) : "")</span>
                             </li>
                         }
                     </ul>
@@ -155,12 +167,18 @@
             @if (_setup is { } resultSetup)
             {
                 @* 기술별 기록: 데미지가 많은 순서. 배우지 않은 기술은 뺍니다. *@
+                @* 합체한 기술은 짝과 한 줄로 합쳐 보여 줍니다. *@
+                int UnionOf(int i) => i < result.WeaponUnion.Length ? result.WeaponUnion[i] : -1;
+                int DamageOf(int i) => i >= 0 && i < result.WeaponDamage.Length ? result.WeaponDamage[i] : 0;
+                int KillsOf(int i) => i >= 0 && i < result.WeaponKills.Length ? result.WeaponKills[i] : 0;
                 var rows = resultSetup.Weapons.Select((weapon, i) => (Weapon: weapon,
                         Level: i < result.WeaponLevels.Length ? result.WeaponLevels[i] : 0,
                         Evolved: i < result.WeaponEvolved.Length && result.WeaponEvolved[i],
-                        Damage: i < result.WeaponDamage.Length ? result.WeaponDamage[i] : 0,
-                        Kills: i < result.WeaponKills.Length ? result.WeaponKills[i] : 0))
-                    .Where(r => r.Level > 0 || r.Damage > 0)
+                        Damage: DamageOf(i) + (UnionOf(i) >= 0 ? DamageOf(UnionOf(i)) : 0),
+                        Kills: KillsOf(i) + (UnionOf(i) >= 0 ? KillsOf(UnionOf(i)) : 0),
+                        Partner: UnionOf(i) >= 0 && UnionOf(i) < resultSetup.Weapons.Count ? Skills.GetSkill(resultSetup.Weapons[UnionOf(i)].SkillId) : null,
+                        Merged: UnionOf(i) == -2))
+                    .Where(r => !r.Merged && (r.Level > 0 || r.Damage > 0))
                     .OrderByDescending(r => r.Damage)
                     .ToList();
                 int total = Math.Max(1, rows.Sum(r => r.Damage) + result.ItemDamage);
@@ -175,7 +193,7 @@
                             <tr>
                                 <td>
                                     <span class="survival-card-icon survival-icon-shot" style="border-color:@row.Weapon.Color;background-image:url('ui/fx_shot_@(row.Weapon.Type).png')"></span>
-                                    <span>@(row.Evolved ? "★" : "")@(skill?.Name ?? "?") <small>@(row.Evolved ? Loc.T("web.survival.evolvedTag") : $"Lv.{row.Level}")</small></span>
+                                    <span>@(row.Evolved ? "★" : "")@(skill?.Name ?? "?")@(row.Partner is null ? "" : $" + ★{row.Partner.Name}") <small>@(row.Partner is not null ? Loc.T("web.survival.unionTag") : row.Evolved ? Loc.T("web.survival.evolvedTag") : $"Lv.{row.Level}")</small></span>
                                 </td>
                                 <td>
                                     @row.Damage.ToString("N0")
@@ -431,6 +449,19 @@
             </span>
             <span class="survival-card-tag">@SurvivalRules.KindIcon(weapon.Kind) @Loc.T($"web.survival.kind.{weapon.Kind}")</span>
             <span class="survival-card-desc">@(option.Kind == "new" ? Loc.T($"web.survival.kind.{weapon.Kind}.desc") : Loc.T("web.survival.up"))</span>
+        }
+        else if (option.Kind == "union" && _setup is { } unionSetup && option.Index < unionSetup.Weapons.Count && option.Partner >= 0 && option.Partner < unionSetup.Weapons.Count)
+        {
+            // 기술 합체: 진화한 같은 타입 기술 두 개
+            var a = unionSetup.Weapons[option.Index];
+            var b = unionSetup.Weapons[option.Partner];
+            <span class="survival-card-head">
+                <span class="survival-card-icon survival-icon-shot" style="border-color:@a.Color;background-image:url('ui/fx_shot_@(a.Type).png')"></span>
+                <strong>★@(Skills.GetSkill(a.SkillId)?.Name ?? "?") + ★@(Skills.GetSkill(b.SkillId)?.Name ?? "?")</strong>
+                <span class="survival-card-level">@Loc.T("web.survival.unionTag")</span>
+            </span>
+            <span class="survival-card-tag">@SurvivalRules.KindIcon(a.Kind) @Loc.T($"web.survival.kind.{a.Kind}") + @SurvivalRules.KindIcon(b.Kind) @Loc.T($"web.survival.kind.{b.Kind}")</span>
+            <span class="survival-card-desc">@string.Format(Loc.T("web.survival.union.desc"), SurvivalRules.UNION_POWER_PERCENT)</span>
         }
         else if (option.Kind == "evolve" && _setup is { } evolveSetup && option.Index < evolveSetup.Forms.Count)
         {
