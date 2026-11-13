@@ -133,6 +133,13 @@ const TYPE_RAMP = {
     rock: ["#221c0c", "#443818", "#6a5a28", "#8d7a3a", "#b4a064", "#d4c694", "#efe8cc", "#ffffff"],
 };
 
+// 판 시작할 때 효과를 그리는 데 쓰는 시간 한도(ms). 넘으면 남은 효과는 미리 뽑아 둔 시트로.
+const LIVE_FX_BUDGET_MS = 4000;
+
+function rampHex(type, color) {
+    return TYPE_RAMP[type] ?? rampOf(type, color).map(c => "#" + c.map(v => v.toString(16).padStart(2, "0")).join(""));
+}
+
 function hexRgb(hex) { const v = parseInt(hex.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; }
 function rampOf(type, color) {
     if (TYPE_RAMP[type]) return TYPE_RAMP[type].map(hexRgb);
@@ -323,7 +330,37 @@ class Game {
         for (const file of files) jobs.push(loadImage(file).then(image => { this.images[file] = image; }));
 
         await Promise.all(jobs);
+        await this.renderLiveSheets();
         this.groundPattern = this.makeGroundPattern();
+    }
+
+    // 판을 시작할 때 이번 판 기술에 쓰는 효과만 pixelfx로 타입 색에 맞춰 그립니다. (wwwroot/js/pfx-runtime.js)
+    // 실패하거나 너무 오래 걸리면 남은 효과는 미리 뽑아 둔 회색 시트에 색을 입혀 씁니다. (tinted)
+    async renderLiveSheets() {
+        this.liveSheets = {};
+        let rt;
+        try { rt = await import("./pfx-runtime.js"); } catch { return; }
+        const started = performance.now();
+        const pairs = new Map();
+        const add = (name, w) => { if (w && rt.SPECS[name] && PFX[name]) pairs.set(`${name}|${w.type}`, [name, w]); };
+        for (const w of this.setup.weapons) {
+            const name = fxOf(w);
+            if (name === "s_wave") { add("s_jet", w); add("n_splash", w); }
+            else if (name.startsWith("st_")) add("w_aura", w);
+            else add(name, w);
+            add(HIT_FX[w.kind] ?? "h_spark", w);
+            if (CAST_FX[w.kind]) add(CAST_FX[w.kind], w);
+        }
+        add("h_spark", this.setup.weapons[0]); // 대폭발 아이템·특성 반격의 맞을 때 효과
+        for (const [key, [name, w]] of pairs) {
+            if (performance.now() - started > LIVE_FX_BUDGET_MS) break;
+            try {
+                const sheet = await rt.renderSheet(name, PFX[name], rt.paletteFor(rampHex(w.type, w.color)));
+                if (sheet) this.liveSheets[key] = sheet;
+            } catch { /* 미리 뽑아 둔 시트를 씁니다 */ }
+            await new Promise(resolve => setTimeout(resolve)); // 한 장마다 화면이 숨 쉴 틈
+        }
+        this.liveMs = Math.round(performance.now() - started);
     }
 
     makeGroundPattern() {
@@ -1474,8 +1511,10 @@ class Game {
 
     tinted(name, type, color) {
         const base = this.images[`pfx/${name}.png`];
-        if (!type || !base || name.startsWith("st_")) return base;
+        if (!type || name.startsWith("st_")) return base;
         const key = `${name}|${type}`;
+        if (this.liveSheets?.[key]) return this.liveSheets[key]; // 판 시작할 때 pixelfx로 그린 시트
+        if (!base) return base;
         if (this.novaTints[key]) return this.novaTints[key];
         const canvas = document.createElement("canvas");
         canvas.width = base.width;
