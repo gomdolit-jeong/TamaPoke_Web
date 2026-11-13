@@ -329,9 +329,22 @@ class Game {
         files.add("pfx/h_spark.png");
         for (const file of files) jobs.push(loadImage(file).then(image => { this.images[file] = image; }));
 
+        // 준비 진행: 그림 받기 0~60%, 기술 효과 그리기 60~100%
+        let loaded = 0;
+        for (const job of jobs) job.then(() => this.reportLoad("images", 60 * ++loaded / jobs.length));
         await Promise.all(jobs);
+        this.reportLoad("effects", 60);
         await this.renderLiveSheets();
         this.groundPattern = this.makeGroundPattern();
+    }
+
+    // 준비 진행을 C# 준비 화면에 알립니다. (5%마다 한 번)
+    reportLoad(stage, percent) {
+        const p = Math.min(100, Math.round(percent));
+        if (stage === this.loadStage && Math.floor(p / 5) === Math.floor((this.loadPercent ?? -5) / 5)) return;
+        this.loadStage = stage;
+        this.loadPercent = p;
+        this.dotnet?.invokeMethodAsync?.("OnLoadProgress", stage, p)?.catch?.(() => {});
     }
 
     // 판을 시작할 때 이번 판 기술에 쓰는 효과만 pixelfx로 타입 색에 맞춰 그립니다. (wwwroot/js/pfx-runtime.js)
@@ -352,13 +365,14 @@ class Game {
             if (CAST_FX[w.kind]) add(CAST_FX[w.kind], w);
         }
         add("h_spark", this.setup.weapons[0]); // 대폭발 아이템·특성 반격의 맞을 때 효과
+        let done = 0;
         for (const [key, [name, w]] of pairs) {
             if (performance.now() - started > LIVE_FX_BUDGET_MS) break;
             try {
                 const sheet = await rt.renderSheet(name, PFX[name], rt.paletteFor(rampHex(w.type, w.color)));
                 if (sheet) this.liveSheets[key] = sheet;
             } catch { /* 미리 뽑아 둔 시트를 씁니다 */ }
-            await new Promise(resolve => setTimeout(resolve)); // 한 장마다 화면이 숨 쉴 틈
+            this.reportLoad("effects", 60 + 40 * ++done / pairs.size);
         }
         this.liveMs = Math.round(performance.now() - started);
     }

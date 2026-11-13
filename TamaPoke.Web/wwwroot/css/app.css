@@ -3630,7 +3630,59 @@ nav.pet-menu .menu-arena {
 }
 
 .survival-loading {
-    top: 45%;
+    top: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 13rem;
+    padding: 1rem 1.25rem 0.75rem;
+    border-radius: 0.875rem;
+    font-size: 14px;
+    transform: translate(-50%, -50%);
+}
+
+.survival-loading p {
+    margin: 0;
+}
+
+.survival-loading small {
+    font-size: 12px;
+    opacity: 0.75;
+}
+
+/* 돌아가는 몬스터볼 (멈춘 게 아니라는 표시) */
+.survival-loading-ball {
+    width: 32px;
+    height: 32px;
+    background: url("../ui/icon_ball.png") center / contain no-repeat;
+    image-rendering: pixelated;
+    animation: survival-loading-spin 0.9s linear infinite;
+}
+
+@keyframes survival-loading-spin {
+    to { transform: rotate(360deg); }
+}
+
+.survival-loading-bar {
+    display: block;
+    width: 100%;
+    height: 8px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: rgb(255 255 255 / 18%);
+}
+
+.survival-loading-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #ffd54f, #ff9b3d);
+    transition: width 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .survival-loading-ball { animation-duration: 3s; }
 }
 
 .survival-hint {

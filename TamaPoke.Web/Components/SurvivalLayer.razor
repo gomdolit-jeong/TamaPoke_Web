@@ -15,7 +15,13 @@
 
     @if (_isLoading)
     {
-        <p class="survival-loading" role="status">@Loc.T("web.survival.loading")</p>
+        @* 준비 화면: 단계(포켓몬 → 그림 → 기술 효과)와 진행 막대. 단계와 %는 survival.js가 OnLoadProgress로 알려 줍니다. *@
+        <div class="survival-loading" role="status">
+            <span class="survival-loading-ball" aria-hidden="true"></span>
+            <p>@Loc.T(_loadStage switch { "images" => "web.survival.loading.images", "effects" => "web.survival.loading.effects", _ => "web.survival.loading" })</p>
+            <span class="survival-loading-bar"><span style="width:@(_loadPercent)%"></span></span>
+            <small>@(_loadPercent)%</small>
+        </div>
     }
     else if (_result is null && _options is null && !_isPaused && !_clearPrompt)
     {
@@ -262,9 +268,24 @@
         await StartRunAsync();
     }
 
+    private string _loadStage = "";
+    private int _loadPercent;
+
+    // 게임 준비 진행 (survival.js load): stage는 images(그림) 또는 effects(기술 효과), percent는 0~100
+    [JSInvokable]
+    public void OnLoadProgress(string stage, int percent)
+    {
+        if (!_isLoading) return;
+        _loadStage = stage;
+        _loadPercent = Math.Clamp(percent, 0, 100);
+        StateHasChanged();
+    }
+
     private async Task StartRunAsync()
     {
         _isLoading = true;
+        _loadStage = "";
+        _loadPercent = 0;
         _result = null;
         _options = null;
         _choice = null;

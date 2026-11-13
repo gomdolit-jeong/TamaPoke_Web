@@ -666,6 +666,8 @@
   "web.survival.busy": "지금은 도전할 수 없어요.",
   "web.survival.guestNote": "게스트도 할 수 있지만, 랭킹에는 구글 로그인했을 때만 올라가요.",
   "web.survival.loading": "야생 포켓몬을 부르는 중…",
+  "web.survival.loading.images": "그림을 불러오는 중…",
+  "web.survival.loading.effects": "기술 효과를 그리는 중…",
   "web.survival.hint": "WASD·방향키 또는 화면을 누른 채 끌어서 이동해요. 공격은 자동! (Esc: 일시정지·내 상태 보기)",
   "web.survival.pause": "일시정지",
   "web.survival.paused": "일시정지",

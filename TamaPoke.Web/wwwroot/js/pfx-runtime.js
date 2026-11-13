@@ -76,6 +76,8 @@ export async function renderSheet(name, info, palette) {
         tg.putImageData(new ImageData(rgba, w, h), 0, 0);
         g.drawImage(tmp, sx, sy, info.fw, info.fh, i * info.fw, 0, info.fw, info.fh);
         fx.update(1 / info.fps);
+        // 오래 걸리는 시트도 화면(준비 화면의 진행 막대)이 멈추지 않게 6장마다 쉬어 갑니다.
+        if (i % 6 === 5) await new Promise(resolve => setTimeout(resolve));
     }
     return sheet;
 }

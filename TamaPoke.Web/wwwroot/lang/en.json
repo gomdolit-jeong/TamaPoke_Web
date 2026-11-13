@@ -666,6 +666,8 @@
   "web.survival.busy": "You can't start right now.",
   "web.survival.guestNote": "Guests can play too, but only Google-signed-in records reach the ranking.",
   "web.survival.loading": "Calling wild Pokémon…",
+  "web.survival.loading.images": "Loading sprites…",
+  "web.survival.loading.effects": "Drawing move effects…",
   "web.survival.hint": "Move with WASD / arrow keys or press and drag. Attacks are automatic! (Esc: pause & status)",
   "web.survival.pause": "Pause",
   "web.survival.paused": "Paused",
