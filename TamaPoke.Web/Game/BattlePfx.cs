@@ -94,6 +94,33 @@ public static class PfxSheets
     };
 }
 
+// pixelfx 0.3의 타격 타이밍(효과 파일의 act.hits): 효과 첫 장면부터 T초에 맞고,
+// 그때 Stop초 멈추고, Shake초 동안 Amp만큼 흔들리고, 맞은 쪽이 Push(pixelfx 픽셀)만큼 밀립니다.
+// Target이 false면 땅을 치는 순간처럼 맞은 쪽은 움직이지 않습니다.
+public sealed record PfxHit(double T, double Stop = 0, double Shake = 0, double Amp = 0, double Push = 0, bool Target = true);
+
+public static class PfxActs
+{
+    // wwwroot/lib/pixelfx/src/fx의 act.hits를 옮긴 값 (pixelfx를 바꾸면 같이 맞춥니다)
+    public static readonly Dictionary<string, PfxHit[]> All = new()
+    {
+        ["w_slash"] = [new(0.04, 0.03, Push: 0.9), new(0.08, 0.03, Push: 0.9), new(0.12, 0.08, 0.14, 2, 1.4)],                         // melee/claw-swipe
+        ["sl_sword"] = [new(0.06, 0.14, 0.18, 2, 2.8)],                                                                                 // melee/sword-slash
+        ["sl_double"] = [new(0.06, 0.05, 0.08, 1, 1.4), new(0.16, 0.14, 0.2, 2, 2.8)],                                                  // melee/double-slash
+        ["sl_punch"] = [new(0.076, 0.13, 0.18, 2, 2.6)],                                                                                // melee/uppercut
+        ["sl_whip"] = [new(0.21, 0.1, 0.14, 2, 2.4)],                                                                                   // melee/whip-crack
+        ["sl_thrust"] = [new(0.07, 0.12, 0.14, 2, 2.8)],                                                                                // melee/thrust
+        ["sl_hammer"] = [new(0.15, 0.2, 0.34, 3, 3)],                                                                                   // melee/hammer-smash
+        ["sl_scythe"] = [new(0.14, 0.12, 0.16, 2, 2.4)],                                                                                // melee/scythe-reap
+        ["sl_flurry"] = [new(0.05, 0.015, Push: 0.5), new(0.16, 0.015, Push: 0.5), new(0.27, 0.015, Push: 0.5), new(0.42, 0.12, 0.18, 2, 2.6)], // melee/dagger-flurry
+        ["sl_spin"] = [new(0.17, 0.12, 0.16, 2, 2.4)],                                                                                  // melee/spin-slash
+        ["sl_cleave"] = [new(0.335, 0.2, 0.34, 3, 3.2)],                                                                                // melee/heavy-cleave
+        ["n_frost"] = [new(0.42, 0.1, 0.26, 2, Target: false), new(0.66, Push: 0.9)],                                                   // ice/frost-nova
+        ["n_fire"] = [new(0.32, 0.1, 0.28, 3, Target: false), new(0.6, Push: 1.2)],                                                     // fire/fire-ring
+        ["n_thunder"] = [new(0.12, 0.13, 0.3, 3, Target: false), new(0.42, Push: 2)],                                                   // lightning/thunderclap
+    };
+}
+
 // 배틀 화면에 겹쳐 그리는 효과 하나. StartMs는 배틀 시계(BattleClockMs) 기준입니다.
 // Image: 타입 색으로 그린 시트 주소 (없으면 pfx/이름.png). Vx·Vy: 움직이는 효과의 속도(px/ms)
 // LifeMs: 0이면 한 번 재생, 아니면 그 시간 동안 반복 재생. Cut: 앞에서부터 이 비율의 프레임만 재생

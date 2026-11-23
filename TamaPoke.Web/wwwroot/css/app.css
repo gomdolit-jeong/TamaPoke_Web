@@ -4156,11 +4156,12 @@ nav.pet-menu .menu-arena {
     animation: battle-shake 0.08s linear infinite;
 }
 
+/* 흔들리는 세기(--shake)는 효과마다 다릅니다. (pixelfx 타격의 amp) */
 @keyframes battle-shake {
     0% { transform: translate(0, 0); }
-    25% { transform: translate(-3px, 1px); }
-    50% { transform: translate(2px, -2px); }
-    75% { transform: translate(-1px, 2px); }
+    25% { transform: translate(calc(var(--shake, 3px) * -1), calc(var(--shake, 3px) * 0.33)); }
+    50% { transform: translate(calc(var(--shake, 3px) * 0.67), calc(var(--shake, 3px) * -0.67)); }
+    75% { transform: translate(calc(var(--shake, 3px) * -0.33), calc(var(--shake, 3px) * 0.67)); }
     100% { transform: translate(0, 0); }
 }
 

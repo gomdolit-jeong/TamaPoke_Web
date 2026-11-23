@@ -5,7 +5,7 @@
 
 @* 게임판 좌표는 PC판 BattleView와 같은 288x288입니다. *@
 <div class="game-arena battle-arena @(Pet.IsDefeatedFadeOut ? "is-defeated" : "")">
-    <div class="battle-field @(Pet.IsBattleShaking ? "is-shaking" : "")" style="background-image:url('backgrounds/@(Dex.GetBiomeName(Pet.SpeciesId, Pet.SpriteForm)).png')">
+    <div class="battle-field @(Pet.IsBattleShaking ? "is-shaking" : "")" style="--shake:@Css(Pet.BattleShakePx)px;background-image:url('backgrounds/@(Dex.GetBiomeName(Pet.SpeciesId, Pet.SpriteForm)).png')">
         <div class="battle-platform battle-platform-enemy"></div>
         <div class="battle-platform battle-platform-player"></div>
 
@@ -19,13 +19,13 @@
 
         @if (Pet.IsEnemyVisible)
         {
-            <div class="battle-sprite battle-sprite-enemy @(Pet.IsEnemyTakingDamage ? "is-hit" : "")">
+            <div class="battle-sprite battle-sprite-enemy @(Pet.IsEnemyTakingDamage ? "is-hit" : "")" style="@PushStyle(Pet.EnemyPush)">
                 <AnimatedSprite SpritePath="@Pet.EnemySpritePath" FallbackPath="@Pet.EnemyBasePath" Action="Pet.EnemyCurrentAction" Row="Pet.EnemyRow" FitBox="72" Alt="@Pet.EnemyName" />
             </div>
         }
         @if (Pet.IsPlayerVisible)
         {
-            <div class="battle-sprite battle-sprite-player @(Pet.IsPlayerTakingDamage ? "is-hit" : "")">
+            <div class="battle-sprite battle-sprite-player @(Pet.IsPlayerTakingDamage ? "is-hit" : "")" style="@PushStyle(Pet.PlayerPush)">
                 <AnimatedSprite SpritePath="@Pet.SpritePath" FallbackPath="@($"{Pet.SpeciesId:D4}")" Action="Pet.CurrentAction" Row="Pet.CurrentRow" FitBox="108" Alt="@Pet.Name" />
                 @if (Pet.IsMegaEvolving)
                 {
@@ -220,6 +220,11 @@
     }
 
     // 기준점(Ox, Oy)이 (X, Y)에 오도록 놓고, 그 점을 중심으로 돌리거나 뒤집습니다. 움직이는 효과는 지금 위치에 그립니다.
+    private static string Css(double value) => value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
+    // 맞아서 밀려난 거리 (transform과 따로 움직이도록 translate 속성을 씁니다)
+    private static string PushStyle((double X, double Y) push) => push == (0, 0) ? "" : $"translate:{Css(push.X)}px {Css(push.Y)}px";
+
     private static string PfxStyle(BattlePfx pfx, int frame, double clockMs)
     {
         var s = pfx.Sheet;

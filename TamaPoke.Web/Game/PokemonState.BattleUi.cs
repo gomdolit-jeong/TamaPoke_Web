@@ -106,8 +106,61 @@ public sealed partial class PokemonState
     // pixelfx 효과 (타격 불꽃, 급소, 기절 연기, 포획 빛). 기존 기술 그림 위에 겹쳐 그립니다.
     [JsonIgnore] public List<BattlePfx> BattlePfxList { get; } = [];
     [JsonIgnore] public double BattleClockMs { get; private set; }
-    [JsonIgnore] public bool IsBattleShaking => BattleClockMs < _shakeUntilMs;
+    // 흔들림·멈춤·밀림은 실제 시간(_battleRealMs)으로 잽니다. (멈춘 동안에는 배틀 시계가 서 있으므로)
+    [JsonIgnore] public bool IsBattleShaking => _battleRealMs < _shakeUntilMs;
+    [JsonIgnore] public double BattleShakePx { get; private set; } = DEFAULT_SHAKE_PX;
     private double _shakeUntilMs;
+    private double _battleRealMs;
+    private double _freezeUntilMs;
+    private const double DEFAULT_SHAKE_PX = 3;
+    private const double SHAKE_PX_PER_AMP = 1.5;  // pixelfx 흔들림 1 = 화면 1.5px
+    private const double PUSH_PX_PER_UNIT = 4;    // pixelfx 밀림 1 = 화면 4px
+    private const double PUSH_OUT_MS = 60, PUSH_BACK_MS = 320;
+
+    // 맞은 쪽이 밀려났다가 돌아오는 거리 (배틀 화면 px). 배틀 화면이 스프라이트를 이만큼 옮겨 그립니다.
+    [JsonIgnore] public (double X, double Y) EnemyPush => PushAt(_enemyPush);
+    [JsonIgnore] public (double X, double Y) PlayerPush => PushAt(_playerPush);
+    private (double Dx, double Dy, double StartMs) _enemyPush, _playerPush;
+
+    // 아직 오지 않은 타격 (배틀 시계 기준 시각, 타격, 맞는 쪽이 상대인지)
+    private readonly List<(double AtMs, PfxHit Hit, bool TargetIsEnemy)> _pendingHits = [];
+
+    private (double X, double Y) PushAt((double Dx, double Dy, double StartMs) push)
+    {
+        double t = _battleRealMs - push.StartMs;
+        if (push.StartMs <= 0 || t < 0 || t > PUSH_OUT_MS + PUSH_BACK_MS) return (0, 0);
+        double k = t < PUSH_OUT_MS ? t / PUSH_OUT_MS : 1 - (t - PUSH_OUT_MS) / PUSH_BACK_MS;
+        k = k * k * (3 - 2 * k);
+        return (push.Dx * k, push.Dy * k);
+    }
+
+    private void Shake(double ms, double px)
+    {
+        _shakeUntilMs = Math.Max(_shakeUntilMs, _battleRealMs + ms);
+        BattleShakePx = px;
+    }
+
+    // 효과 name을 배틀 시계 startMs에 speed 배속으로 틀었을 때의 타격들을 걸어 둡니다. 모든 멈춤 시간(ms)을 돌려줍니다.
+    private double QueueActHits(string name, bool targetIsEnemy, double startMs, double speed)
+    {
+        if (!PfxActs.All.TryGetValue(name, out var hits)) return 0;
+        foreach (var hit in hits) _pendingHits.Add((startMs + hit.T * 1000 / speed, hit, targetIsEnemy));
+        return hits.Sum(h => h.Stop) * 1000;
+    }
+
+    private void ApplyActHit(PfxHit hit, bool targetIsEnemy)
+    {
+        if (hit.Stop > 0) _freezeUntilMs = Math.Max(_freezeUntilMs, _battleRealMs + hit.Stop * 1000);
+        if (hit.Shake > 0) Shake(hit.Shake * 1000, hit.Amp * SHAKE_PX_PER_AMP);
+        if (!hit.Target || hit.Push == 0) return;
+        // 쓴 쪽에서 맞은 쪽 방향으로 밀려납니다.
+        var (fx, fy) = FxCenter(!targetIsEnemy);
+        var (tx, ty) = FxCenter(targetIsEnemy);
+        double dx = tx - fx, dy = ty - fy, dist = Math.Max(1, Math.Sqrt(dx * dx + dy * dy));
+        double px = Math.Abs(hit.Push) * PUSH_PX_PER_UNIT;
+        var push = (dx / dist * px, dy / dist * px, _battleRealMs);
+        if (targetIsEnemy) _enemyPush = push; else _playerPush = push;
+    }
     [JsonIgnore] public bool IsBallVisible { get; private set; }
     [JsonIgnore] public bool IsBallWobbling { get; private set; }
 
@@ -273,6 +326,8 @@ public sealed partial class PokemonState
         BattleMessage = "";
         BattleFx = null;
         BattlePfxList.Clear();
+        _pendingHits.Clear();
+        _enemyPush = _playerPush = default;
         IsBallVisible = false;
         NeedsSave = true;
     }
@@ -304,9 +359,20 @@ public sealed partial class PokemonState
     }
 
     // 배틀 시계를 진행하고 끝난 효과를 지웁니다. (Update에서 배틀 중에 부릅니다)
+    // 맞는 순간 잠깐 멈추는 동안(pixelfx의 hit stop)은 배틀 시계가 서서 효과도 멈춥니다.
     private void UpdateBattlePfx(double ms)
     {
+        _battleRealMs += ms;
+        if (_battleRealMs < _freezeUntilMs) return;
         BattleClockMs += ms;
+        for (int i = 0; i < _pendingHits.Count; i++)
+        {
+            var (at, hit, targetIsEnemy) = _pendingHits[i];
+            if (BattleClockMs < at) continue;
+            _pendingHits.RemoveAt(i--);
+            ApplyActHit(hit, targetIsEnemy);
+            if (_battleRealMs < _freezeUntilMs) break; // 멈춘 동안에는 다음 타격을 미룹니다.
+        }
         BattlePfxList.RemoveAll(fx => fx.IsDone(BattleClockMs));
     }
 
@@ -329,7 +395,7 @@ public sealed partial class PokemonState
         double scale = targetIsEnemy ? 0.9 : 1.2;
         AddBattlePfx($"hit_{type}", x, y, scale, angleDeg: angle);
         if (crit) AddBattlePfx("crit", x, y, scale * 0.8, angleDeg: angle);
-        if (crit || typeMultiplier > 1) _shakeUntilMs = BattleClockMs + (crit ? 320 : 220);
+        if (crit || typeMultiplier > 1) Shake(crit ? 320 : 220, DEFAULT_SHAKE_PX);
     }
 
     private Task PlayStatFxAsync(bool rose, bool targetIsEnemy) =>

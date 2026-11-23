@@ -172,7 +172,9 @@ public sealed partial class PokemonState
                     pfx = new BattlePfx(main, tx - ux * 26 * near, ty - uy * 26 * near, scale, false, (angleRad - turn) * 180 / Math.PI, 1, BattleClockMs, image);
                 }
                 AddBattlePfx(main, pfx.X, pfx.Y, scale, pfx.Flip, pfx.AngleDeg, image: image);
-                await Task.Delay(WaitMs(pfx, 450));
+                // pixelfx 타격 타이밍: 맞는 순간 멈추고, 흔들리고, 상대가 밀려납니다.
+                double stopMs = QueueActHits(main, targetIsEnemy, BattleClockMs, 1);
+                await Task.Delay(WaitMs(pfx, 450) + (int)stopMs);
                 return true;
             }
             case "nova":
@@ -186,7 +188,8 @@ public sealed partial class PokemonState
                 double turn = main == "w_chain" ? angle : 0;
                 var pfx = new BattlePfx(main, tx, y, scale, false, turn, 1.2, BattleClockMs, image);
                 AddBattlePfx(main, tx, y, scale, angleDeg: turn, speed: 1.2, image: image);
-                await Task.Delay(WaitMs(pfx, 650));
+                double stopMs = QueueActHits(main, targetIsEnemy, BattleClockMs, 1.2);
+                await Task.Delay(WaitMs(pfx, 650) + (int)stopMs);
                 return true;
             }
             default:
