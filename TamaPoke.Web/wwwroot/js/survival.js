@@ -333,6 +333,13 @@ class Game {
         let loaded = 0;
         for (const job of jobs) job.then(() => this.reportLoad("images", 60 * ++loaded / jobs.length));
         await Promise.all(jobs);
+        // 범위에 맞춰 그리는 효과(부채꼴·베기·충격파)의 실제 길이를 미리 재 둡니다. (판 중에 처음 쏠 때 멈칫하지 않게)
+        for (const w of setup.weapons) {
+            if (!["spray", "slash", "nova"].includes(w.kind)) continue;
+            const name = fxOf(w);
+            if (name === "s_wave") { if (PFX.s_jet && this.images["pfx/s_jet.png"]) this.fxExtent("s_jet"); }
+            else if (PFX[name] && this.images[`pfx/${name}.png`]) this.fxExtent(name);
+        }
         this.reportLoad("effects", 60);
         await this.renderLiveSheets();
         this.groundPattern = this.makeGroundPattern();
@@ -1172,54 +1179,74 @@ class Game {
         const reach = 190 * (0.42 + this.lv(w) * 0.04);
         // 포켓몬 몸과 겹치지 않게, 쏘는 방향으로 몸 바깥(16px 앞)에서 시작합니다.
         const mouth = 16;
-        const name = fxOf(w), info = PFX[name];
-        const opts = { tint: w.type, color: w.color, follow: true, glow: w.united };
+        // 효과 끝이 불꽃·물줄기가 실제로 닿는 거리(reach)에서 끝나도록 그림의 실제 길이(fxExtent)로 크기를 정합니다.
+        const name = fxOf(w), v = this.shotVariant(w);
+        const opts = { tint: w.type, color: w.color, follow: true, glow: w.united, fit: true };
+        const turnOf = (o) => (v.mirror ? this.mirrorAcrossAim(o) : o);
         if (name === "s_wave") {
             // 파도(파도타기류): 물줄기 다섯 개를 나란히 넓게 내보내 물살이 쓸고 가는 모양으로, 끝에서 물보라가 터집니다.
             // (pixelfx에는 위에서 본 파도 그림이 없어서 물줄기 그림으로 만듭니다)
-            const jet = PFX.s_jet, nx = -Math.sin(aim), ny = Math.cos(aim);
+            const jet = this.fxExtent("s_jet").fwd, nx = -Math.sin(aim), ny = Math.cos(aim);
             for (const k of [-2, -1, 0, 1, 2]) {
                 const back = Math.abs(k) * 5, side = k * 9;
                 this.addPfx("s_jet", "spray", this.player.x + Math.cos(aim) * (mouth - back) + nx * side, this.player.y + Math.sin(aim) * (mouth - back) + ny * side,
-                    { ...opts, angle: aim, scale: (reach - mouth) * (1 - Math.abs(k) * 0.08) / (jet.fw - jet.ox), speed: 2 });
+                    turnOf({ ...opts, angle: aim, scale: (reach - mouth) * (1 - Math.abs(k) * 0.08) / jet, speed: 2 * v.pace }));
             }
             if (PFX.n_splash) this.addPfx("n_splash", "spray", this.player.x + Math.cos(aim) * reach, this.player.y + Math.sin(aim) * reach + 6,
                 { ...opts, follow: true, scale: reach * 0.7 / PFX.n_splash.fw, speed: 2.4 });
         } else if (name === "w_spray") {
             // 세 갈래: 불길이 실제 공격처럼 넓게 퍼집니다.
+            const len = this.fxExtent(name).fwd;
             for (const off of [-0.34, 0, 0.34]) {
-                const a = aim + off;
+                const a = aim + off + (off ? (Math.random() - 0.5) * 0.1 : 0); // 양옆 갈래는 쏠 때마다 조금씩 벌어짐이 다릅니다.
                 this.addPfx(name, "spray", this.player.x + Math.cos(a) * mouth, this.player.y + Math.sin(a) * mouth,
-                    { ...opts, angle: a, scale: (reach - mouth) * (off ? 0.9 : 1.05) / (info.fw - info.ox), speed: 2 });
+                    turnOf({ ...opts, angle: a, scale: (reach - mouth) * (off ? 0.92 : 1) / len, speed: 2 * v.pace }));
             }
         } else {
             // 한 줄기: 곧게 뻗습니다.
             this.addPfx(name, "spray", this.player.x + Math.cos(aim) * mouth, this.player.y + Math.sin(aim) * mouth,
-                { ...opts, angle: aim, scale: (reach - mouth) * 1.12 / (info.fw - info.ox), speed: 2 });
+                turnOf({ ...opts, angle: aim, scale: (reach - mouth) / this.fxExtent(name).fwd, speed: 2 * v.pace }));
         }
+    }
+
+    // 쏠 때마다 모양이 조금씩 달라지게: 기술마다 번갈아 뒤집고(mirror), 재생 속도를 ±10% 흔듭니다(pace).
+    shotVariant(w) {
+        w.shotNo = (w.shotNo ?? 0) + 1;
+        return { mirror: w.shotNo % 2 === 0, pace: 0.9 + Math.random() * 0.2 };
+    }
+
+    // 돌려 그리는 효과를 공격 방향을 축으로 뒤집습니다. (반 바퀴 돌리고 좌우를 뒤집으면 같음)
+    mirrorAcrossAim(o) {
+        return { ...o, angle: (o.angle ?? 0) + Math.PI, flip: !o.flip };
     }
 
     fireSlash(w, aim) {
         const radius = 42 + 7 * this.lv(w);
         const half = 1.05;
-        const swing = (angle) => {
+        const v = this.shotVariant(w);
+        const swing = (angle, back) => {
             this.near(this.player.x, this.player.y, radius, (e) => {
                 let diff = Math.atan2(e.y - this.player.y, e.x - this.player.x) - angle;
                 diff = Math.atan2(Math.sin(diff), Math.cos(diff));
                 if (Math.abs(diff) <= half) this.damage(e, this.weaponDamage(w, e), w, 70);
             });
             const left = Math.cos(angle) < 0;
-            const name = fxOf(w), info = PFX[name];
+            const name = fxOf(w);
             // 그림마다 원래 그려진 방향(SLASH_TURN)만큼 되돌려 공격 방향과 맞춥니다. 땅에 깔리는 그림(SLASH_FLAT)은 돌리지 않습니다.
+            // 뒤집어 그리기(좌우 반전 + 반대로 돌림)는 공격 방향을 축으로 뒤집은 모양입니다. 왼쪽을 볼 때는 그림이 거꾸로 서지 않게 뒤집어 그리고,
+            // 쏠 때마다 번갈아 반대쪽에서 휘두르도록 한 번씩 더 뒤집습니다. (뒤따르는 추가 베기도 한 번씩 바뀜)
             const flat = SLASH_FLAT.has(name), turn = SLASH_TURN[name] ?? 0;
-            const drawAngle = flat ? 0 : left ? angle - Math.PI + turn : angle - turn;
+            const mirrored = flat ? left : left !== (v.mirror !== !!back);
+            const drawAngle = flat ? 0 : mirrored ? angle - Math.PI + turn : angle - turn;
+            // 칼끝이 베기 범위(radius)에 닿게: 돌려 그리는 그림은 어느 방향이든 닿는 거리, 땅에 깔리는 그림은 좌우 폭으로 맞춥니다.
+            const ext = this.fxExtent(name);
             this.addPfx(name, "slash", this.player.x, this.player.y + 4, {
-                angle: drawAngle, flip: left, scale: radius * 1.17 / Math.max(40, info.fw - info.ox), speed: 1.4, tint: w.type, color: w.color, follow: true, glow: w.united,
+                angle: drawAngle, flip: mirrored, scale: radius / (flat ? ext.half : ext.rad), speed: 1.4 * v.pace, tint: w.type, color: w.color, follow: true, glow: w.united, fit: true,
             });
         };
-        swing(aim);
-        if (this.lv(w) >= 3) swing(aim + Math.PI);
-        for (let i = 0; i < w.extra; i++) setTimeout(() => this.running && !this.paused && swing(aim), 120 * (i + 1));
+        swing(aim, false);
+        if (this.lv(w) >= 3) swing(aim + Math.PI, false);
+        for (let i = 0; i < w.extra; i++) setTimeout(() => this.running && !this.paused && swing(aim, i % 2 === 0), 120 * (i + 1));
     }
 
     fireNova(w) {
@@ -1228,7 +1255,10 @@ class Game {
         this.near(this.player.x, this.player.y, radius, (e) => this.damage(e, this.weaponDamage(w, e) * 0.8 * (1 + 0.3 * w.extra), w, 160));
         this.effects.push({ type: "nova", w, x: this.player.x, y: this.player.y, radius, life: 0.3, max: 0.3 });
         const name = fxOf(w);
-        this.addPfx(name, "nova", this.player.x, this.player.y + 7, { scale: radius * 2.26 / PFX[name].fw, speed: 2, tint: w.type, color: w.color, follow: true, glow: w.united });
+        // 좌우 끝이 충격파 범위(radius)에 닿게 그림의 실제 좌우 폭으로 맞춥니다.
+        // 쏠 때마다 좌우를 번갈아 뒤집고 재생 속도를 조금씩 바꿉니다.
+        const v = this.shotVariant(w);
+        this.addPfx(name, "nova", this.player.x, this.player.y + 7, { scale: radius / this.fxExtent(name).half, speed: 2 * v.pace, flip: v.mirror, tint: w.type, color: w.color, follow: true, glow: w.united, fit: true });
     }
 
     fireChain(w, first) {
@@ -1502,7 +1532,37 @@ class Game {
         const p = this.player;
         this.pfx.push({ name, group, x, y, dx: x - p.x, dy: y - p.y, t: 0, angle: o.angle ?? 0, scale: o.scale ?? 1, speed: o.speed ?? 1,
             tint: o.tint, color: o.color, follow: !!o.follow, flip: !!o.flip, tall: PFX_TALL[name] ?? 1, glow: !!o.glow, vx: o.vx ?? 0, vy: o.vy ?? 0 });
-        if (o.glow) this.pfx[this.pfx.length - 1].scale *= UNION_FX.scale;
+        // fit: 공격 범위에 맞춘 효과(부채꼴·베기·충격파)는 합체해도 범위가 그대로라 크기는 두고 빛만 냅니다.
+        if (o.glow && !o.fit) this.pfx[this.pfx.length - 1].scale *= UNION_FX.scale;
+    }
+
+    // 효과 그림이 기준점(ox, oy)에서 실제로 닿는 거리 (원래 그림 px). 모든 프레임의 보이는 픽셀로 한 번만 잽니다.
+    // fwd: 앞(오른쪽)으로, half: 좌우로, rad: 어느 방향이든. 그림을 못 읽으면 칸 크기로 어림합니다.
+    fxExtent(name) {
+        this.fxExtents ??= {};
+        if (this.fxExtents[name]) return this.fxExtents[name];
+        const info = PFX[name], image = this.images[`pfx/${name}.png`];
+        let ext = { fwd: info.fw - info.ox, half: info.fw / 2, rad: Math.max(info.fw, info.fh) / 2 };
+        try {
+            const canvas = document.createElement("canvas");
+            canvas.width = image.width;
+            canvas.height = image.height;
+            const g = canvas.getContext("2d", { willReadFrequently: true });
+            g.drawImage(image, 0, 0);
+            const px = g.getImageData(0, 0, canvas.width, canvas.height).data, tall = PFX_TALL[name] ?? 1;
+            let fwd = 0, half = 0, rad = 0;
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    if (px[(y * canvas.width + x) * 4 + 3] < 40) continue; // 거의 투명한 가장자리는 빼고
+                    const dx = (x % info.fw) + 0.5 - info.ox, dy = (y + 0.5 - info.oy) * tall;
+                    fwd = Math.max(fwd, dx);
+                    half = Math.max(half, Math.abs(dx));
+                    rad = Math.max(rad, Math.hypot(dx, dy));
+                }
+            }
+            if (fwd > 4 && half > 4) ext = { fwd, half, rad };
+        } catch { /* 칸 크기로 어림한 값을 씁니다 */ }
+        return (this.fxExtents[name] = ext);
     }
 
     // 회색 효과 시트에 기술 타입 색을 곱한 그림 (효과·타입마다 한 번만 만듭니다)
