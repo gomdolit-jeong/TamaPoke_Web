@@ -30,7 +30,7 @@ Windows 데스크톱 펫 [TamaPoke_PC](https://github.com/gomdolit-jeong/TamaPok
 - [GitHub Pages](https://pages.github.com/)와 GitHub Actions 자동 배포
 - [Firebase](https://firebase.google.com/) Authentication, Cloud Firestore (구글 로그인 세이브)
 
-`cloud.js`의 Firebase `apiKey`는 웹 앱에 원래 공개되는 식별값입니다. 세이브는 Firestore 보안 규칙으로 보호하여 본인 계정의 문서만 읽고 쓸 수 있습니다. 대전 순위표는 로그인한 사람이 모두 읽을 수 있고, 쓰기는 본인 기록만 되며 점수 변화 폭도 규칙에서 확인합니다. 규칙 전체는 [`firestore.rules`](./firestore.rules)에 있고, Firebase 콘솔에 붙여 넣어 게시합니다.
+`cloud.js`의 Firebase `apiKey`는 웹 앱에 원래 공개되는 식별값입니다. 세이브는 Firestore 보안 규칙으로 보호하여 본인 계정의 문서만 읽고 쓸 수 있습니다. 대전과 서바이벌 순위표는 시작 화면에 보여 주려고 로그인하지 않아도 읽을 수 있고(한 번에 100명까지), 쓰기는 본인 기록만 되며 점수 변화 폭도 규칙에서 확인합니다. 규칙 전체는 [`firestore.rules`](./firestore.rules)에 있고, Firebase 콘솔에 붙여 넣어 게시합니다.
 
 ## 개발
 

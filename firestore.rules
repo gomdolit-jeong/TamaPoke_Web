@@ -11,9 +11,11 @@ service cloud.firestore {
     }
 
     // 대전: 순위표는 누구나 읽을 수 있고(시작 화면 순위표), 쓰기는 본인 문서만 됩니다.
+    // 목록은 한 번에 100명까지만 읽습니다. (앱이 쓰는 최대치, 컬렉션 전체를 긁어 가는 것을 막음)
     // 닉네임은 영어 글자와 숫자 3~12자(욕설은 앱에서 거름), 레벨은 1~100, 점수는 처음 1000점에서 시작하고, 한 번에 이기면 +2~40, 지면 -0~40까지만 바뀝니다. (10초에 한 번)
     match /arena/{season}/players/{uid} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if request.query.limit <= 100;
       allow create: if isOwner(uid) && validEntry()
         && request.resource.data.points == 1000
         && request.resource.data.wins == 0
@@ -24,7 +26,8 @@ service cloud.firestore {
     // 서바이벌: 이번 주 최고 기록만 저장합니다. 순위는 버틴 시간, 같으면 쓰러뜨린 수 (score = 버틴 초 × 100000 + 쓰러뜨린 수)
     // 더 좋은 기록으로만 바꿀 수 있고, 지난 저장에서 이번 기록의 시간만큼은 지나야 합니다.
     match /survival/{season}/players/{uid} {
-      allow read: if true; // 순위표는 누구나 읽을 수 있습니다. (시작 화면 순위표)
+      allow get: if true; // 순위표는 누구나 읽을 수 있습니다. (시작 화면 순위표)
+      allow list: if request.query.limit <= 100; // 한 번에 100명까지만
       allow create: if isOwner(uid) && validSurvival();
       allow update: if isOwner(uid) && validSurvival()
         && request.resource.data.score > resource.data.score

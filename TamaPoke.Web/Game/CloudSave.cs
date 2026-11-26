@@ -33,7 +33,8 @@ public sealed class CloudSave(IJSRuntime js, SaveStore store) : IDisposable
     public bool IsGuestImportPending { get; private set; }
     public string? SignInError { get; private set; }
     public bool IsSignedIn => _userId is not null;
-    public bool IsModuleReady => _module is not null;
+    private bool _isInitialized;
+    public bool IsModuleReady => _isInitialized;
     public string? UserId => _userId;
 
     // 계정 세이브를 불러와서 플레이할 수 있는 상태
@@ -52,6 +53,8 @@ public sealed class CloudSave(IJSRuntime js, SaveStore store) : IDisposable
             _module = await js.InvokeAsync<IJSObjectReference>("import", BuildInfo.Versioned("./js/cloud.js"));
             _self = DotNetObjectReference.Create(this);
             await _module.InvokeVoidAsync("init", _self);
+            // init이 끝나야 Firebase 앱이 생깁니다. 그 전에 준비됐다고 하면 시작 화면 순위표가 먼저 불러서 실패합니다.
+            _isInitialized = true;
         }
         catch (JSException ex)
         {
