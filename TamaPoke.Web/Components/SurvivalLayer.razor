@@ -104,7 +104,7 @@
                             string pair = SurvivalRules.EvolvePair(weapon.Kind);
                             <li class="@(level == 0 ? "is-locked" : "")">
                                 <span class="survival-weapon-name">
-                                    <span class="battle-type battle-type-@weapon.Type">@(skill?.Type.ToString() ?? "")</span>
+                                    <span class="battle-type battle-type-@weapon.Type">@Loc.Type(skill?.Type)</span>
                                     <strong>@(evolved ? "★" : "")@(skill?.Name ?? "?")@(partnerSkill is null ? "" : $" + ★{partnerSkill.Name}")</strong>
                                     <span class="survival-card-level">@(level == 0 ? Loc.T("web.survival.status.notYet") : partnerSkill is not null ? Loc.T("web.survival.unionTag") : evolved ? Loc.T("web.survival.evolvedTag") : $"Lv.{level}/5")</span>
                                 </span>

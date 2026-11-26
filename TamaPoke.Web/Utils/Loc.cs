@@ -42,6 +42,13 @@ public sealed class Loc(HttpClient http, IJSRuntime js)
     public string T(string key) =>
         _strings.TryGetValue(key, out var text) || _fallback.TryGetValue(key, out text) ? text : key;
 
+    /// <summary>타입 이름(Fire 등)을 현재 언어로 바꿉니다. lang의 web.type.* 키를 씁니다.</summary>
+    public string Type(object? type)
+    {
+        var name = type?.ToString();
+        return string.IsNullOrEmpty(name) || name == "None" ? "" : T($"web.type.{name.ToLowerInvariant()}");
+    }
+
     public async Task InitializeAsync()
     {
         L.Current = this;

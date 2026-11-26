@@ -68,10 +68,10 @@
                     <span class="party-name">@(isShiny ? "✨" : "")@Dex.GetName(speciesId, Loc.Language)</span>
                     <span class="party-level">Lv.@level @(isLead ? Loc.T("party.lead") : "")</span>
                     <span class="party-types">
-                        <span class="battle-type battle-type-@type1.ToString().ToLowerInvariant()">@type1</span>
+                        <span class="battle-type battle-type-@type1.ToString().ToLowerInvariant()">@Loc.Type(type1)</span>
                         @if (type2 != PokemonType.None)
                         {
-                            <span class="battle-type battle-type-@type2.ToString().ToLowerInvariant()">@type2</span>
+                            <span class="battle-type battle-type-@type2.ToString().ToLowerInvariant()">@Loc.Type(type2)</span>
                         }
                     </span>
                 </span>

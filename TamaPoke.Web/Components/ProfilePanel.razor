@@ -35,10 +35,10 @@
     {
         var (type1, type2) = PokemonForms.GetTypes(Pet.Dex, info.Id, Pet.SpriteForm.Length > 0 ? $"p{info.Id:D4}_{Pet.SpriteForm}.bin" : null);
         <p class="party-types">
-            <span class="battle-type battle-type-@type1.ToString().ToLowerInvariant()">@type1</span>
+            <span class="battle-type battle-type-@type1.ToString().ToLowerInvariant()">@Loc.Type(type1)</span>
             @if (type2 != PokemonType.None)
             {
-                <span class="battle-type battle-type-@type2.ToString().ToLowerInvariant()">@type2</span>
+                <span class="battle-type battle-type-@type2.ToString().ToLowerInvariant()">@Loc.Type(type2)</span>
             }
         </p>
     }
@@ -57,7 +57,7 @@
             <li class="@(open ? "is-open" : "")">
                 <button type="button" class="profile-move" aria-expanded="@(open ? "true" : "false")" @onclick="() => ToggleSkill(skill.Id)">
                     <span>@(open ? "▾" : "▸") @skill.Name</span>
-                    <span class="battle-type battle-type-@skill.Type.ToString().ToLowerInvariant()">@skill.Type</span>
+                    <span class="battle-type battle-type-@skill.Type.ToString().ToLowerInvariant()">@Loc.Type(skill.Type)</span>
                 </button>
                 @if (open)
                 {

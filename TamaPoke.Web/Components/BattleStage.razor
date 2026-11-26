@@ -85,9 +85,9 @@
                 <div class="battle-choice-grid">
                     @foreach (var skill in Pet.CurrentSkills)
                     {
-                        <button type="button" title="@skill.Type" @onclick="() => Pet.ExecuteSkillTurnAsync(skill)">
+                        <button type="button" title="@TypeLabel(skill.Type)" @onclick="() => Pet.ExecuteSkillTurnAsync(skill)">
                             <span class="battle-choice-name">@skill.Name</span>
-                            <span class="battle-type battle-type-@skill.Type.ToString().ToLowerInvariant()">@skill.Type</span>
+                            <span class="battle-type battle-type-@skill.Type.ToString().ToLowerInvariant()">@TypeLabel(skill.Type)</span>
                         </button>
                     }
                 </div>
@@ -141,11 +141,11 @@
             <div class="battle-popup-row">
                 @if (Pet.RecommendedSkill1 is { } first)
                 {
-                    <button type="button" class="battle-learn" @onclick="() => Pet.SelectRecommendedSkill(1)">@first.Name<span class="battle-type battle-type-@first.Type.ToString().ToLowerInvariant()">@first.Type</span></button>
+                    <button type="button" class="battle-learn" @onclick="() => Pet.SelectRecommendedSkill(1)">@first.Name<span class="battle-type battle-type-@first.Type.ToString().ToLowerInvariant()">@TypeLabel(first.Type)</span></button>
                 }
                 @if (Pet.RecommendedSkill2 is { } second)
                 {
-                    <button type="button" class="battle-learn" @onclick="() => Pet.SelectRecommendedSkill(2)">@second.Name<span class="battle-type battle-type-@second.Type.ToString().ToLowerInvariant()">@second.Type</span></button>
+                    <button type="button" class="battle-learn" @onclick="() => Pet.SelectRecommendedSkill(2)">@second.Name<span class="battle-type battle-type-@second.Type.ToString().ToLowerInvariant()">@TypeLabel(second.Type)</span></button>
                 }
             </div>
             <button type="button" class="battle-run battle-wide" @onclick="Pet.SkipSkillLearning">@Loc.T("battle.ui.dontLearn")</button>
@@ -171,6 +171,8 @@
 @code {
     [Parameter, EditorRequired] public required PokemonState Pet { get; set; }
     [Parameter, EditorRequired] public required PokemonDex Dex { get; set; }
+
+    private string TypeLabel(object type) => Loc.Type(type);
 
     private string HpClass(int hp, int maxHp)
     {

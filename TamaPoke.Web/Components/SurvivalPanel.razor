@@ -155,7 +155,7 @@
                         var skill = Skills.GetSkill(weapon.SkillId);
                         <li>
                             <span class="survival-weapon-name">
-                                <span class="battle-type battle-type-@weapon.Type">@(skill?.Type.ToString() ?? "")</span>
+                                <span class="battle-type battle-type-@weapon.Type">@Loc.Type(skill?.Type)</span>
                                 <strong>@(skill?.Name ?? "?")</strong>
                                 @if (i == 0)
                                 {
